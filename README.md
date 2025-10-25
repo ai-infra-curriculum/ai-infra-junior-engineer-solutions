@@ -23,7 +23,14 @@ This repository provides **reference solutions** for all exercises in the [ai-in
 
 ## ✨ What's New
 
-**Recently Added Solutions:**
+**🎓 Capstone Project Solutions Added!**
+- 🚀 **Project 01: Simple Model API** - Flask + Docker + PyTorch serving
+- ☸️ **Project 02: Kubernetes Model Serving** - K8s + HPA + Ingress
+- 🔄 **Project 03: ML Pipeline with Tracking** - Airflow + MLflow + DVC
+- 📊 **Project 04: Monitoring & Alerting** - Prometheus + Grafana + ELK
+- 🏗️ **Project 05: Production ML System** - Complete CI/CD + Security + HA
+
+**Recently Added Exercise Solutions:**
 - 🤖 **LLM Basics Exercise** (Module 004) - Complete solution for running your first language model with Hugging Face Transformers
 - ⚡ **GPU Fundamentals Exercise** (Module 004) - Full implementation of GPU-accelerated ML inference with PyTorch
 - 🏗️ **Terraform/IaC Exercise** (Module 010) - Production-ready Infrastructure as Code with hands-on AWS deployment
@@ -56,6 +63,9 @@ ai-infra-junior-engineer-solutions/
 ├── README.md (this file)
 ├── LEARNING_GUIDE.md (how to use this repository effectively)
 ├── modules/
+│   ├── mod-004-ml-basics/ ✨ NEW
+│   │   ├── exercise-04-llm-basics/
+│   │   └── exercise-05-gpu-fundamentals/
 │   ├── mod-005-docker/
 │   │   ├── exercise-01-docker-basics/
 │   │   │   ├── README.md
@@ -71,7 +81,15 @@ ai-infra-junior-engineer-solutions/
 │   ├── mod-007-apis/
 │   ├── mod-008-databases/
 │   ├── mod-009-monitoring/
+│   │   └── exercise-06-airflow-workflow-monitoring/ ✨ NEW
 │   └── mod-010-cloud-platforms/
+│       └── exercise-07-terraform-basics/ ✨ NEW
+├── projects/ 🎓 NEW
+│   ├── project-01-simple-model-api/
+│   ├── project-02-kubernetes-serving/
+│   ├── project-03-ml-pipeline-tracking/
+│   ├── project-04-monitoring-alerting/
+│   └── project-05-production-ml-capstone/
 ├── .github/
 │   └── workflows/
 │       ├── ci-cd.yml
@@ -236,6 +254,29 @@ cd modules/mod-005-docker/exercise-01-docker-basics
 
 **Total Lines of Code**: ~9,400
 **Estimated Completion**: 26-30 hours
+
+---
+
+## 🎓 Capstone Projects (5 projects)
+
+| Project | Description | Complexity | Technologies |
+|---------|-------------|------------|--------------|
+| **01** | Simple Model API | ⭐⭐⭐ Hard | Flask, PyTorch, Docker, ResNet-50 |
+| **02** | Kubernetes Model Serving | ⭐⭐⭐⭐ Expert | Kubernetes, HPA, Ingress, NGINX |
+| **03** | ML Pipeline with Tracking | ⭐⭐⭐⭐ Expert | Airflow, MLflow, DVC, Great Expectations |
+| **04** | Monitoring & Alerting | ⭐⭐⭐⭐ Expert | Prometheus, Grafana, ELK, Alertmanager |
+| **05** | Production ML System | ⭐⭐⭐⭐⭐ Master | CI/CD, Security, HA, Canary, SLOs |
+
+**Total Documentation**: ~3,500 lines across comprehensive SOLUTION_GUIDE.md files
+**Estimated Completion**: 40-60 hours total
+**Portfolio Ready**: Yes - production-grade implementations
+
+Each capstone project includes:
+- Complete source code with tests
+- Production configurations (Docker, K8s, CI/CD)
+- Comprehensive SOLUTION_GUIDE.md (500-900 lines)
+- Architecture diagrams and design decisions
+- Deployment automation and troubleshooting
 
 ---
 
