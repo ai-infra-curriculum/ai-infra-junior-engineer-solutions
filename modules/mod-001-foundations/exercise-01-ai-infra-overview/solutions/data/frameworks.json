@@ -1,0 +1,348 @@
+{
+  "ml_frameworks": [
+    {
+      "name": "TensorFlow",
+      "type": "Deep Learning",
+      "developer": "Google Brain",
+      "language": "Python, C++",
+      "first_release": "2015",
+      "license": "Apache 2.0",
+      "use_cases": [
+        "Computer Vision",
+        "Natural Language Processing",
+        "Speech Recognition",
+        "Time Series Forecasting",
+        "Reinforcement Learning"
+      ],
+      "pros": [
+        "Production-ready with TensorFlow Serving",
+        "TensorBoard for visualization",
+        "Strong mobile/edge support (TensorFlow Lite)",
+        "Extensive ecosystem and tooling",
+        "Good for large-scale distributed training"
+      ],
+      "cons": [
+        "Steeper learning curve",
+        "More verbose than PyTorch",
+        "Debugging can be challenging"
+      ],
+      "deployment_tools": ["TensorFlow Serving", "TFX", "TensorFlow Lite"],
+      "market_share": "35%",
+      "github_stars": 180000,
+      "job_demand": "Very High",
+      "learning_curve": "Medium-High"
+    },
+    {
+      "name": "PyTorch",
+      "type": "Deep Learning",
+      "developer": "Meta AI",
+      "language": "Python, C++",
+      "first_release": "2016",
+      "license": "BSD",
+      "use_cases": [
+        "Research and Prototyping",
+        "Computer Vision",
+        "NLP and Transformers",
+        "Generative AI",
+        "Reinforcement Learning"
+      ],
+      "pros": [
+        "Pythonic and intuitive API",
+        "Dynamic computation graphs",
+        "Excellent for research",
+        "Large community and ecosystem",
+        "Easy debugging"
+      ],
+      "cons": [
+        "Production deployment more complex",
+        "Mobile support less mature than TensorFlow",
+        "Fewer high-level APIs"
+      ],
+      "deployment_tools": ["TorchServe", "ONNX", "PyTorch Mobile"],
+      "market_share": "45%",
+      "github_stars": 75000,
+      "job_demand": "Very High",
+      "learning_curve": "Medium"
+    },
+    {
+      "name": "scikit-learn",
+      "type": "Traditional ML",
+      "developer": "Community",
+      "language": "Python",
+      "first_release": "2007",
+      "license": "BSD",
+      "use_cases": [
+        "Classification",
+        "Regression",
+        "Clustering",
+        "Dimensionality Reduction",
+        "Feature Engineering"
+      ],
+      "pros": [
+        "Simple and consistent API",
+        "Excellent documentation",
+        "Perfect for traditional ML",
+        "Fast for small to medium datasets",
+        "Great for learning ML basics"
+      ],
+      "cons": [
+        "Not for deep learning",
+        "Limited GPU support",
+        "Not ideal for very large datasets"
+      ],
+      "deployment_tools": ["Flask/FastAPI", "ONNX", "Pickle"],
+      "market_share": "80% (for traditional ML)",
+      "github_stars": 57000,
+      "job_demand": "High",
+      "learning_curve": "Low"
+    },
+    {
+      "name": "XGBoost",
+      "type": "Gradient Boosting",
+      "developer": "DMLC",
+      "language": "C++, Python, R",
+      "first_release": "2014",
+      "license": "Apache 2.0",
+      "use_cases": [
+        "Tabular Data",
+        "Kaggle Competitions",
+        "Fraud Detection",
+        "Recommendation Systems",
+        "Feature Importance Analysis"
+      ],
+      "pros": [
+        "State-of-the-art for tabular data",
+        "Fast training and inference",
+        "Built-in regularization",
+        "Handles missing values",
+        "Excellent feature importance"
+      ],
+      "cons": [
+        "Requires careful hyperparameter tuning",
+        "Less interpretable than linear models",
+        "Not for image/text data"
+      ],
+      "deployment_tools": ["Flask/FastAPI", "ONNX", "Native API"],
+      "market_share": "60% (for tabular ML)",
+      "github_stars": 25000,
+      "job_demand": "High",
+      "learning_curve": "Medium"
+    },
+    {
+      "name": "Hugging Face Transformers",
+      "type": "NLP/Transformers",
+      "developer": "Hugging Face",
+      "language": "Python",
+      "first_release": "2018",
+      "license": "Apache 2.0",
+      "use_cases": [
+        "Text Generation (GPT models)",
+        "Question Answering",
+        "Translation",
+        "Sentiment Analysis",
+        "Named Entity Recognition"
+      ],
+      "pros": [
+        "Huge model library",
+        "Easy fine-tuning",
+        "Active community",
+        "Inference API",
+        "Multi-framework support (PyTorch/TensorFlow)"
+      ],
+      "cons": [
+        "Large model sizes",
+        "Resource intensive",
+        "Learning curve for transformers"
+      ],
+      "deployment_tools": ["Hugging Face Inference API", "TorchServe", "ONNX"],
+      "market_share": "70% (for NLP)",
+      "github_stars": 120000,
+      "job_demand": "Very High (Growing)",
+      "learning_curve": "Medium-High"
+    },
+    {
+      "name": "Keras",
+      "type": "High-Level Deep Learning",
+      "developer": "François Chollet / Google",
+      "language": "Python",
+      "first_release": "2015",
+      "license": "Apache 2.0",
+      "use_cases": [
+        "Rapid Prototyping",
+        "Computer Vision",
+        "NLP",
+        "Time Series",
+        "Educational Projects"
+      ],
+      "pros": [
+        "Very beginner-friendly",
+        "Clean and simple API",
+        "Fast prototyping",
+        "Good documentation",
+        "Now integrated with TensorFlow"
+      ],
+      "cons": [
+        "Less flexibility than PyTorch",
+        "Fewer low-level controls",
+        "Smaller standalone community (now part of TF)"
+      ],
+      "deployment_tools": ["TensorFlow Serving", "ONNX", "TensorFlow.js"],
+      "market_share": "20% (declining as TF API)",
+      "github_stars": 60000,
+      "job_demand": "Medium",
+      "learning_curve": "Low"
+    },
+    {
+      "name": "JAX",
+      "type": "High-Performance ML",
+      "developer": "Google Research",
+      "language": "Python",
+      "first_release": "2018",
+      "license": "Apache 2.0",
+      "use_cases": [
+        "Research",
+        "High-Performance Computing",
+        "Scientific Computing",
+        "Reinforcement Learning",
+        "Probabilistic Programming"
+      ],
+      "pros": [
+        "Automatic differentiation",
+        "JIT compilation for speed",
+        "Functional programming style",
+        "Excellent for research",
+        "GPU/TPU optimized"
+      ],
+      "cons": [
+        "Steeper learning curve",
+        "Smaller ecosystem",
+        "Less production tooling",
+        "Debugging can be difficult"
+      ],
+      "deployment_tools": ["Custom solutions", "ONNX"],
+      "market_share": "5% (growing in research)",
+      "github_stars": 27000,
+      "job_demand": "Low-Medium (Research-focused)",
+      "learning_curve": "High"
+    },
+    {
+      "name": "LightGBM",
+      "type": "Gradient Boosting",
+      "developer": "Microsoft",
+      "language": "C++, Python",
+      "first_release": "2016",
+      "license": "MIT",
+      "use_cases": [
+        "Tabular Data",
+        "Large Datasets",
+        "Ranking Problems",
+        "Click-Through Rate Prediction",
+        "Time Series"
+      ],
+      "pros": [
+        "Faster than XGBoost on large data",
+        "Lower memory usage",
+        "Supports categorical features",
+        "Good for imbalanced data",
+        "Parallel training"
+      ],
+      "cons": [
+        "Can overfit on small datasets",
+        "Requires tuning",
+        "Not for non-tabular data"
+      ],
+      "deployment_tools": ["Flask/FastAPI", "ONNX", "Native API"],
+      "market_share": "40% (for tabular ML)",
+      "github_stars": 16000,
+      "job_demand": "Medium-High",
+      "learning_curve": "Medium"
+    },
+    {
+      "name": "MXNet",
+      "type": "Deep Learning",
+      "developer": "Apache Software Foundation",
+      "language": "Python, Scala, Julia, R",
+      "first_release": "2015",
+      "license": "Apache 2.0",
+      "use_cases": [
+        "Scalable Deep Learning",
+        "Multi-language Projects",
+        "Distributed Training",
+        "Computer Vision",
+        "NLP"
+      ],
+      "pros": [
+        "Supports multiple languages",
+        "Scalable and efficient",
+        "Good for distributed training",
+        "Flexible API (Gluon)"
+      ],
+      "cons": [
+        "Smaller community than PyTorch/TensorFlow",
+        "Less documentation",
+        "Declining popularity"
+      ],
+      "deployment_tools": ["MXNet Model Server", "ONNX"],
+      "market_share": "3% (declining)",
+      "github_stars": 20000,
+      "job_demand": "Low",
+      "learning_curve": "Medium"
+    },
+    {
+      "name": "FastAI",
+      "type": "High-Level Deep Learning",
+      "developer": "fast.ai",
+      "language": "Python (built on PyTorch)",
+      "first_release": "2018",
+      "license": "Apache 2.0",
+      "use_cases": [
+        "Educational Projects",
+        "Rapid Prototyping",
+        "Computer Vision",
+        "NLP",
+        "Tabular Data"
+      ],
+      "pros": [
+        "Very easy to use",
+        "Great for learning",
+        "Best-practice defaults",
+        "Excellent course materials",
+        "Fast prototyping"
+      ],
+      "cons": [
+        "Less control than PyTorch",
+        "Smaller adoption in industry",
+        "Abstractions can hide details"
+      ],
+      "deployment_tools": ["FastAPI", "PyTorch deployment tools"],
+      "market_share": "5% (education)",
+      "github_stars": 25000,
+      "job_demand": "Low-Medium",
+      "learning_curve": "Very Low"
+    }
+  ],
+  "comparison_criteria": [
+    "Learning Curve",
+    "Production Readiness",
+    "Community Size",
+    "Documentation Quality",
+    "Performance",
+    "Deployment Ease",
+    "Job Market Demand",
+    "Research vs Production",
+    "Ecosystem Maturity"
+  ],
+  "trends": {
+    "2024": {
+      "growing": ["PyTorch", "Hugging Face Transformers", "JAX"],
+      "stable": ["TensorFlow", "scikit-learn", "XGBoost"],
+      "declining": ["Keras (standalone)", "MXNet", "Caffe"]
+    },
+    "focus_areas": {
+      "llms": "Hugging Face Transformers, PyTorch, JAX",
+      "production_ml": "TensorFlow, scikit-learn, XGBoost",
+      "research": "PyTorch, JAX",
+      "tabular": "XGBoost, LightGBM, CatBoost"
+    }
+  }
+}

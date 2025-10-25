@@ -1,0 +1,27 @@
+# Lightweight inference image (CPU-only)
+FROM python:3.10-slim AS builder
+
+WORKDIR /build
+COPY requirements-inference.txt requirements.txt
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+FROM python:3.10-slim
+LABEL description="Lightweight ML inference API"
+
+COPY --from=builder /root/.local /root/.local
+ENV PATH=/root/.local/bin:$PATH
+
+RUN useradd -m -u 1000 apiuser && \
+    mkdir -p /app /models && \
+    chown -R apiuser:apiuser /app /models
+
+WORKDIR /app
+COPY --chown=apiuser:apiuser api.py model_loader.py ./
+COPY --chown=apiuser:apiuser models/ /models/
+
+USER apiuser
+EXPOSE 8000
+
+HEALTHCHECK CMD curl -f http://localhost:8000/health || exit 1
+
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]

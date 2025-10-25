@@ -1,0 +1,439 @@
+---
+# TensorFlow Serving Deployment
+# Serves TensorFlow models via gRPC and REST
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tensorflow-serving
+  namespace: ml-workloads
+  labels:
+    app: tensorflow-serving
+    framework: tensorflow
+    component: model-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tensorflow-serving
+  template:
+    metadata:
+      labels:
+        app: tensorflow-serving
+        framework: tensorflow
+        version: "2.13"
+    spec:
+      containers:
+      - name: tensorflow-serving
+        image: tensorflow/serving:2.13.0
+        ports:
+        - containerPort: 8500
+          name: grpc
+          protocol: TCP
+        - containerPort: 8501
+          name: rest
+          protocol: TCP
+        env:
+        - name: MODEL_NAME
+          value: "sentiment-classifier"
+        - name: MODEL_BASE_PATH
+          value: "/models"
+        # Enable batching for better throughput
+        - name: TF_ENABLE_BATCHING
+          value: "true"
+        - name: TF_BATCH_SIZE
+          value: "32"
+        volumeMounts:
+        - name: models
+          mountPath: /models
+          readOnly: true
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /v1/models/sentiment-classifier
+            port: 8501
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /v1/models/sentiment-classifier
+            port: 8501
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: models
+        persistentVolumeClaim:
+          claimName: models-pvc
+
+---
+# Service for TensorFlow Serving
+apiVersion: v1
+kind: Service
+metadata:
+  name: tensorflow-serving
+  namespace: ml-workloads
+  labels:
+    app: tensorflow-serving
+spec:
+  type: ClusterIP
+  selector:
+    app: tensorflow-serving
+  ports:
+  - port: 8500
+    targetPort: 8500
+    protocol: TCP
+    name: grpc
+  - port: 8501
+    targetPort: 8501
+    protocol: TCP
+    name: rest
+
+---
+# Simple REST API Model Server
+# Python Flask/FastAPI based model server
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-api-server
+  namespace: ml-workloads
+  labels:
+    app: model-api-server
+    component: model-server
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: model-api-server
+  template:
+    metadata:
+      labels:
+        app: model-api-server
+        version: "1.0"
+    spec:
+      initContainers:
+      # Load model into memory on startup
+      - name: model-loader
+        image: python:3.11-slim
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "Loading models from /models..."
+            ls -la /models/
+            echo "Models loaded successfully"
+        volumeMounts:
+        - name: models
+          mountPath: /models
+          readOnly: true
+      containers:
+      - name: api-server
+        image: python:3.11-slim
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            pip install --no-cache-dir flask numpy
+            cat > /app/server.py << 'PYEOF'
+            from flask import Flask, request, jsonify
+            import json
+            import os
+
+            app = Flask(__name__)
+
+            @app.route('/health', methods=['GET'])
+            def health():
+                return jsonify({"status": "healthy", "model": "loaded"})
+
+            @app.route('/predict', methods=['POST'])
+            def predict():
+                data = request.json
+                # Simulate prediction
+                return jsonify({
+                    "prediction": "positive",
+                    "confidence": 0.95,
+                    "model": "sentiment-classifier",
+                    "version": "1.0.0"
+                })
+
+            @app.route('/batch_predict', methods=['POST'])
+            def batch_predict():
+                data = request.json
+                batch_size = len(data.get('inputs', []))
+                return jsonify({
+                    "predictions": ["positive"] * batch_size,
+                    "batch_size": batch_size
+                })
+
+            @app.route('/models', methods=['GET'])
+            def list_models():
+                return jsonify({
+                    "models": ["sentiment-classifier", "image-classifier"],
+                    "versions": {"sentiment-classifier": "1.0.0"}
+                })
+
+            if __name__ == '__main__':
+                app.run(host='0.0.0.0', port=8080)
+            PYEOF
+
+            python /app/server.py
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: MODEL_PATH
+          value: "/models"
+        - name: WORKERS
+          value: "4"
+        volumeMounts:
+        - name: models
+          mountPath: /models
+          readOnly: true
+        - name: config
+          mountPath: /config
+          readOnly: true
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: models
+        persistentVolumeClaim:
+          claimName: models-pvc
+      - name: config
+        configMap:
+          name: model-registry
+
+---
+# Service for REST API Server
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-api-server
+  namespace: ml-workloads
+  labels:
+    app: model-api-server
+spec:
+  type: ClusterIP
+  selector:
+    app: model-api-server
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+
+---
+# ONNX Runtime Server
+# Serves ONNX format models
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: onnx-runtime-server
+  namespace: ml-workloads
+  labels:
+    app: onnx-runtime-server
+    framework: onnx
+    component: model-server
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: onnx-runtime-server
+  template:
+    metadata:
+      labels:
+        app: onnx-runtime-server
+        framework: onnx
+    spec:
+      containers:
+      - name: onnx-server
+        image: mcr.microsoft.com/onnxruntime/server:latest
+        ports:
+        - containerPort: 8001
+          name: http
+        env:
+        - name: MODEL_PATH
+          value: "/models/text-generator/1.5.0"
+        volumeMounts:
+        - name: models
+          mountPath: /models
+          readOnly: true
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      volumes:
+      - name: models
+        persistentVolumeClaim:
+          claimName: models-pvc
+
+---
+# Service for ONNX Runtime
+apiVersion: v1
+kind: Service
+metadata:
+  name: onnx-runtime-server
+  namespace: ml-workloads
+  labels:
+    app: onnx-runtime-server
+spec:
+  type: ClusterIP
+  selector:
+    app: onnx-runtime-server
+  ports:
+  - port: 80
+    targetPort: 8001
+    protocol: TCP
+    name: http
+
+---
+# Model Server with GPU Support
+# For models requiring GPU inference
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-model-server
+  namespace: ml-workloads
+  labels:
+    app: gpu-model-server
+    component: model-server
+    gpu: "true"
+spec:
+  replicas: 1  # Limited by GPU availability
+  selector:
+    matchLabels:
+      app: gpu-model-server
+  template:
+    metadata:
+      labels:
+        app: gpu-model-server
+        gpu: "true"
+    spec:
+      # Node selector for GPU nodes
+      nodeSelector:
+        accelerator: nvidia-gpu
+      # Toleration for GPU taints
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      containers:
+      - name: model-server
+        image: nvidia/cuda:11.8.0-runtime-ubuntu22.04
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "GPU Model Server Starting..."
+            echo "GPUs available:"
+            nvidia-smi || echo "No GPU detected"
+
+            # Simulate model serving
+            while true; do
+              echo "[$(date)] GPU model server running"
+              sleep 30
+            done
+        ports:
+        - containerPort: 8080
+          name: http
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "2000m"
+            nvidia.com/gpu: 1  # Request 1 GPU
+          limits:
+            memory: "8Gi"
+            cpu: "4000m"
+            nvidia.com/gpu: 1
+        volumeMounts:
+        - name: models
+          mountPath: /models
+          readOnly: true
+      volumes:
+      - name: models
+        persistentVolumeClaim:
+          claimName: models-pvc
+
+---
+# HorizontalPodAutoscaler for model serving
+# Auto-scale based on CPU/memory usage
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: model-api-server-hpa
+  namespace: ml-workloads
+  labels:
+    app: model-api-server
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: model-api-server
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  # Scale based on CPU utilization
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  # Scale based on memory utilization
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 15
+      - type: Pods
+        value: 2
+        periodSeconds: 15
+      selectPolicy: Max
+
+---
+# PodDisruptionBudget for high availability
+# Ensure minimum number of pods during disruptions
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: model-api-server-pdb
+  namespace: ml-workloads
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: model-api-server

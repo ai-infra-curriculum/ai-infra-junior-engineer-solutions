@@ -1,0 +1,314 @@
+---
+# Basic Ingress Example
+# Routes all traffic to backend-v1 service
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: basic-ingress
+  namespace: ingress-demo
+  annotations:
+    # Nginx Ingress Controller specific annotations
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx  # Specifies which ingress controller to use
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-v1
+            port:
+              number: 80
+
+---
+# Path-Based Routing
+# Routes traffic based on URL path
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: path-based-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      # API endpoints
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 80
+      # Web frontend
+      - path: /web
+        pathType: Prefix
+        backend:
+          service:
+            name: web-service
+            port:
+              number: 80
+      # Admin panel
+      - path: /admin
+        pathType: Prefix
+        backend:
+          service:
+            name: admin-service
+            port:
+              number: 80
+      # Health check
+      - path: /health
+        pathType: Exact
+        backend:
+          service:
+            name: health-service
+            port:
+              number: 80
+      # Default backend
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-v1
+            port:
+              number: 80
+
+---
+# Host-Based Routing
+# Routes traffic based on hostname
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: host-based-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+  # API hostname
+  - host: api.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 80
+  # Web hostname
+  - host: web.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: web-service
+            port:
+              number: 80
+  # Admin hostname
+  - host: admin.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: admin-service
+            port:
+              number: 80
+
+---
+# Combined Host and Path Routing
+# Routes based on both hostname and path
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: combined-routing-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+  # app.example.com with path-based routing
+  - host: app.example.com
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 80
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: web-service
+            port:
+              number: 80
+  # admin.example.com
+  - host: admin.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: admin-service
+            port:
+              number: 80
+
+---
+# Default Backend
+# Handles requests that don't match any rules
+apiVersion: v1
+kind: Service
+metadata:
+  name: default-backend
+  namespace: ingress-demo
+  labels:
+    app: default-backend
+spec:
+  type: ClusterIP
+  selector:
+    app: default-backend
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: default-backend
+  namespace: ingress-demo
+  labels:
+    app: default-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: default-backend
+  template:
+    metadata:
+      labels:
+        app: default-backend
+    spec:
+      containers:
+      - name: default-backend
+        image: hashicorp/http-echo:0.2.3
+        args:
+          - "-text=404 - Not Found"
+          - "-listen=:8080"
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            memory: "16Mi"
+            cpu: "25m"
+          limits:
+            memory: "32Mi"
+            cpu: "50m"
+
+---
+# Ingress with Default Backend
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-with-default
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  defaultBackend:
+    service:
+      name: default-backend
+      port:
+        number: 80
+  rules:
+  - http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 80
+
+---
+# Fanout Ingress
+# Multiple paths from single host
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fanout-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: myapp.example.com
+    http:
+      paths:
+      - path: /v1(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: backend-v1
+            port:
+              number: 80
+      - path: /v2(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: backend-v2
+            port:
+              number: 80
+      - path: /api(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 80
+
+---
+# Ingress with Custom Error Pages
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: custom-errors-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/custom-http-errors: "404,503"
+    nginx.ingress.kubernetes.io/default-backend: default-backend
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-v1
+            port:
+              number: 80

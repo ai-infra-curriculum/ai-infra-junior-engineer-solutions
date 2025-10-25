@@ -1,0 +1,65 @@
+{{ define "slack.slo.text" }}
+{{- if .Alerts.Firing }}
+:fire: *{{ .Alerts.Firing | len }} SLO Alert{{ if gt (len .Alerts.Firing) 1 }}s{{ end }} Firing*
+
+{{ range .Alerts.Firing }}
+*Alert:* {{ .Labels.alertname }}
+*Service:* {{ .Labels.service }}
+*Severity:* {{ .Labels.severity }}
+*SLO Type:* {{ .Labels.slo_type }}
+{{ if .Labels.slo_window }}*Window:* {{ .Labels.slo_window }}{{ end }}
+
+*Summary:* {{ .Annotations.summary }}
+
+*Details:*
+{{ .Annotations.description }}
+
+{{ if .Annotations.dashboard_url }}:chart_with_upwards_trend: <{{ .Annotations.dashboard_url }}|View Dashboard>{{ end }}
+{{ if .Annotations.runbook_url }}:book: <{{ .Annotations.runbook_url }}|Runbook>{{ end }}
+
+---
+{{ end }}
+{{- end }}
+
+{{- if .Alerts.Resolved }}
+:white_check_mark: *{{ .Alerts.Resolved | len }} SLO Alert{{ if gt (len .Alerts.Resolved) 1 }}s{{ end }} Resolved*
+
+{{ range .Alerts.Resolved }}
+*Alert:* {{ .Labels.alertname }}
+*Service:* {{ .Labels.service }}
+*Duration:* {{ .StartsAt | humanizeDuration }} - {{ .EndsAt | humanizeDuration }}
+
+{{ end }}
+{{- end }}
+{{ end }}
+
+{{ define "slack.default.text" }}
+{{- if .Alerts.Firing }}
+*{{ .Alerts.Firing | len }} Alert{{ if gt (len .Alerts.Firing) 1 }}s{{ end }} Firing*
+
+{{ range .Alerts.Firing }}
+*{{ .Labels.alertname }}*
+{{ if .Labels.service }}Service: {{ .Labels.service }}{{ end }}
+{{ if .Labels.instance }}Instance: {{ .Labels.instance }}{{ end }}
+Severity: {{ .Labels.severity }}
+
+{{ .Annotations.summary }}
+
+{{ if .Annotations.description }}Details:
+{{ .Annotations.description }}
+{{ end }}
+
+{{ if .Annotations.dashboard_url }}<{{ .Annotations.dashboard_url }}|Dashboard>{{ end }} {{ if .Annotations.runbook_url }}<{{ .Annotations.runbook_url }}|Runbook>{{ end }}
+
+---
+{{ end }}
+{{- end }}
+
+{{- if .Alerts.Resolved }}
+*{{ .Alerts.Resolved | len }} Alert{{ if gt (len .Alerts.Resolved) 1 }}s{{ end }} Resolved*
+
+{{ range .Alerts.Resolved }}
+{{ .Labels.alertname }} ({{ if .Labels.service }}{{ .Labels.service }}{{ else }}{{ .Labels.instance }}{{ end }})
+{{ end }}
+{{- end }}
+{{ end }}

@@ -1,0 +1,229 @@
+---
+# PersistentVolumeClaim for trained models
+# Store production models here
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: models-pvc
+  namespace: ml-workloads
+  labels:
+    app: model-storage
+    type: models
+spec:
+  accessModes:
+    - ReadWriteMany  # Multiple pods can read simultaneously
+  storageClassName: standard  # Use your cluster's storage class
+  resources:
+    requests:
+      storage: 50Gi
+
+---
+# PersistentVolumeClaim for training data
+# Store datasets here
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: training-data-pvc
+  namespace: ml-workloads
+  labels:
+    app: model-storage
+    type: training-data
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 100Gi
+
+---
+# PersistentVolumeClaim for model artifacts (logs, checkpoints)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: artifacts-pvc
+  namespace: ml-workloads
+  labels:
+    app: model-storage
+    type: artifacts
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 20Gi
+
+---
+# ConfigMap for model repository configuration
+# Metadata about available models
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: model-registry
+  namespace: ml-workloads
+  labels:
+    app: model-registry
+data:
+  models.yaml: |
+    models:
+      - name: sentiment-classifier
+        version: "1.0.0"
+        framework: tensorflow
+        path: /models/sentiment-classifier/1
+        description: "BERT-based sentiment classifier"
+        input_shape: [1, 512]
+        output_shape: [1, 3]
+        labels: ["negative", "neutral", "positive"]
+
+      - name: image-classifier
+        version: "2.1.0"
+        framework: pytorch
+        path: /models/image-classifier/2.1.0
+        description: "ResNet50 image classification"
+        input_shape: [1, 3, 224, 224]
+        output_shape: [1, 1000]
+
+      - name: text-generator
+        version: "1.5.0"
+        framework: onnx
+        path: /models/text-generator/1.5.0
+        description: "GPT-2 text generation model"
+        max_length: 1024
+
+      - name: recommendation-engine
+        version: "3.0.0"
+        framework: tensorflow
+        path: /models/recommendation/3.0.0
+        description: "User recommendation system"
+        features: 128
+
+  inference-config.yaml: |
+    inference:
+      batch_size: 32
+      timeout_ms: 5000
+      max_queue_size: 100
+
+    preprocessing:
+      normalize: true
+      resize_images: [224, 224]
+
+    postprocessing:
+      top_k: 5
+      threshold: 0.5
+
+---
+# Secret for model registry credentials
+# For accessing external model registries (MLflow, etc.)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: model-registry-credentials
+  namespace: ml-workloads
+type: Opaque
+stringData:
+  # MLflow tracking server
+  MLFLOW_TRACKING_URI: "http://mlflow.example.com"
+  MLFLOW_TRACKING_USERNAME: "ml-user"
+  MLFLOW_TRACKING_PASSWORD: "changeme"
+
+  # S3 credentials for model storage
+  AWS_ACCESS_KEY_ID: "AKIAIOSFODNN7EXAMPLE"
+  AWS_SECRET_ACCESS_KEY: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+  AWS_DEFAULT_REGION: "us-west-2"
+  S3_BUCKET: "ml-models-bucket"
+
+  # Azure ML credentials
+  AZURE_STORAGE_ACCOUNT: "mlstorageaccount"
+  AZURE_STORAGE_KEY: "base64encodedkey=="
+
+  # GCS credentials
+  GOOGLE_APPLICATION_CREDENTIALS: "/secrets/gcp-key.json"
+
+---
+# Job to initialize model storage
+# Creates directory structure and downloads sample models
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: init-model-storage
+  namespace: ml-workloads
+  labels:
+    app: model-storage
+    job-type: initialization
+spec:
+  template:
+    metadata:
+      labels:
+        app: model-storage
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: init
+        image: busybox:1.36
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "Initializing model storage..."
+
+            # Create directory structure
+            mkdir -p /models/sentiment-classifier/1
+            mkdir -p /models/image-classifier/2.1.0
+            mkdir -p /models/text-generator/1.5.0
+            mkdir -p /models/recommendation/3.0.0
+
+            mkdir -p /training-data/text
+            mkdir -p /training-data/images
+            mkdir -p /training-data/recommendations
+
+            mkdir -p /artifacts/logs
+            mkdir -p /artifacts/checkpoints
+            mkdir -p /artifacts/metrics
+
+            # Create placeholder model files
+            echo "Model placeholder - sentiment classifier v1.0.0" > /models/sentiment-classifier/1/model.txt
+            echo "Model placeholder - image classifier v2.1.0" > /models/image-classifier/2.1.0/model.txt
+            echo "Model placeholder - text generator v1.5.0" > /models/text-generator/1.5.0/model.txt
+            echo "Model placeholder - recommendation engine v3.0.0" > /models/recommendation/3.0.0/model.txt
+
+            # Create metadata files
+            cat > /models/sentiment-classifier/1/metadata.json << 'EOF'
+            {
+              "name": "sentiment-classifier",
+              "version": "1.0.0",
+              "framework": "tensorflow",
+              "created": "2024-01-01T00:00:00Z",
+              "accuracy": 0.92,
+              "input": "text",
+              "output": "label"
+            }
+            EOF
+
+            echo "Storage initialization complete!"
+            ls -la /models/
+            ls -la /training-data/
+            ls -la /artifacts/
+        volumeMounts:
+        - name: models
+          mountPath: /models
+        - name: training-data
+          mountPath: /training-data
+        - name: artifacts
+          mountPath: /artifacts
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+      volumes:
+      - name: models
+        persistentVolumeClaim:
+          claimName: models-pvc
+      - name: training-data
+        persistentVolumeClaim:
+          claimName: training-data-pvc
+      - name: artifacts
+        persistentVolumeClaim:
+          claimName: artifacts-pvc

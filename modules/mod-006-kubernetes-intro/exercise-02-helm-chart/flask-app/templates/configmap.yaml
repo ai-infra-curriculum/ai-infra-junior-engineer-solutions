@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "flask-app.fullname" . }}
+  labels:
+    {{- include "flask-app.labels" . | nindent 4 }}
+data:
+  # Flask Application Configuration
+  APP_NAME: {{ .Values.flask.appName | quote }}
+  FLASK_ENV: {{ .Values.flask.env | quote }}
+  LOG_LEVEL: {{ .Values.flask.logLevel | quote }}
+  JSON_SORT_KEYS: {{ .Values.flask.jsonSortKeys | quote }}
+  MAX_CONTENT_LENGTH: {{ .Values.flask.maxContentLength | quote }}
+
+  {{- if .Values.database.enabled }}
+  # Database Configuration (non-sensitive)
+  DATABASE_HOST: {{ .Values.database.host | quote }}
+  DATABASE_PORT: {{ .Values.database.port | quote }}
+  DATABASE_NAME: {{ .Values.database.name | quote }}
+  DATABASE_SSL_MODE: {{ .Values.database.sslMode | quote }}
+  DATABASE_POOL_SIZE: {{ .Values.database.poolSize | quote }}
+  DATABASE_MAX_OVERFLOW: {{ .Values.database.maxOverflow | quote }}
+  {{- end }}
+
+  {{- if .Values.redis.enabled }}
+  # Redis Configuration (non-sensitive)
+  REDIS_HOST: {{ .Values.redis.host | quote }}
+  REDIS_PORT: {{ .Values.redis.port | quote }}
+  REDIS_DB: {{ .Values.redis.database | quote }}
+  REDIS_MAX_CONNECTIONS: {{ .Values.redis.maxConnections | quote }}
+  {{- end }}
+
+  {{- if .Values.mlModel.enabled }}
+  # ML Model Configuration
+  MODEL_PATH: {{ .Values.mlModel.modelPath | quote }}
+  MODEL_VERSION: {{ .Values.mlModel.modelVersion | quote }}
+  MODEL_TYPE: {{ .Values.mlModel.modelType | quote }}
+  BATCH_SIZE: {{ .Values.mlModel.batchSize | quote }}
+  BATCH_TIMEOUT: {{ .Values.mlModel.batchTimeout | quote }}
+  MODEL_WARMUP: {{ .Values.mlModel.warmup | quote }}
+  MODEL_WORKERS: {{ .Values.mlModel.workers | quote }}
+  {{- end }}

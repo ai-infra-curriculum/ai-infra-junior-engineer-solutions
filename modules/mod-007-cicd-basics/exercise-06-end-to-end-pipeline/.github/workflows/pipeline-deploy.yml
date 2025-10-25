@@ -1,0 +1,187 @@
+name: Deploy Pipeline
+
+on:
+  push:
+    tags:
+      - 'v*'
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/ml-pipeline
+
+jobs:
+  build-and-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build-and-push]
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    environment:
+      name: staging
+      url: https://staging-ml-api.example.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBE_CONFIG_STAGING }}" | base64 -d > kubeconfig
+          export KUBECONFIG=./kubeconfig
+
+      - name: Deploy to Kubernetes
+        run: |
+          export KUBECONFIG=./kubeconfig
+          kubectl set image deployment/ml-inference \
+            ml-inference=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }} \
+            -n ml-staging
+
+          kubectl rollout status deployment/ml-inference -n ml-staging --timeout=5m
+
+      - name: Run smoke tests
+        run: |
+          # Wait for deployment
+          sleep 30
+
+          # Test health endpoint
+          curl -f https://staging-ml-api.example.com/health || exit 1
+
+          # Test prediction endpoint
+          curl -X POST https://staging-ml-api.example.com/predict \
+            -H "Content-Type: application/json" \
+            -d '{"features": [{"feature_0": 0.5}]}' || exit 1
+
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build-and-push, deploy-staging]
+    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+    environment:
+      name: production
+      url: https://ml-api.example.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBE_CONFIG_PRODUCTION }}" | base64 -d > kubeconfig
+          export KUBECONFIG=./kubeconfig
+
+      - name: Deploy to Kubernetes (Blue-Green)
+        run: |
+          export KUBECONFIG=./kubeconfig
+
+          # Deploy green version
+          kubectl set image deployment/ml-inference-green \
+            ml-inference=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }} \
+            -n ml-production
+
+          kubectl rollout status deployment/ml-inference-green -n ml-production --timeout=5m
+
+          # Switch traffic to green
+          kubectl patch service ml-inference -n ml-production \
+            -p '{"spec":{"selector":{"version":"green"}}}'
+
+          echo "Traffic switched to green deployment"
+
+      - name: Run production smoke tests
+        run: |
+          sleep 30
+
+          # Test health endpoint
+          curl -f https://ml-api.example.com/health || exit 1
+
+          # Test prediction endpoint
+          curl -X POST https://ml-api.example.com/predict \
+            -H "Content-Type: application/json" \
+            -d '{"features": [{"feature_0": 0.5}]}' || exit 1
+
+      - name: Keep old deployment as blue (for rollback)
+        run: |
+          export KUBECONFIG=./kubeconfig
+          echo "Blue deployment kept for rollback if needed"
+
+  rollback-production:
+    name: Rollback Production
+    runs-on: ubuntu-latest
+    if: failure() && needs.deploy-production.result == 'failure'
+    needs: [deploy-production]
+    environment:
+      name: production
+
+    steps:
+      - name: Rollback to blue deployment
+        run: |
+          echo "${{ secrets.KUBE_CONFIG_PRODUCTION }}" | base64 -d > kubeconfig
+          export KUBECONFIG=./kubeconfig
+
+          # Switch traffic back to blue
+          kubectl patch service ml-inference -n ml-production \
+            -p '{"spec":{"selector":{"version":"blue"}}}'
+
+          echo "Rolled back to blue deployment"

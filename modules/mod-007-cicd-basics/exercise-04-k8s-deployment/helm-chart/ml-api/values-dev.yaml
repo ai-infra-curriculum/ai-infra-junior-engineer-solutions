@@ -1,0 +1,56 @@
+# Development environment values
+# Override default values for dev environment
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/your-org/ml-api
+  pullPolicy: Always
+  tag: "dev"
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-staging"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+  hosts:
+    - host: ml-api-dev.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+   - secretName: ml-api-dev-tls
+     hosts:
+       - ml-api-dev.example.com
+
+resources:
+  limits:
+    cpu: 250m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+autoscaling:
+  enabled: false
+
+podDisruptionBudget:
+  enabled: false
+
+config:
+  logLevel: DEBUG
+  workers: 2
+  maxRequests: 500
+
+persistence:
+  enabled: true
+  storageClass: "standard"
+  size: 2Gi
+
+# Dev-specific environment variables
+env:
+  - name: ENVIRONMENT
+    value: "development"
+  - name: DEBUG
+    value: "true"

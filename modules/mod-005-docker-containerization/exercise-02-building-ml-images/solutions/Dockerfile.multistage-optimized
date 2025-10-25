@@ -1,0 +1,76 @@
+# Highly optimized multi-stage Dockerfile for ML applications
+# Demonstrates advanced optimization techniques
+
+# Stage 1: Base with common dependencies
+FROM python:3.11-slim as base
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Stage 2: Builder for dependencies
+FROM base as builder
+
+# Install build tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    make \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create and activate virtual environment
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Copy only requirements first (layer caching optimization)
+COPY requirements*.txt /tmp/
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir -r /tmp/requirements-tensorflow.txt
+
+# Stage 3: Runtime
+FROM base as runtime
+
+# Install only runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copy virtual environment from builder
+COPY --from=builder /opt/venv /opt/venv
+
+# Set PATH
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Create non-root user with specific UID/GID
+RUN groupadd -g 1000 mlgroup && \
+    useradd -m -u 1000 -g mlgroup mluser && \
+    mkdir -p /app /models /data /cache && \
+    chown -R mluser:mlgroup /app /models /data /cache
+
+# Set working directory
+WORKDIR /app
+
+# Copy application code (do this late to maximize cache hits)
+COPY --chown=mluser:mlgroup . /app/
+
+# Switch to non-root user
+USER mluser
+
+# Set model cache directory
+ENV TRANSFORMERS_CACHE=/cache \
+    HF_HOME=/cache \
+    TORCH_HOME=/cache
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import sys; sys.exit(0)" || exit 1
+
+# Expose port
+EXPOSE 8000
+
+# Use exec form for CMD
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "120", "app:app"]

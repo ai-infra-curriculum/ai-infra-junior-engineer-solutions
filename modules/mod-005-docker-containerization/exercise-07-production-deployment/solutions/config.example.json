@@ -1,0 +1,43 @@
+{
+  "service_name": "ml-api",
+  "image": "ml-api:v2.0.0",
+  "replicas": 3,
+  "port": 8000,
+  "health_url": "/health",
+  "update_delay": 10,
+  "canary_percentage": 10,
+  "container_config": {
+    "environment": {
+      "ENV": "production",
+      "MODEL_VERSION": "v2.0.0",
+      "LOG_LEVEL": "info",
+      "DATABASE_URL": "postgresql://mluser:password@postgres:5432/mldb",
+      "REDIS_URL": "redis://redis:6379/0"
+    },
+    "ports": {
+      "8000/tcp": 8000,
+      "8001/tcp": 8001
+    },
+    "volumes": {
+      "ml-models": {
+        "bind": "/models",
+        "mode": "ro"
+      },
+      "ml-cache": {
+        "bind": "/app/cache",
+        "mode": "rw"
+      }
+    },
+    "labels": {
+      "service": "ml-api",
+      "monitoring": "enabled",
+      "health.port": "8000",
+      "health.path": "/health"
+    },
+    "restart_policy": {
+      "Name": "unless-stopped"
+    }
+  },
+  "network": "ml-network",
+  "volumes": ["ml-models", "ml-cache"]
+}

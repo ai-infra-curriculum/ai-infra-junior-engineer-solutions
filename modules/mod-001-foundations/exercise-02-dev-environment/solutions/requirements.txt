@@ -1,0 +1,25 @@
+# Requirements for Development Environment Setup Tools
+#
+# These tools help validate and configure your AI/ML development environment
+#
+# Installation:
+#   pip install -r requirements.txt
+#
+# Or with specific versions:
+#   pip install -r requirements.txt --upgrade
+
+# Core dependencies
+PyYAML>=6.0.1          # YAML parsing for configs
+psutil>=5.9.0          # System and process utilities
+
+# Optional but recommended
+rich>=13.0.0           # Better terminal output (optional)
+click>=8.1.0           # CLI framework (optional)
+requests>=2.31.0       # HTTP requests (for installer scripts)
+
+# Development/Testing (optional)
+pytest>=7.4.0          # Testing framework
+pytest-cov>=4.1.0      # Coverage reporting
+black>=23.0.0          # Code formatting
+ruff>=0.1.0            # Linting
+mypy>=1.5.0            # Type checking

@@ -1,0 +1,61 @@
+# Grafana Dashboard Provisioning
+# Auto-loads dashboards from JSON files on startup
+
+apiVersion: 1
+
+providers:
+  # ==========================================
+  # ML Platform Dashboards
+  # ==========================================
+  - name: 'ML Platform - SLO & Service Health'
+    orgId: 1
+    folder: 'ML Platform'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/ml-platform
+      foldersFromFilesStructure: false
+
+  # ==========================================
+  # Infrastructure Dashboards
+  # ==========================================
+  - name: 'Infrastructure Monitoring'
+    orgId: 1
+    folder: 'Infrastructure'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/infrastructure
+      foldersFromFilesStructure: false
+
+  # ==========================================
+  # Executive Dashboards
+  # ==========================================
+  - name: 'Executive Overview'
+    orgId: 1
+    folder: 'Executive'
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/executive
+      foldersFromFilesStructure: false
+
+  # ==========================================
+  # Default Dashboards (Home)
+  # ==========================================
+  - name: 'Default Dashboards'
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards/default
+      foldersFromFilesStructure: false

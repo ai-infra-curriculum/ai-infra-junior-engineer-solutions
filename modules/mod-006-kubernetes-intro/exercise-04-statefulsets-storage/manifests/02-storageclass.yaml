@@ -1,0 +1,29 @@
+---
+# StorageClass for dynamic provisioning
+# Note: This example uses 'standard' which works with most local clusters
+# In production, use appropriate StorageClass for your environment
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: fast-storage
+  labels:
+    exercise: statefulsets-storage
+provisioner: kubernetes.io/no-provisioner  # For local testing
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain  # Keep data after PVC deletion
+
+---
+# Example StorageClass for production (cloud environments)
+# Uncomment and adjust for your cloud provider
+# apiVersion: storage.k8s.io/v1
+# kind: StorageClass
+# metadata:
+#   name: fast-ssd
+# provisioner: kubernetes.io/aws-ebs  # or gce-pd, azure-disk
+# parameters:
+#   type: gp3
+#   iopsPerGB: "10"
+#   fsType: ext4
+# volumeBindingMode: WaitForFirstConsumer
+# allowVolumeExpansion: true
+# reclaimPolicy: Delete

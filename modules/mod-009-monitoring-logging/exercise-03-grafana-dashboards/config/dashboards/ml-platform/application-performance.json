@@ -1,0 +1,421 @@
+{
+  "dashboard": {
+    "uid": "app-performance",
+    "title": "Application Performance - Inference Gateway",
+    "tags": [
+      "Application",
+      "ML Platform",
+      "Performance"
+    ],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "version": 1,
+    "refresh": "30s",
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "timepicker": {
+      "refresh_intervals": [
+        "10s",
+        "30s",
+        "1m",
+        "5m",
+        "15m",
+        "30m",
+        "1h",
+        "2h",
+        "1d"
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Request Metrics",
+        "type": "row",
+        "gridPos": {
+          "x": 0,
+          "y": 0,
+          "w": 24,
+          "h": 1
+        },
+        "collapsed": false,
+        "panels": []
+      },
+      {
+        "id": 2,
+        "title": "Request Rate (QPS)",
+        "type": "stat",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": {
+          "x": 0,
+          "y": 1,
+          "w": 6,
+          "h": 4
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{service=\"inference-gateway\"}[5m]))",
+            "refId": "A",
+            "instant": true
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value",
+          "justifyMode": "auto",
+          "textMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": [
+              "lastNotNull"
+            ]
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "reqps",
+            "decimals": 2,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": null,
+                  "color": "green"
+                },
+                {
+                  "value": 80,
+                  "color": "red"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Error Rate",
+        "type": "stat",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": {
+          "x": 6,
+          "y": 1,
+          "w": 6,
+          "h": 4
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{service=\"inference-gateway\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{service=\"inference-gateway\"}[5m])) * 100",
+            "refId": "A",
+            "instant": true
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value",
+          "justifyMode": "auto",
+          "textMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": [
+              "lastNotNull"
+            ]
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "decimals": 2,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": null,
+                  "color": "green"
+                },
+                {
+                  "value": 1,
+                  "color": "yellow"
+                },
+                {
+                  "value": 5,
+                  "color": "red"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Avg Response Time",
+        "type": "stat",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": {
+          "x": 12,
+          "y": 1,
+          "w": 6,
+          "h": 4
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(http_request_duration_seconds_sum{service=\"inference-gateway\"}[5m])) / sum(rate(http_request_duration_seconds_count{service=\"inference-gateway\"}[5m])) * 1000",
+            "refId": "A",
+            "instant": true
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value",
+          "justifyMode": "auto",
+          "textMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": [
+              "lastNotNull"
+            ]
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "decimals": 2,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": null,
+                  "color": "green"
+                },
+                {
+                  "value": 80,
+                  "color": "red"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Active Requests",
+        "type": "stat",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": {
+          "x": 18,
+          "y": 1,
+          "w": 6,
+          "h": 4
+        },
+        "targets": [
+          {
+            "expr": "http_requests_in_progress{service=\"inference-gateway\"}",
+            "refId": "A",
+            "instant": true
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value",
+          "justifyMode": "auto",
+          "textMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": [
+              "lastNotNull"
+            ]
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "decimals": 2,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": null,
+                  "color": "green"
+                },
+                {
+                  "value": 80,
+                  "color": "red"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Request Rate by Endpoint",
+        "type": "timeseries",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": {
+          "x": 0,
+          "y": 5,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{service=\"inference-gateway\"}[5m])) by (endpoint)",
+            "refId": "A",
+            "legendFormat": "{{endpoint}}"
+          }
+        ],
+        "options": {
+          "legend": {
+            "calcs": [
+              "mean",
+              "lastNotNull",
+              "max"
+            ],
+            "displayMode": "table",
+            "placement": "bottom",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "barAlignment": 0,
+              "lineWidth": 1,
+              "fillOpacity": 10,
+              "gradientMode": "none",
+              "spanNulls": false,
+              "showPoints": "never",
+              "pointSize": 5,
+              "stacking": {
+                "mode": "none",
+                "group": "A"
+              },
+              "axisPlacement": "auto",
+              "axisLabel": "",
+              "scaleDistribution": {
+                "type": "linear"
+              }
+            },
+            "unit": "reqps",
+            "decimals": 2
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "Error Rate Over Time",
+        "type": "timeseries",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": {
+          "x": 12,
+          "y": 5,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{service=\"inference-gateway\",status=~\"5..\"}[5m])) by (status)",
+            "refId": "A",
+            "legendFormat": "{{status}}"
+          }
+        ],
+        "options": {
+          "legend": {
+            "calcs": [
+              "mean",
+              "lastNotNull",
+              "max"
+            ],
+            "displayMode": "table",
+            "placement": "bottom",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "barAlignment": 0,
+              "lineWidth": 1,
+              "fillOpacity": 10,
+              "gradientMode": "none",
+              "spanNulls": false,
+              "showPoints": "never",
+              "pointSize": 5,
+              "stacking": {
+                "mode": "none",
+                "group": "A"
+              },
+              "axisPlacement": "auto",
+              "axisLabel": "",
+              "scaleDistribution": {
+                "type": "linear"
+              }
+            },
+            "unit": "reqps",
+            "decimals": 2
+          }
+        }
+      }
+    ],
+    "templating": {
+      "list": []
+    },
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1,
+          "datasource": {
+            "type": "grafana",
+            "uid": "-- Grafana --"
+          },
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "type": "dashboard"
+        }
+      ]
+    },
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 1,
+    "links": [],
+    "liveNow": false,
+    "style": "dark"
+  },
+  "overwrite": true
+}

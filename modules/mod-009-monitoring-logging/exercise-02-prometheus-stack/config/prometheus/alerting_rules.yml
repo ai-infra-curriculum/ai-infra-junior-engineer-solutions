@@ -1,0 +1,404 @@
+# Prometheus Alerting Rules for ML Infrastructure
+# Purpose: Alert on SLO violations, infrastructure issues, and application errors
+# Last Updated: 2025-10-23
+
+groups:
+  # ==========================================
+  # Critical SLO Alerts (Page Immediately)
+  # ==========================================
+  - name: slo_critical_alerts
+    interval: 30s
+    rules:
+      # Multi-Window Multi-Burn-Rate (MWMBR) Alert - Fast Burn
+      # Triggers when: 2% error budget consumed in 1h (14.4x burn rate)
+      # Action: Page on-call immediately
+      - alert: SLOAvailabilityFastBurn
+        expr: |
+          slo:availability:burn_rate:1h > 14.4
+          and
+          slo:availability:burn_rate:6h > 14.4
+        for: 2m
+        labels:
+          severity: critical
+          alert_type: slo
+          slo_window: fast_burn
+          page: "true"
+          team: ml-platform
+        annotations:
+          summary: "Inference Gateway availability SLO fast burn detected"
+          description: |
+            The inference-gateway service is consuming error budget at 14.4x normal rate.
+            At this rate, the entire monthly error budget will be exhausted in 2 hours.
+
+            Current burn rate (1h): {{ $value | humanize }}
+            SLO target: 99.5% availability
+            Error budget: 0.5% (21.6 minutes/month)
+
+            Immediate action required!
+          runbook_url: "https://wiki.company.com/runbooks/slo-fast-burn"
+          dashboard_url: "http://localhost:3000/d/slo-overview"
+
+      # MWMBR Alert - Slow Burn
+      # Triggers when: 10% error budget consumed in 3d (6x burn rate)
+      # Action: Create incident, notify team
+      - alert: SLOAvailabilitySlowBurn
+        expr: |
+          slo:availability:burn_rate:3d > 6
+        for: 15m
+        labels:
+          severity: warning
+          alert_type: slo
+          slo_window: slow_burn
+          page: "false"
+          team: ml-platform
+        annotations:
+          summary: "Inference Gateway availability SLO slow burn detected"
+          description: |
+            The inference-gateway service is consuming error budget at 6x normal rate.
+            At this rate, the monthly error budget will be exhausted in 5 days.
+
+            Current burn rate (3d): {{ $value | humanize }}
+            SLO target: 99.5% availability
+
+            Investigation recommended.
+          runbook_url: "https://wiki.company.com/runbooks/slo-slow-burn"
+          dashboard_url: "http://localhost:3000/d/slo-overview"
+
+      # Latency P99 SLO Violation
+      # Target: P99 < 300ms for /predict endpoint
+      - alert: SLOLatencyP99Violation
+        expr: |
+          slo:http_request_duration:p99:rate5m > 300
+        for: 5m
+        labels:
+          severity: warning
+          alert_type: slo
+          slo_type: latency
+          page: "false"
+          team: ml-platform
+        annotations:
+          summary: "Inference Gateway P99 latency exceeds SLO target"
+          description: |
+            The /predict endpoint P99 latency is {{ $value | humanize }}ms, exceeding the 300ms SLO target.
+
+            P99 latency (5m): {{ $value | printf "%.2f" }}ms
+            SLO target: < 300ms
+
+            Check for:
+            - Model inference slowness
+            - Resource saturation (CPU/memory)
+            - Network issues
+            - Database query performance
+          runbook_url: "https://wiki.company.com/runbooks/latency-slo-violation"
+          dashboard_url: "http://localhost:3000/d/latency-analysis"
+
+      # Error Budget Nearly Exhausted (90% consumed)
+      - alert: SLOErrorBudgetCritical
+        expr: |
+          slo:availability:error_budget_remaining < 0.1
+        for: 5m
+        labels:
+          severity: critical
+          alert_type: slo
+          budget_status: critical
+          page: "true"
+          team: ml-platform
+        annotations:
+          summary: "Error budget critically low (< 10% remaining)"
+          description: |
+            Only {{ $value | humanizePercentage }} of the monthly error budget remains.
+
+            Freeze non-critical deployments and changes until error budget recovers.
+            Focus on reliability improvements.
+          runbook_url: "https://wiki.company.com/runbooks/error-budget-freeze"
+
+  # ==========================================
+  # Application Health Alerts
+  # ==========================================
+  - name: application_health
+    interval: 30s
+    rules:
+      # Service down
+      - alert: ServiceDown
+        expr: |
+          up{service=~"inference-gateway|prometheus|alertmanager"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          alert_type: availability
+          page: "true"
+        annotations:
+          summary: "Service {{ $labels.service }} is down"
+          description: |
+            The {{ $labels.service }} service has been down for more than 1 minute.
+
+            Instance: {{ $labels.instance }}
+            Job: {{ $labels.job }}
+          runbook_url: "https://wiki.company.com/runbooks/service-down"
+
+      # High error rate (> 5%)
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{service="inference-gateway", status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{service="inference-gateway"}[5m]))
+          ) * 100 > 5
+        for: 2m
+        labels:
+          severity: critical
+          alert_type: errors
+          page: "true"
+        annotations:
+          summary: "High error rate detected (> 5%)"
+          description: |
+            Error rate is {{ $value | printf "%.2f" }}%, exceeding the 5% threshold.
+
+            This is significantly impacting availability SLO.
+            Check application logs immediately.
+          runbook_url: "https://wiki.company.com/runbooks/high-error-rate"
+
+      # Elevated error rate (> 1%)
+      - alert: ElevatedErrorRate
+        expr: |
+          (
+            sum(rate(http_requests_total{service="inference-gateway", status=~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{service="inference-gateway"}[5m]))
+          ) * 100 > 1
+        for: 5m
+        labels:
+          severity: warning
+          alert_type: errors
+          page: "false"
+        annotations:
+          summary: "Elevated error rate detected (> 1%)"
+          description: |
+            Error rate is {{ $value | printf "%.2f" }}%, above normal baseline.
+
+            Monitor closely and investigate if it continues.
+
+      # Health check failing
+      - alert: HealthCheckFailing
+        expr: |
+          probe_success{probe_type="http"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          alert_type: availability
+          page: "true"
+        annotations:
+          summary: "Health check failing for {{ $labels.instance }}"
+          description: |
+            The health check probe for {{ $labels.instance }} has been failing for 2 minutes.
+
+            Service: {{ $labels.service }}
+
+  # ==========================================
+  # Infrastructure Alerts
+  # ==========================================
+  - name: infrastructure_alerts
+    interval: 1m
+    rules:
+      # High CPU usage (> 80%)
+      - alert: HighCPUUsage
+        expr: |
+          container:cpu_usage:percent > 80
+        for: 5m
+        labels:
+          severity: warning
+          alert_type: resource
+          resource: cpu
+        annotations:
+          summary: "High CPU usage for {{ $labels.container_label_com_docker_compose_service }}"
+          description: |
+            CPU usage is {{ $value | printf "%.2f" }}%, exceeding 80% threshold.
+
+            Container: {{ $labels.container_label_com_docker_compose_service }}
+
+            Consider:
+            - Scaling horizontally
+            - Optimizing application code
+            - Upgrading instance type
+
+      # Critical CPU usage (> 95%)
+      - alert: CriticalCPUUsage
+        expr: |
+          container:cpu_usage:percent > 95
+        for: 2m
+        labels:
+          severity: critical
+          alert_type: resource
+          resource: cpu
+          page: "true"
+        annotations:
+          summary: "Critical CPU usage for {{ $labels.container_label_com_docker_compose_service }}"
+          description: |
+            CPU usage is {{ $value | printf "%.2f" }}%, at critical levels!
+
+            Service performance is severely degraded.
+            Scale immediately or kill non-essential processes.
+
+      # High memory usage (> 85%)
+      - alert: HighMemoryUsage
+        expr: |
+          container:memory_usage:percent > 85
+        for: 5m
+        labels:
+          severity: warning
+          alert_type: resource
+          resource: memory
+        annotations:
+          summary: "High memory usage for {{ $labels.container_label_com_docker_compose_service }}"
+          description: |
+            Memory usage is {{ $value | printf "%.2f" }}%, exceeding 85% threshold.
+
+            Risk of OOM kills.
+
+      # Critical memory usage (> 95%)
+      - alert: CriticalMemoryUsage
+        expr: |
+          container:memory_usage:percent > 95
+        for: 2m
+        labels:
+          severity: critical
+          alert_type: resource
+          resource: memory
+          page: "true"
+        annotations:
+          summary: "Critical memory usage for {{ $labels.container_label_com_docker_compose_service }}"
+          description: |
+            Memory usage is {{ $value | printf "%.2f" }}%, OOM kill imminent!
+
+            Scale immediately or restart service.
+
+      # Disk space low (< 15% free)
+      - alert: DiskSpaceLow
+        expr: |
+          (
+            node_filesystem_avail_bytes{mountpoint="/host/root"}
+            /
+            node_filesystem_size_bytes{mountpoint="/host/root"}
+          ) * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+          alert_type: resource
+          resource: disk
+        annotations:
+          summary: "Disk space low on {{ $labels.instance }}"
+          description: |
+            Only {{ $value | printf "%.2f" }}% disk space remaining.
+
+            Clean up old logs, container images, or expand volume.
+
+      # Container restarting frequently
+      - alert: ContainerRestartingFrequently
+        expr: |
+          rate(container_last_seen{container_label_com_docker_compose_service!=""}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          alert_type: stability
+        annotations:
+          summary: "Container {{ $labels.container_label_com_docker_compose_service }} restarting frequently"
+          description: |
+            The container has restarted {{ $value | printf "%.2f" }} times in the last 5 minutes.
+
+            Check logs for crash causes.
+
+  # ==========================================
+  # ML Model Performance Alerts
+  # ==========================================
+  - name: ml_model_alerts
+    interval: 1m
+    rules:
+      # Low prediction confidence
+      - alert: LowPredictionConfidence
+        expr: |
+          ml:prediction_confidence:avg:rate5m < 0.5
+        for: 10m
+        labels:
+          severity: warning
+          alert_type: model_quality
+        annotations:
+          summary: "Low average prediction confidence for {{ $labels.model_name }}"
+          description: |
+            Average prediction confidence is {{ $value | printf "%.2f" }}, below 0.5 threshold.
+
+            Model: {{ $labels.model_name }}
+
+            Possible causes:
+            - Model drift
+            - Poor quality input data
+            - Model needs retraining
+
+      # Model load time excessive
+      - alert: ModelLoadTimeSlow
+        expr: |
+          ml:model_load_time:p95:rate5m > 10
+        for: 5m
+        labels:
+          severity: warning
+          alert_type: performance
+        annotations:
+          summary: "Model load time excessive for {{ $labels.model_name }}"
+          description: |
+            P95 model load time is {{ $value | printf "%.2f" }}s, exceeding 10s threshold.
+
+            This impacts service startup and autoscaling responsiveness.
+
+  # ==========================================
+  # Prometheus Meta-Monitoring
+  # ==========================================
+  - name: prometheus_monitoring
+    interval: 1m
+    rules:
+      # Prometheus scrape failures
+      - alert: PrometheusScrapeFailures
+        expr: |
+          up == 0
+        for: 5m
+        labels:
+          severity: warning
+          alert_type: monitoring
+        annotations:
+          summary: "Prometheus cannot scrape {{ $labels.job }}/{{ $labels.instance }}"
+          description: |
+            Prometheus has failed to scrape {{ $labels.instance }} for 5 minutes.
+
+            Job: {{ $labels.job }}
+
+            Check target health and network connectivity.
+
+      # Prometheus high cardinality
+      - alert: PrometheusHighCardinality
+        expr: |
+          prometheus_tsdb_symbol_table_size_bytes > 100000000  # 100MB
+        for: 15m
+        labels:
+          severity: warning
+          alert_type: monitoring
+        annotations:
+          summary: "Prometheus experiencing high cardinality"
+          description: |
+            Symbol table size is {{ $value | humanize1024 }}, indicating high cardinality.
+
+            Review metric labels and implement relabeling to reduce cardinality.
+
+      # Alertmanager down
+      - alert: AlertmanagerDown
+        expr: |
+          up{job="alertmanager"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          alert_type: monitoring
+          page: "true"
+        annotations:
+          summary: "Alertmanager is down"
+          description: |
+            Alertmanager has been down for 5 minutes.
+
+            Alerts will not be routed or delivered!
+            Restore Alertmanager immediately.

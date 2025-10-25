@@ -1,0 +1,572 @@
+---
+# Simple Training Job
+# One-time batch training job
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: model-training-simple
+  namespace: ml-workloads
+  labels:
+    app: model-training
+    job-type: training
+    model: sentiment-classifier
+spec:
+  # Retry failed jobs up to 3 times
+  backoffLimit: 3
+  # Keep completed job pods for 1 hour
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: model-training
+        job-type: training
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: trainer
+        image: python:3.11-slim
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "===== ML Training Job Started ====="
+            echo "Timestamp: $(date)"
+            echo ""
+
+            # Install dependencies
+            pip install --no-cache-dir numpy scikit-learn
+
+            # Simulate training
+            cat > /app/train.py << 'PYEOF'
+            import time
+            import json
+            from datetime import datetime
+
+            print("Loading training data...")
+            time.sleep(2)
+
+            print("Training model (10 epochs)...")
+            for epoch in range(1, 11):
+                print(f"Epoch {epoch}/10 - loss: {1.0 / epoch:.4f}, accuracy: {0.5 + (epoch * 0.04):.4f}")
+                time.sleep(1)
+
+            print("\nTraining complete!")
+            print("Saving model...")
+
+            # Save model metadata
+            metadata = {
+                "model_name": "sentiment-classifier",
+                "version": "1.0.0",
+                "trained_at": datetime.now().isoformat(),
+                "accuracy": 0.92,
+                "loss": 0.15,
+                "epochs": 10,
+                "framework": "tensorflow"
+            }
+
+            with open('/models/sentiment-classifier/1/metadata.json', 'w') as f:
+                json.dump(metadata, f, indent=2)
+
+            print("Model saved to /models/sentiment-classifier/1/")
+            print("Training job completed successfully!")
+            PYEOF
+
+            python /app/train.py
+
+            echo ""
+            echo "===== Training Job Completed ====="
+        env:
+        - name: MODEL_NAME
+          value: "sentiment-classifier"
+        - name: EPOCHS
+          value: "10"
+        - name: BATCH_SIZE
+          value: "32"
+        - name: LEARNING_RATE
+          value: "0.001"
+        volumeMounts:
+        - name: training-data
+          mountPath: /data
+          readOnly: true
+        - name: models
+          mountPath: /models
+        - name: artifacts
+          mountPath: /artifacts
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+      volumes:
+      - name: training-data
+        persistentVolumeClaim:
+          claimName: training-data-pvc
+      - name: models
+        persistentVolumeClaim:
+          claimName: models-pvc
+      - name: artifacts
+        persistentVolumeClaim:
+          claimName: artifacts-pvc
+
+---
+# Scheduled Training Job (CronJob)
+# Periodically retrain model with new data
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: scheduled-model-training
+  namespace: ml-workloads
+  labels:
+    app: model-training
+    job-type: scheduled-training
+spec:
+  # Run every day at 2 AM
+  schedule: "0 2 * * *"
+  # Keep last 3 successful jobs
+  successfulJobsHistoryLimit: 3
+  # Keep last 1 failed job
+  failedJobsHistoryLimit: 1
+  # Don't start new job if previous one is still running
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    metadata:
+      labels:
+        app: model-training
+        job-type: scheduled-training
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: model-training
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: trainer
+            image: python:3.11-slim
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                echo "===== Scheduled Training Started ====="
+                echo "Job: $JOB_NAME"
+                echo "Run ID: $RUN_ID"
+                echo "Date: $(date)"
+                echo ""
+
+                pip install --no-cache-dir numpy scikit-learn
+
+                echo "Checking for new training data..."
+                NEW_DATA_COUNT=$(find /data -type f -mtime -1 | wc -l)
+                echo "Found $NEW_DATA_COUNT new data files"
+
+                if [ "$NEW_DATA_COUNT" -gt 0 ]; then
+                  echo "Training model with new data..."
+                  # Training logic here
+                  sleep 10
+                  echo "Model training completed"
+                else
+                  echo "No new data, skipping training"
+                fi
+
+                echo "===== Scheduled Training Completed ====="
+            env:
+            - name: JOB_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: RUN_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
+            volumeMounts:
+            - name: training-data
+              mountPath: /data
+            - name: models
+              mountPath: /models
+            - name: artifacts
+              mountPath: /artifacts
+            resources:
+              requests:
+                memory: "2Gi"
+                cpu: "1000m"
+              limits:
+                memory: "4Gi"
+                cpu: "2000m"
+          volumes:
+          - name: training-data
+            persistentVolumeClaim:
+              claimName: training-data-pvc
+          - name: models
+            persistentVolumeClaim:
+              claimName: models-pvc
+          - name: artifacts
+            persistentVolumeClaim:
+              claimName: artifacts-pvc
+
+---
+# Distributed Training Job
+# Multi-worker training using multiple pods
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: distributed-training
+  namespace: ml-workloads
+  labels:
+    app: model-training
+    job-type: distributed-training
+spec:
+  # Run 4 parallel pods for distributed training
+  parallelism: 4
+  completions: 4
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: model-training
+        job-type: distributed-training
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: trainer
+        image: python:3.11-slim
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "===== Distributed Training Worker ====="
+            echo "Pod: $POD_NAME"
+            echo "Pod IP: $POD_IP"
+            echo "Worker Index: $WORKER_INDEX"
+            echo ""
+
+            pip install --no-cache-dir numpy
+
+            cat > /app/distributed_train.py << 'PYEOF'
+            import os
+            import time
+            import socket
+
+            pod_name = os.environ.get('POD_NAME', 'unknown')
+            worker_index = os.environ.get('WORKER_INDEX', '0')
+
+            print(f"Worker {worker_index} starting...")
+            print(f"Pod: {pod_name}")
+            print(f"Hostname: {socket.gethostname()}")
+
+            # Simulate distributed training
+            print(f"\nWorker {worker_index} training...")
+            for epoch in range(1, 6):
+                print(f"[Worker {worker_index}] Epoch {epoch}/5 - Processing batch...")
+                time.sleep(2)
+
+            print(f"\nWorker {worker_index} completed!")
+            PYEOF
+
+            export WORKER_INDEX=$(($(hostname | sed 's/.*-//') + 1))
+            python /app/distributed_train.py
+
+            echo "===== Worker Completed ====="
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: MASTER_ADDR
+          value: "distributed-training-0"
+        - name: MASTER_PORT
+          value: "23456"
+        volumeMounts:
+        - name: training-data
+          mountPath: /data
+          readOnly: true
+        - name: models
+          mountPath: /models
+        - name: artifacts
+          mountPath: /artifacts
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+      volumes:
+      - name: training-data
+        persistentVolumeClaim:
+          claimName: training-data-pvc
+      - name: models
+        persistentVolumeClaim:
+          claimName: models-pvc
+      - name: artifacts
+        persistentVolumeClaim:
+          claimName: artifacts-pvc
+
+---
+# GPU Training Job
+# Training job using GPU resources
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: gpu-training-job
+  namespace: ml-workloads
+  labels:
+    app: model-training
+    job-type: gpu-training
+    gpu: "true"
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app: model-training
+        job-type: gpu-training
+    spec:
+      restartPolicy: OnFailure
+      # Select nodes with GPUs
+      nodeSelector:
+        accelerator: nvidia-gpu
+      # Tolerate GPU taints
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      containers:
+      - name: gpu-trainer
+        image: nvidia/cuda:11.8.0-runtime-ubuntu22.04
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "===== GPU Training Job ====="
+            echo "Checking GPU availability..."
+            nvidia-smi || echo "No GPU detected"
+            echo ""
+
+            echo "GPU Training starting..."
+            echo "This would train a large model using GPU acceleration"
+            sleep 30
+
+            echo "GPU Training completed!"
+            echo "===== Job Completed ====="
+        env:
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        - name: NVIDIA_VISIBLE_DEVICES
+          value: "all"
+        volumeMounts:
+        - name: training-data
+          mountPath: /data
+          readOnly: true
+        - name: models
+          mountPath: /models
+        - name: artifacts
+          mountPath: /artifacts
+        resources:
+          requests:
+            memory: "8Gi"
+            cpu: "4000m"
+            nvidia.com/gpu: 1
+          limits:
+            memory: "16Gi"
+            cpu: "8000m"
+            nvidia.com/gpu: 1
+      volumes:
+      - name: training-data
+        persistentVolumeClaim:
+          claimName: training-data-pvc
+      - name: models
+        persistentVolumeClaim:
+          claimName: models-pvc
+      - name: artifacts
+        persistentVolumeClaim:
+          claimName: artifacts-pvc
+
+---
+# Hyperparameter Tuning Job
+# Run multiple training jobs with different hyperparameters
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hyperparameter-tuning
+  namespace: ml-workloads
+  labels:
+    app: model-training
+    job-type: hyperparameter-tuning
+spec:
+  # Run 9 different configurations in parallel
+  parallelism: 3
+  completions: 9
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: model-training
+        job-type: hyperparameter-tuning
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: tuner
+        image: python:3.11-slim
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "===== Hyperparameter Tuning Job ====="
+
+            pip install --no-cache-dir numpy scikit-learn
+
+            # Generate random hyperparameters
+            LEARNING_RATE=$(python -c "import random; print(random.uniform(0.0001, 0.01))")
+            BATCH_SIZE=$(python -c "import random; print(random.choice([16, 32, 64, 128]))")
+            DROPOUT=$(python -c "import random; print(random.uniform(0.1, 0.5))")
+
+            echo "Testing hyperparameters:"
+            echo "  Learning Rate: $LEARNING_RATE"
+            echo "  Batch Size: $BATCH_SIZE"
+            echo "  Dropout: $DROPOUT"
+            echo ""
+
+            # Simulate training with these hyperparameters
+            echo "Training model..."
+            sleep 10
+
+            # Simulate evaluation
+            ACCURACY=$(python -c "import random; print(round(random.uniform(0.75, 0.95), 4))")
+            echo "Accuracy: $ACCURACY"
+
+            # Save results
+            mkdir -p /artifacts/hyperparameter-tuning
+            cat > /artifacts/hyperparameter-tuning/result-$POD_NAME.json << EOF
+            {
+              "learning_rate": $LEARNING_RATE,
+              "batch_size": $BATCH_SIZE,
+              "dropout": $DROPOUT,
+              "accuracy": $ACCURACY,
+              "pod": "$POD_NAME"
+            }
+            EOF
+
+            echo "Results saved to /artifacts/hyperparameter-tuning/"
+            echo "===== Job Completed ====="
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        volumeMounts:
+        - name: training-data
+          mountPath: /data
+          readOnly: true
+        - name: artifacts
+          mountPath: /artifacts
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      volumes:
+      - name: training-data
+        persistentVolumeClaim:
+          claimName: training-data-pvc
+      - name: artifacts
+        persistentVolumeClaim:
+          claimName: artifacts-pvc
+
+---
+# Training Pipeline Job
+# Multi-stage training pipeline (preprocessing -> training -> evaluation)
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: training-pipeline
+  namespace: ml-workloads
+  labels:
+    app: model-training
+    job-type: pipeline
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app: model-training
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+      # Stage 1: Data preprocessing
+      - name: preprocessing
+        image: python:3.11-slim
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "===== Stage 1: Data Preprocessing ====="
+            pip install --no-cache-dir numpy pandas
+            echo "Preprocessing training data..."
+            sleep 5
+            echo "Preprocessing complete!"
+        volumeMounts:
+        - name: training-data
+          mountPath: /data
+        - name: artifacts
+          mountPath: /artifacts
+      # Stage 2: Training
+      - name: training
+        image: python:3.11-slim
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "===== Stage 2: Model Training ====="
+            pip install --no-cache-dir numpy scikit-learn
+            echo "Training model..."
+            sleep 10
+            echo "Training complete!"
+        volumeMounts:
+        - name: training-data
+          mountPath: /data
+        - name: models
+          mountPath: /models
+        - name: artifacts
+          mountPath: /artifacts
+      containers:
+      # Stage 3: Evaluation
+      - name: evaluation
+        image: python:3.11-slim
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "===== Stage 3: Model Evaluation ====="
+            pip install --no-cache-dir numpy scikit-learn
+            echo "Evaluating model..."
+            sleep 5
+            echo "Metrics:"
+            echo "  Accuracy: 0.92"
+            echo "  Precision: 0.90"
+            echo "  Recall: 0.93"
+            echo "  F1-Score: 0.91"
+            echo "Pipeline complete!"
+        volumeMounts:
+        - name: models
+          mountPath: /models
+          readOnly: true
+        - name: artifacts
+          mountPath: /artifacts
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      volumes:
+      - name: training-data
+        persistentVolumeClaim:
+          claimName: training-data-pvc
+      - name: models
+        persistentVolumeClaim:
+          claimName: models-pvc
+      - name: artifacts
+        persistentVolumeClaim:
+          claimName: artifacts-pvc

@@ -1,0 +1,141 @@
+# Grafana Data Sources Provisioning
+# Auto-configures Prometheus, Loki, and Jaeger on Grafana startup
+
+apiVersion: 1
+
+# Delete all existing datasources before adding new ones
+deleteDatasources:
+  - name: Prometheus
+    orgId: 1
+  - name: Loki
+    orgId: 1
+  - name: Jaeger
+    orgId: 1
+
+datasources:
+  # ==========================================
+  # Prometheus - Metrics Database
+  # ==========================================
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    orgId: 1
+    uid: prometheus
+    url: http://prometheus:9090
+    isDefault: true
+    version: 1
+    editable: false
+    jsonData:
+      httpMethod: POST
+      timeInterval: 15s
+      queryTimeout: 60s
+      customQueryParameters: ''
+
+      # Exemplars (link metrics to traces)
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: jaeger
+
+      # Prometheus-specific features
+      prometheusType: Prometheus
+      prometheusVersion: 2.48.0
+      cacheLevel: High
+      disableMetricsLookup: false
+      incrementalQuerying: true
+      incrementalQueryOverlapWindow: 10m
+
+      # Recording rules
+      manageAlerts: false
+
+    # Default query options
+    defaultEditor: code
+
+  # ==========================================
+  # Loki - Log Aggregation
+  # ==========================================
+  - name: Loki
+    type: loki
+    access: proxy
+    orgId: 1
+    uid: loki
+    url: http://loki:3100
+    isDefault: false
+    version: 1
+    editable: false
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        # Extract trace_id from logs and link to Jaeger
+        - datasourceUid: jaeger
+          matcherRegex: "trace_id=(\\w+)"
+          name: TraceID
+          url: "$${__value.raw}"
+        # Extract request_id from logs
+        - matcherRegex: "request_id=([\\w-]+)"
+          name: RequestID
+          url: ""
+
+      # Query timeout
+      timeout: 60
+
+      # Live streaming
+      maxStreams: 100
+      streamingEnabled: true
+
+  # ==========================================
+  # Jaeger - Distributed Tracing
+  # ==========================================
+  - name: Jaeger
+    type: jaeger
+    access: proxy
+    orgId: 1
+    uid: jaeger
+    url: http://jaeger:16686
+    isDefault: false
+    version: 1
+    editable: false
+    jsonData:
+      # Trace to logs correlation
+      tracesToLogs:
+        datasourceUid: loki
+        filterByTraceID: true
+        filterBySpanID: false
+        mapTagNamesEnabled: true
+        mappedTags:
+          - key: service.name
+            value: service
+        spanStartTimeShift: '-1h'
+        spanEndTimeShift: '1h'
+
+      # Trace to metrics correlation
+      tracesToMetrics:
+        datasourceUid: prometheus
+        queries:
+          - name: 'Request rate'
+            query: 'sum(rate(http_requests_total{service="$service"}[5m]))'
+          - name: 'Error rate'
+            query: 'sum(rate(http_requests_total{service="$service",status=~"5.."}[5m]))'
+          - name: 'Duration'
+            query: 'histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{service="$service"}[5m]))'
+
+      # Node graph settings
+      nodeGraph:
+        enabled: true
+
+      # Service map
+      serviceMap:
+        enabled: true
+
+  # ==========================================
+  # TestData - For Dashboard Development
+  # ==========================================
+  - name: TestData
+    type: testdata
+    access: proxy
+    orgId: 1
+    uid: testdata
+    isDefault: false
+    version: 1
+    editable: false
+    jsonData:
+      # Used for dashboard development and testing

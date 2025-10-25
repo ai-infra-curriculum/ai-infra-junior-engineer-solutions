@@ -1,0 +1,225 @@
+# Prometheus Configuration for ML Infrastructure Monitoring
+# Last Updated: 2025-10-23
+
+global:
+  # How frequently to scrape targets by default
+  scrape_interval: 15s
+
+  # How long until a scrape request times out
+  scrape_timeout: 10s
+
+  # How frequently to evaluate rules
+  evaluation_interval: 15s
+
+  # External labels to attach to any time series or alerts
+  external_labels:
+    cluster: 'ml-platform-dev'
+    environment: 'development'
+    datacenter: 'us-east-1'
+    team: 'ml-infrastructure'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - 'alertmanager:9093'
+      timeout: 10s
+      api_version: v2
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - '/etc/prometheus/recording_rules.yml'
+  - '/etc/prometheus/alerting_rules.yml'
+
+# Scrape configurations
+scrape_configs:
+  # ==========================================
+  # Prometheus Self-Monitoring
+  # ==========================================
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+          component: 'monitoring'
+    metric_relabel_configs:
+      # Drop expensive metrics we don't need
+      - source_labels: [__name__]
+        regex: 'prometheus_tsdb_symbol_table_size_bytes|prometheus_tsdb_reloads_.*'
+        action: drop
+
+  # ==========================================
+  # Alertmanager Monitoring
+  # ==========================================
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['alertmanager:9093']
+        labels:
+          service: 'alertmanager'
+          component: 'monitoring'
+
+  # ==========================================
+  # Node Exporter (Infrastructure Metrics)
+  # ==========================================
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+        labels:
+          service: 'node-exporter'
+          component: 'infrastructure'
+          instance_type: 'docker-host'
+    metric_relabel_configs:
+      # Keep only essential filesystem metrics
+      - source_labels: [__name__, mountpoint]
+        regex: 'node_filesystem_.*;/host/(run|snap).*'
+        action: drop
+
+  # ==========================================
+  # cAdvisor (Container Metrics)
+  # ==========================================
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+        labels:
+          service: 'cadvisor'
+          component: 'infrastructure'
+    metric_relabel_configs:
+      # Only keep metrics for named containers (not system containers)
+      - source_labels: [container_label_com_docker_compose_service]
+        regex: ''
+        action: drop
+      # Drop high-cardinality percpu metrics
+      - source_labels: [__name__]
+        regex: 'container_cpu_usage_seconds_total|container_memory_working_set_bytes|container_network_.*|container_fs_.*'
+        action: keep
+
+  # ==========================================
+  # ML Inference Gateway (Application Metrics)
+  # ==========================================
+  - job_name: 'inference-gateway'
+    static_configs:
+      - targets: ['inference-gateway:8000']
+        labels:
+          service: 'inference-gateway'
+          component: 'application'
+          team: 'ml-platform'
+          tier: 'production'
+    metrics_path: '/metrics'
+    scrape_interval: 10s  # More frequent for critical service
+    scrape_timeout: 5s
+    metric_relabel_configs:
+      # Normalize endpoint labels to reduce cardinality
+      - source_labels: [endpoint]
+        regex: '/predict/.*'
+        replacement: '/predict/{id}'
+        target_label: endpoint
+      # Add SLO indicator label
+      - source_labels: [__name__]
+        regex: 'http_request_duration_seconds.*'
+        target_label: slo_indicator
+        replacement: 'latency'
+      - source_labels: [__name__]
+        regex: 'http_requests_total'
+        target_label: slo_indicator
+        replacement: 'availability'
+
+  # ==========================================
+  # Custom ML Model Exporter
+  # ==========================================
+  - job_name: 'ml-model-exporter'
+    static_configs:
+      - targets: ['ml-model-exporter:9101']
+        labels:
+          service: 'ml-model-exporter'
+          component: 'application'
+          exporter_type: 'custom'
+    scrape_interval: 30s  # Model metrics change slowly
+
+  # ==========================================
+  # Pushgateway (Batch Jobs)
+  # ==========================================
+  - job_name: 'pushgateway'
+    honor_labels: true  # Preserve job labels from pushed metrics
+    static_configs:
+      - targets: ['pushgateway:9091']
+        labels:
+          service: 'pushgateway'
+          component: 'infrastructure'
+    metric_relabel_configs:
+      # Add batch job indicator
+      - source_labels: [__name__]
+        regex: '.*'
+        target_label: metric_source
+        replacement: 'batch'
+
+  # ==========================================
+  # Blackbox Exporter (Endpoint Probing)
+  # ==========================================
+  - job_name: 'blackbox-http'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - http://inference-gateway:8000/health
+          - http://inference-gateway:8000/ready
+        labels:
+          probe_type: 'http'
+          service: 'inference-gateway'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+  # ==========================================
+  # Docker Service Discovery (Advanced)
+  # ==========================================
+  - job_name: 'docker-discovery'
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 30s
+    relabel_configs:
+      # Only scrape containers with monitoring label
+      - source_labels: [__meta_docker_container_label_com_example_monitoring]
+        regex: '.*'
+        action: keep
+      # Use container name as instance
+      - source_labels: [__meta_docker_container_name]
+        target_label: instance
+      # Extract service name from label
+      - source_labels: [__meta_docker_container_label_com_example_service]
+        target_label: service
+      # Extract team from label
+      - source_labels: [__meta_docker_container_label_com_example_team]
+        target_label: team
+      # Default metrics path
+      - target_label: __metrics_path__
+        replacement: /metrics
+      # Use container port 8000 for app metrics
+      - source_labels: [__meta_docker_container_label_com_example_monitoring]
+        regex: 'application'
+        target_label: __address__
+        replacement: '${1}:8000'
+
+# Remote write configuration (for long-term storage)
+# Uncomment and configure for production
+# remote_write:
+#   - url: "http://victoriametrics:8428/api/v1/write"
+#     queue_config:
+#       max_samples_per_send: 10000
+#       max_shards: 30
+#       capacity: 50000
+#     write_relabel_configs:
+#       # Only send critical metrics for long-term storage
+#       - source_labels: [__name__]
+#         regex: '(http_request_duration_seconds.*|http_requests_total|up|ml_.*)'
+#         action: keep
+
+# Remote read configuration
+# remote_read:
+#   - url: "http://victoriametrics:8428/api/v1/read"
+#     read_recent: true

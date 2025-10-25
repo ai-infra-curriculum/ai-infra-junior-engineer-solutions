@@ -1,0 +1,156 @@
+{{- include "flask-app.validateValues" . -}}
+
+========================================
+🚀 Flask Application Deployed Successfully!
+========================================
+
+Chart Name:    {{ .Chart.Name }}
+Chart Version: {{ .Chart.Version }}
+App Version:   {{ .Chart.AppVersion }}
+Release Name:  {{ .Release.Name }}
+Namespace:     {{ .Release.Namespace }}
+
+----------------------------------------
+📋 Resources Created
+----------------------------------------
+
+✓ Deployment:     {{ include "flask-app.fullname" . }}
+✓ Service:        {{ include "flask-app.fullname" . }} ({{ .Values.service.type }})
+{{- if .Values.serviceAccount.create }}
+✓ ServiceAccount: {{ include "flask-app.serviceAccountName" . }}
+{{- end }}
+{{- if .Values.ingress.enabled }}
+✓ Ingress:        {{ include "flask-app.fullname" . }}
+{{- end }}
+{{- if .Values.autoscaling.enabled }}
+✓ HPA:            {{ include "flask-app.fullname" . }} (min: {{ .Values.autoscaling.minReplicas }}, max: {{ .Values.autoscaling.maxReplicas }})
+{{- end }}
+{{- if .Values.persistence.enabled }}
+✓ PVC:            {{ include "flask-app.fullname" . }} ({{ .Values.persistence.size }})
+{{- end }}
+{{- if .Values.database.enabled }}
+✓ Database:       {{ .Values.database.host }}:{{ .Values.database.port }}/{{ .Values.database.name }}
+{{- end }}
+{{- if .Values.redis.enabled }}
+✓ Redis:          {{ .Values.redis.host }}:{{ .Values.redis.port }}
+{{- end }}
+
+----------------------------------------
+🌐 Accessing Your Application
+----------------------------------------
+
+{{- if .Values.ingress.enabled }}
+{{- range $host := .Values.ingress.hosts }}
+  {{- range .paths }}
+  🔗 http{{ if $.Values.ingress.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
+  {{- end }}
+{{- end }}
+{{- else if contains "NodePort" .Values.service.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "flask-app.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo "🔗 http://$NODE_IP:$NODE_PORT"
+{{- else if contains "LoadBalancer" .Values.service.type }}
+  NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+        Watch the status with: kubectl get --namespace {{ .Release.Namespace }} svc -w {{ include "flask-app.fullname" . }}
+
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "flask-app.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+  echo "🔗 http://$SERVICE_IP:{{ .Values.service.port }}"
+{{- else if contains "ClusterIP" .Values.service.type }}
+  1️⃣ Port-forward to access locally:
+     kubectl --namespace {{ .Release.Namespace }} port-forward svc/{{ include "flask-app.fullname" . }} 8080:{{ .Values.service.port }}
+     🔗 http://127.0.0.1:8080
+
+  2️⃣ Or run a test pod:
+     kubectl run --namespace {{ .Release.Namespace }} test-flask-app --rm --tty -i --restart='Never' --image=curlimages/curl -- sh
+     # Inside the pod:
+     curl http://{{ include "flask-app.fullname" . }}:{{ .Values.service.port }}/
+{{- end }}
+
+----------------------------------------
+📊 Monitoring & Observability
+----------------------------------------
+
+# Check pod status
+kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/name={{ include "flask-app.name" . }}
+
+# View logs
+kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/name={{ include "flask-app.name" . }} --tail=100 -f
+
+{{- if .Values.serviceMonitor.enabled }}
+# Prometheus metrics available at:
+#   /metrics endpoint on port {{ .Values.service.port }}
+{{- end }}
+
+# Get deployment status
+kubectl get deployment {{ include "flask-app.fullname" . }} -n {{ .Release.Namespace }}
+
+{{- if .Values.autoscaling.enabled }}
+# Check HPA status
+kubectl get hpa {{ include "flask-app.fullname" . }} -n {{ .Release.Namespace }}
+{{- end }}
+
+----------------------------------------
+🔧 Configuration
+----------------------------------------
+
+Environment: {{ .Values.flask.env }}
+{{- if .Values.flask.debug }}
+⚠️  Debug Mode: ENABLED (disable in production!)
+{{- else }}
+✓ Debug Mode: Disabled
+{{- end }}
+{{- if .Values.mlModel.enabled }}
+✓ ML Model: {{ .Values.mlModel.modelType }} ({{ .Values.mlModel.modelVersion }})
+{{- end }}
+
+{{- if eq .Values.flask.env "production" }}
+{{- if eq .Values.flask.secretKey "change-me-in-production-use-vault-or-sealed-secrets" }}
+
+⚠️⚠️⚠️ SECURITY WARNING ⚠️⚠️⚠️
+You are using the default Flask secret key in PRODUCTION!
+Please update the secret key immediately:
+
+  helm upgrade {{ .Release.Name }} {{ .Chart.Name }} \
+    --set flask.secretKey="your-secure-random-secret-key"
+
+Or use an external secret manager (Vault, Sealed Secrets, etc.)
+{{- end }}
+{{- end }}
+
+----------------------------------------
+🔄 Upgrade Instructions
+----------------------------------------
+
+# Upgrade this release with new values
+helm upgrade {{ .Release.Name }} {{ .Chart.Name }} -n {{ .Release.Namespace }} -f your-values.yaml
+
+# Rollback to previous version if needed
+helm rollback {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+----------------------------------------
+🗑️  Uninstall Instructions
+----------------------------------------
+
+# Remove this release (keeps history)
+helm uninstall {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+# Remove this release (delete history)
+helm uninstall {{ .Release.Name }} -n {{ .Release.Namespace }} --wait
+
+{{- if .Values.persistence.enabled }}
+# Note: PVC will NOT be deleted automatically
+# To delete PVC:
+kubectl delete pvc {{ include "flask-app.fullname" . }} -n {{ .Release.Namespace }}
+{{- end }}
+
+----------------------------------------
+📚 Additional Resources
+----------------------------------------
+
+📖 Chart Repository: https://github.com/ai-infra-curriculum/flask-app
+📧 Support: ai-infra@example.com
+🐛 Issues: https://github.com/ai-infra-curriculum/flask-app/issues
+
+========================================
+Thank you for using Flask App Helm Chart!
+========================================

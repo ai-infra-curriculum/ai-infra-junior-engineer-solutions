@@ -1,0 +1,13 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ml-api
+  namespace: ml-api
+  labels:
+    app: ml-api
+spec:
+  minAvailable: 1
+  # Alternative: maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: ml-api

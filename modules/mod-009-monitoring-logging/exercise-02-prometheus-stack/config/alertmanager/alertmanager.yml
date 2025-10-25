@@ -1,0 +1,291 @@
+# Alertmanager Configuration for ML Infrastructure
+# Purpose: Route, group, and deliver alerts to appropriate teams
+# Last Updated: 2025-10-23
+
+global:
+  # Default values
+  resolve_timeout: 5m
+
+  # SMTP settings for email notifications
+  smtp_from: 'alertmanager@ml-platform.company.com'
+  smtp_smarthost: 'smtp.company.com:587'
+  smtp_auth_username: 'alertmanager@ml-platform.company.com'
+  smtp_auth_password: '${SMTP_PASSWORD}'  # Set via environment variable
+  smtp_require_tls: true
+
+  # Slack webhook (set via environment variable)
+  slack_api_url: '${SLACK_WEBHOOK_URL}'
+
+  # PagerDuty integration key (set via environment variable)
+  pagerduty_url: 'https://events.pagerduty.com/v2/enqueue'
+
+# Templates for custom notification formatting
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# Route tree for alert routing
+route:
+  # Default receiver for unmatched alerts
+  receiver: 'default-notifications'
+
+  # Group alerts by these labels
+  group_by: ['alertname', 'cluster', 'service']
+
+  # How long to wait before sending initial notification
+  group_wait: 10s
+
+  # How long to wait before sending notification about new alerts
+  # that are added to a group of alerts already firing
+  group_interval: 5m
+
+  # How long to wait before sending a notification again
+  repeat_interval: 4h
+
+  # Child routes with specific routing rules
+  routes:
+    # ==========================================
+    # Critical SLO Alerts - Page On-Call
+    # ==========================================
+    - match:
+        severity: critical
+        page: "true"
+      receiver: 'pagerduty-critical'
+      group_wait: 10s
+      group_interval: 5m
+      repeat_interval: 15m  # Re-page every 15 minutes if unresolved
+      continue: true  # Also send to other receivers
+
+    # ==========================================
+    # SLO Alerts - Team Slack Channel
+    # ==========================================
+    - match_re:
+        alert_type: slo
+      receiver: 'slack-slo-alerts'
+      group_by: ['slo_type', 'service']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 3h
+
+    # ==========================================
+    # Infrastructure Alerts - Ops Team
+    # ==========================================
+    - match_re:
+        alert_type: (resource|infrastructure|stability)
+      receiver: 'slack-infrastructure'
+      group_by: ['alert_type', 'resource']
+      group_wait: 1m
+      group_interval: 10m
+      repeat_interval: 6h
+
+    # ==========================================
+    # ML Model Quality Alerts - ML Team
+    # ==========================================
+    - match:
+        alert_type: model_quality
+      receiver: 'slack-ml-team'
+      group_by: ['model_name']
+      group_wait: 5m
+      group_interval: 30m
+      repeat_interval: 12h
+
+    # ==========================================
+    # Monitoring System Alerts - Platform Team
+    # ==========================================
+    - match:
+        alert_type: monitoring
+      receiver: 'slack-platform-team'
+      group_wait: 2m
+      group_interval: 10m
+      repeat_interval: 4h
+
+    # ==========================================
+    # Warning-level Alerts - Team Notifications
+    # ==========================================
+    - match:
+        severity: warning
+      receiver: 'slack-warnings'
+      group_wait: 5m
+      group_interval: 15m
+      repeat_interval: 12h
+
+# Inhibition rules - suppress certain alerts when others are firing
+inhibit_rules:
+  # Inhibit warning alerts if critical alert for same service is firing
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['service', 'alertname']
+
+  # Inhibit slow burn alerts if fast burn is active
+  - source_match:
+      slo_window: 'fast_burn'
+    target_match:
+      slo_window: 'slow_burn'
+    equal: ['service']
+
+  # Inhibit infrastructure alerts if service is down
+  - source_match:
+      alertname: 'ServiceDown'
+    target_match_re:
+      alert_type: '(resource|performance)'
+    equal: ['service', 'instance']
+
+  # Inhibit high resource alerts if critical resource alert is firing
+  - source_match:
+      severity: 'critical'
+      alert_type: 'resource'
+    target_match:
+      severity: 'warning'
+      alert_type: 'resource'
+    equal: ['container_label_com_docker_compose_service', 'resource']
+
+# Receiver configurations
+receivers:
+  # ==========================================
+  # Default Receiver
+  # ==========================================
+  - name: 'default-notifications'
+    email_configs:
+      - to: 'ml-platform-team@company.com'
+        headers:
+          subject: '[Alertmanager] {{ .GroupLabels.alertname }}'
+        html: '{{ template "email.default.html" . }}'
+
+  # ==========================================
+  # PagerDuty for Critical Alerts
+  # ==========================================
+  - name: 'pagerduty-critical'
+    pagerduty_configs:
+      - routing_key: '${PAGERDUTY_INTEGRATION_KEY}'
+        description: '{{ .GroupLabels.alertname }}: {{ .CommonAnnotations.summary }}'
+        severity: 'critical'
+        details:
+          firing: '{{ .Alerts.Firing | len }}'
+          resolved: '{{ .Alerts.Resolved | len }}'
+          num_alerts: '{{ .Alerts | len }}'
+          summary: '{{ .CommonAnnotations.summary }}'
+          description: '{{ .CommonAnnotations.description }}'
+          runbook: '{{ .CommonAnnotations.runbook_url }}'
+        links:
+          - href: '{{ .CommonAnnotations.dashboard_url }}'
+            text: 'Dashboard'
+          - href: '{{ .CommonAnnotations.runbook_url }}'
+            text: 'Runbook'
+
+  # ==========================================
+  # Slack - SLO Alerts
+  # ==========================================
+  - name: 'slack-slo-alerts'
+    slack_configs:
+      - channel: '#ml-platform-slo-alerts'
+        username: 'Alertmanager'
+        icon_emoji: ':fire:'
+        title: '{{ .GroupLabels.alertname }}'
+        title_link: '{{ .CommonAnnotations.dashboard_url }}'
+        text: '{{ template "slack.slo.text" . }}'
+        color: '{{ if eq .Status "firing" }}danger{{ else }}good{{ end }}'
+        send_resolved: true
+        actions:
+          - type: button
+            text: 'View Dashboard'
+            url: '{{ .CommonAnnotations.dashboard_url }}'
+          - type: button
+            text: 'Runbook'
+            url: '{{ .CommonAnnotations.runbook_url }}'
+          - type: button
+            text: 'Silence'
+            url: 'http://localhost:9093/#/silences/new'
+
+  # ==========================================
+  # Slack - Infrastructure Alerts
+  # ==========================================
+  - name: 'slack-infrastructure'
+    slack_configs:
+      - channel: '#infrastructure-alerts'
+        username: 'Alertmanager'
+        icon_emoji: ':warning:'
+        title: '{{ .GroupLabels.alertname }}'
+        text: |
+          *Alert:* {{ .GroupLabels.alertname }}
+          *Severity:* {{ .GroupLabels.severity }}
+          *Resource:* {{ .GroupLabels.resource }}
+          *Summary:* {{ .CommonAnnotations.summary }}
+
+          *Description:*
+          {{ .CommonAnnotations.description }}
+
+          *Firing Alerts:* {{ .Alerts.Firing | len }}
+        color: '{{ if eq .GroupLabels.severity "critical" }}danger{{ else }}warning{{ end }}'
+        send_resolved: true
+
+  # ==========================================
+  # Slack - ML Team
+  # ==========================================
+  - name: 'slack-ml-team'
+    slack_configs:
+      - channel: '#ml-model-alerts'
+        username: 'ML Alertmanager'
+        icon_emoji: ':robot_face:'
+        title: 'ML Model Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          *Model:* {{ .GroupLabels.model_name }}
+          *Summary:* {{ .CommonAnnotations.summary }}
+
+          {{ .CommonAnnotations.description }}
+        color: 'warning'
+        send_resolved: true
+
+  # ==========================================
+  # Slack - Platform Team
+  # ==========================================
+  - name: 'slack-platform-team'
+    slack_configs:
+      - channel: '#platform-monitoring'
+        username: 'Alertmanager'
+        icon_emoji: ':mag:'
+        title: 'Monitoring Alert: {{ .GroupLabels.alertname }}'
+        text: |
+          *Summary:* {{ .CommonAnnotations.summary }}
+
+          {{ .CommonAnnotations.description }}
+        color: 'warning'
+        send_resolved: true
+
+  # ==========================================
+  # Slack - General Warnings
+  # ==========================================
+  - name: 'slack-warnings'
+    slack_configs:
+      - channel: '#ml-platform-warnings'
+        username: 'Alertmanager'
+        icon_emoji: ':warning:'
+        title: '{{ .GroupLabels.alertname }}'
+        text: |
+          *Service:* {{ .GroupLabels.service }}
+          *Summary:* {{ .CommonAnnotations.summary }}
+
+          {{ .CommonAnnotations.description }}
+        color: '#FFA500'  # Orange
+        send_resolved: true
+
+# Time-based alert silencing (maintenance windows)
+# mute_time_intervals:
+#   - name: business-hours
+#     time_intervals:
+#       - times:
+#           - start_time: '09:00'
+#             end_time: '17:00'
+#         weekdays: ['monday:friday']
+#
+#   - name: weekends
+#     time_intervals:
+#       - weekdays: ['saturday', 'sunday']
+#
+#   - name: nights
+#     time_intervals:
+#       - times:
+#           - start_time: '00:00'
+#             end_time: '08:00'
+#           - start_time: '18:00'
+#             end_time: '23:59'

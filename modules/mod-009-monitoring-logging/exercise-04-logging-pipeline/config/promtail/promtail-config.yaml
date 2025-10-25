@@ -1,0 +1,228 @@
+# Promtail Configuration for ML Infrastructure Log Collection
+# Version: 2.9.3
+# Purpose: Collect, parse, and ship logs from Docker containers to Loki
+
+# Server configuration
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+  log_level: info
+
+# Position tracking (which logs have been read)
+positions:
+  filename: /tmp/positions/positions.yaml
+
+# Loki client configuration
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+    batchwait: 1s
+    batchsize: 1048576  # 1MB
+    timeout: 10s
+
+    # External labels (applied to all log streams)
+    external_labels:
+      cluster: ml-platform-dev
+      environment: development
+
+    # Backoff configuration for retries
+    backoff_config:
+      min_period: 500ms
+      max_period: 5m
+      max_retries: 10
+
+# Scrape configurations
+scrape_configs:
+  # ==========================================
+  # Docker Container Logs
+  # ==========================================
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+        filters:
+          - name: label
+            values: ["logging=promtail"]  # Only scrape containers with this label
+
+    relabel_configs:
+      # Container name
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/(.*)'
+        target_label: 'container'
+
+      # Service name from Docker Compose label
+      - source_labels: ['__meta_docker_container_label_com_example_service']
+        target_label: 'service'
+
+      # Monitoring type from label
+      - source_labels: ['__meta_docker_container_label_com_example_monitoring']
+        target_label: 'component'
+
+      # Team label
+      - source_labels: ['__meta_docker_container_label_com_example_team']
+        target_label: 'team'
+
+      # Container ID (first 12 chars)
+      - source_labels: ['__meta_docker_container_id']
+        regex: '([0-9a-f]{12}).*'
+        target_label: 'container_id'
+
+      # Image name
+      - source_labels: ['__meta_docker_container_label_com_docker_compose_service']
+        target_label: 'compose_service'
+
+      # Log path
+      - source_labels: ['__meta_docker_container_id']
+        target_label: '__path__'
+        replacement: '/var/lib/docker/containers/$1/$1-json.log'
+
+    # Pipeline stages for log processing
+    pipeline_stages:
+      # ==========================================
+      # Stage 1: Docker JSON parsing
+      # ==========================================
+      - docker: {}
+
+      # ==========================================
+      # Stage 2: Detect log format from labels
+      # ==========================================
+      - match:
+          selector: '{logging_parser="json"}'
+          stages:
+            # Parse JSON structured logs
+            - json:
+                expressions:
+                  timestamp: timestamp
+                  level: level
+                  logger: logger
+                  message: message
+                  trace_id: trace_id
+                  span_id: span_id
+                  request_id: request_id
+                  method: method
+                  endpoint: endpoint
+                  status_code: status_code
+                  duration_ms: duration_ms
+                  service: service
+                  environment: environment
+
+            # Set timestamp from log entry
+            - timestamp:
+                source: timestamp
+                format: RFC3339Nano
+
+            # Extract labels (for efficient querying)
+            - labels:
+                level: level
+                trace_id: trace_id
+                request_id: request_id
+                method: method
+                endpoint: endpoint
+                status_code: status_code
+
+            # Add metrics from logs
+            - metrics:
+                # Count log lines by level
+                log_lines_total:
+                  type: Counter
+                  description: "Total number of log lines"
+                  source: level
+                  config:
+                    action: inc
+                    match_all: true
+
+                # HTTP request duration from logs
+                http_request_duration_seconds:
+                  type: Histogram
+                  description: "HTTP request duration from logs"
+                  source: duration_ms
+                  config:
+                    buckets: [0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10]
+
+            # Drop noisy debug logs (optional)
+            # - drop:
+            #     source: level
+            #     expression: "DEBUG"
+
+      # ==========================================
+      # Stage 3: Default text log handling
+      # ==========================================
+      - match:
+          selector: '{logging_parser!="json"}'
+          stages:
+            # Extract log level from text
+            - regex:
+                expression: '^(?P<timestamp>\S+)\s+(?P<level>\S+)\s+(?P<message>.*)'
+
+            # Set log level label
+            - labels:
+                level: level
+
+            # Metrics for text logs
+            - metrics:
+                log_lines_total:
+                  type: Counter
+                  description: "Total number of log lines"
+                  config:
+                    action: inc
+
+      # ==========================================
+      # Stage 4: PII Redaction (Privacy)
+      # ==========================================
+      - replace:
+          # Redact email addresses
+          expression: '(?P<email>[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+)'
+          replace: '***REDACTED_EMAIL***'
+
+      - replace:
+          # Redact credit card numbers
+          expression: '(?P<cc>\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b)'
+          replace: '***REDACTED_CC***'
+
+      - replace:
+          # Redact IP addresses (optional, often needed for debugging)
+          # expression: '(?P<ip>\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b)'
+          # replace: '***REDACTED_IP***'
+
+  # ==========================================
+  # System Logs (Optional)
+  # ==========================================
+  - job_name: system
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: varlogs
+          __path__: /var/log/*log
+
+    pipeline_stages:
+      # Parse syslog format
+      - regex:
+          expression: '^(?P<timestamp>\S+\s+\d+\s+\d+:\d+:\d+)\s+(?P<hostname>\S+)\s+(?P<app>\S+)(\[(?P<pid>\d+)\])?: (?P<message>.*)'
+
+      - timestamp:
+          source: timestamp
+          format: 'Jan _2 15:04:05'
+
+      - labels:
+          hostname: hostname
+          app: app
+
+  # ==========================================
+  # Promtail Self-Monitoring
+  # ==========================================
+  - job_name: promtail
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: promtail
+          __path__: /var/log/promtail.log
+
+# Limits
+limits_config:
+  readline_rate: 10000
+  readline_burst: 20000
+
+# Target configuration
+target_config:
+  sync_period: 10s

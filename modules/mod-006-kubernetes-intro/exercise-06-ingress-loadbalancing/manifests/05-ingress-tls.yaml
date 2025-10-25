@@ -1,0 +1,288 @@
+---
+# TLS Secret for HTTPS
+# In production, use cert-manager for automatic certificate management
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tls-secret
+  namespace: ingress-demo
+type: kubernetes.io/tls
+data:
+  # These are dummy base64-encoded values for demonstration
+  # In practice, generate real certificates:
+  # openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  #   -keyout tls.key -out tls.crt -subj "/CN=example.com/O=example"
+  # kubectl create secret tls tls-secret --cert=tls.crt --key=tls.key -n ingress-demo
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURFekNDQWZ1Z0F3SUJBZ0lVRk5xb0ZxOGFhRkxVcjBKaEE4VkZxSzBZd0F3RFFZSktvWklodmNOQVFFTApCUUF3R1RFWE1CVUdBMVVFQXd3T2RHVnpkQzVsZUdGdGNHeGxMbU52YlRBZUZ3MHlNekV3TWpReE1UTXdNREJhCkZ3MHlOREV3TWpNeE1UTXdNREJhTUJreEZ6QVZCZ05WQkFNTURuUmxjM1F1WlhoaGJYQnNaUzVqYjIwd2dnRWkKTUEwR0NTcUdTSWIzRFFFQkFRVUFBNElCRHdBd2dnRUtBb0lCQVFETS9WS3JxT2U4QldPdnJXNjNlRGo4Qy9hSwpXTjdqV3pqVlBvZGFrY0VYampjc0Q2ejdEd1RncVg4RnpkeEI1UUhCYVpKL3JneVloOTRqcGNxd29YdGJYRDdyCmdvU29RQXhpT0E9PQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+  tls.key: LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JSUV2UUlCQURBTkJna3Foa2lHOXcwQkFRRUZBQVNDQktjd2dnU2pBZ0VBQW9JQkFRRE0vVktycU9lOEJXT3YKclc2M2VEajhDL2FLV043ald6alZQb2Rha2NFWGpqY3NENno3RHdUZ3FYOEZ6ZHhCNVFIQmFaSi9yZ3lZaDk0ago==
+
+---
+# Ingress with TLS/HTTPS
+# Terminates TLS at the ingress level
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tls-ingress
+  namespace: ingress-demo
+  annotations:
+    # Force HTTPS redirect
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Use HTTP/2
+    nginx.ingress.kubernetes.io/http2-push-preload: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - secure.example.com
+    secretName: tls-secret
+  rules:
+  - host: secure.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-v1
+            port:
+              number: 80
+
+---
+# Multiple TLS Certificates
+# Different certificates for different hostnames
+apiVersion: v1
+kind: Secret
+metadata:
+  name: api-tls-secret
+  namespace: ingress-demo
+type: kubernetes.io/tls
+data:
+  tls.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURFekNDQWZ1Z0F3SUJBZ0lVRk5xb0ZxOGFhRkxVcjBKaEE4VkZxSzBZd0F3RFFZSktvWklodmNOQVFFTApCUUF3R1RFWE1CVUdBMVVFQXd3T2RHVnpkQzVsZUdGdGNHeGxMbU52YlRBZUZ3MHlNekV3TWpReE1UTXdNREJhCkZ3MHlOREV3TWpNeE1UTXdNREJhTUJreEZ6QVZCZ05WQkFNTURuUmxjM1F1WlhoaGJYQnNaUzVqYjIwd2dnRWkKTUEwR0NTcUdTSWIzRFFFQkFRVUFBNElCRHdBd2dnRUtBb0lCQVFETS9WS3JxT2U4QldPdnJXNjNlRGo4Qy9hSwpXTjdqV3pqVlBvZGFrY0VYampjc0Q2ejdEd1RncVg4RnpkeEI1UUhCYVpKL3JneVloOTRqcGNxd29YdGJYRDdyCmdvU29RQXhpT0E9PQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+  tls.key: LS0tLS1CRUdJTiBQUklWQVRFIEtFWS0tLS0tCk1JSUV2UUlCQURBTkJna3Foa2lHOXcwQkFRRUZBQVNDQktjd2dnU2pBZ0VBQW9JQkFRRE0vVktycU9lOEJXT3YKclc2M2VEajhDL2FLV043ald6alZQb2Rha2NFWGpqY3NENno3RHdUZ3FYOEZ6ZHhCNVFIQmFaSi9yZ3lZaDk0ago==
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: multi-tls-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+  # Certificate for web.example.com
+  - hosts:
+    - web.example.com
+    secretName: tls-secret
+  # Certificate for api.example.com
+  - hosts:
+    - api.example.com
+    secretName: api-tls-secret
+  rules:
+  - host: web.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: web-service
+            port:
+              number: 80
+  - host: api.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 80
+
+---
+# TLS with Specific Cipher Suites
+# Enhanced security configuration
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: secure-tls-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # TLS configuration
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
+    nginx.ingress.kubernetes.io/ssl-ciphers: "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384"
+    # Security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains";
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - secure-api.example.com
+    secretName: tls-secret
+  rules:
+  - host: secure-api.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 80
+
+---
+# TLS Passthrough
+# TLS termination happens at the backend, not at ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tls-passthrough-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-passthrough: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: passthrough.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-v1
+            port:
+              number: 80
+
+---
+# Mutual TLS (mTLS) / Client Certificate Authentication
+# Requires client to present a valid certificate
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ca-secret
+  namespace: ingress-demo
+type: Opaque
+data:
+  # CA certificate for client authentication
+  ca.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURFekNDQWZ1Z0F3SUJBZ0lVRk5xb0ZxOGFhRkxVcjBKaEE4VkZxSzBZd0F3RFFZSktvWklodmNOQVFFTApCUUF3R1RFWE1CVUdBMVVFQXd3T2RHVnpkQzVsZUdGdGNHeGxMbU52YlRBZUZ3MHlNekV3TWpReE1UTXdNREJhCg==
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mtls-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Enable mutual TLS
+    nginx.ingress.kubernetes.io/auth-tls-verify-client: "on"
+    nginx.ingress.kubernetes.io/auth-tls-secret: "ingress-demo/ca-secret"
+    nginx.ingress.kubernetes.io/auth-tls-verify-depth: "1"
+    nginx.ingress.kubernetes.io/auth-tls-error-page: "https://example.com/error-cert.html"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - mtls.example.com
+    secretName: tls-secret
+  rules:
+  - host: mtls.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 80
+
+---
+# Automatic Certificate Management with cert-manager annotation
+# Requires cert-manager to be installed in the cluster
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: auto-tls-ingress
+  namespace: ingress-demo
+  annotations:
+    # cert-manager will automatically provision certificate
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    # ACME challenge type
+    cert-manager.io/acme-challenge-type: "http01"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - auto.example.com
+    secretName: auto-tls-secret  # cert-manager will create this
+  rules:
+  - host: auto.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-v1
+            port:
+              number: 80
+
+---
+# Wildcard TLS Certificate
+# Single certificate for *.example.com
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wildcard-tls-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - "*.example.com"
+    secretName: wildcard-tls-secret
+  rules:
+  - host: app1.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-v1
+            port:
+              number: 80
+  - host: app2.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-v2
+            port:
+              number: 80
+  - host: api.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 80

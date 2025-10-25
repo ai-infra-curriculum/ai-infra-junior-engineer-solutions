@@ -1,0 +1,113 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ml-training
+  namespace: ml-production
+  labels:
+    app: ml-training
+    type: training
+spec:
+  ttlSecondsAfterFinished: 86400  # Keep for 24 hours
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: ml-training
+        type: training
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: trainer
+        image: ghcr.io/your-org/ml-pipeline:latest
+        imagePullPolicy: Always
+        command: ["python", "pipelines/training_pipeline.py"]
+        args:
+          - "--data-path"
+          - "s3://ml-data-bucket/dataset.csv"
+          - "--experiment-name"
+          - "production-training"
+        env:
+        - name: MLFLOW_TRACKING_URI
+          valueFrom:
+            secretKeyRef:
+              name: mlflow-secrets
+              key: tracking-uri
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: access-key-id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: secret-access-key
+        - name: AWS_DEFAULT_REGION
+          value: "us-east-1"
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "2000m"
+            nvidia.com/gpu: "1"  # Request GPU if available
+          limits:
+            memory: "8Gi"
+            cpu: "4000m"
+            nvidia.com/gpu: "1"
+        volumeMounts:
+        - name: training-data
+          mountPath: /data
+      volumes:
+      - name: training-data
+        persistentVolumeClaim:
+          claimName: ml-training-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ml-training-pvc
+  namespace: ml-production
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 50Gi
+  storageClassName: fast-ssd
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ml-training-scheduled
+  namespace: ml-production
+spec:
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: trainer
+            image: ghcr.io/your-org/ml-pipeline:latest
+            imagePullPolicy: Always
+            command: ["python", "pipelines/training_pipeline.py"]
+            args:
+              - "--data-path"
+              - "s3://ml-data-bucket/dataset.csv"
+              - "--experiment-name"
+              - "scheduled-training"
+            env:
+            - name: MLFLOW_TRACKING_URI
+              valueFrom:
+                secretKeyRef:
+                  name: mlflow-secrets
+                  key: tracking-uri
+            resources:
+              requests:
+                memory: "4Gi"
+                cpu: "2000m"
+              limits:
+                memory: "8Gi"
+                cpu: "4000m"

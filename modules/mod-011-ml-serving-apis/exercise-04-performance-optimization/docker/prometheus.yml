@@ -1,0 +1,87 @@
+# Prometheus configuration for ML API monitoring
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'ml-api-cluster'
+    environment: 'production'
+
+# Alertmanager configuration (optional)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # - 'alertmanager:9093'
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # ML API instances
+  - job_name: 'ml-api'
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+    static_configs:
+      - targets:
+          - 'api1:8000'
+          - 'api2:8000'
+          - 'api3:8000'
+        labels:
+          service: 'ml-api'
+
+  # Nginx load balancer
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx:80']
+        labels:
+          service: 'nginx'
+
+  # RabbitMQ
+  - job_name: 'rabbitmq'
+    static_configs:
+      - targets: ['rabbitmq:15692']
+        labels:
+          service: 'rabbitmq'
+
+  # Redis
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+        labels:
+          service: 'redis'
+
+  # cAdvisor (container metrics)
+  - job_name: 'cadvisor'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['cadvisor:8080']
+        labels:
+          service: 'cadvisor'
+
+  # Celery workers (if exposing metrics)
+  - job_name: 'celery'
+    static_configs:
+      - targets:
+          - 'celery-worker-predictions:9090'
+          - 'celery-worker-batch:9090'
+          - 'celery-worker-training:9090'
+        labels:
+          service: 'celery-worker'
+
+# Rule files
+rule_files:
+  # - "alerts/*.yml"
+
+# Example alert rules (create alerts/ml-api-alerts.yml)
+# - alert: HighErrorRate
+#   expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+#   for: 5m
+#   labels:
+#     severity: critical
+#   annotations:
+#     summary: "High error rate on {{ $labels.instance }}"
+#     description: "Error rate is {{ $value }} errors/sec"

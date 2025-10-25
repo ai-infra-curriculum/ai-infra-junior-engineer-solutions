@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-api
+  namespace: ml-api
+  labels:
+    app: ml-api
+    version: v1
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: ml-api
+  template:
+    metadata:
+      labels:
+        app: ml-api
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: ml-api
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      containers:
+      - name: ml-api
+        image: ghcr.io/your-org/ml-api:latest
+        imagePullPolicy: IfNotPresent
+
+        ports:
+        - name: http
+          containerPort: 8000
+          protocol: TCP
+
+        env:
+        - name: MODEL_PATH
+          value: "/models/model.pkl"
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: ml-api-config
+              key: log_level
+        - name: WORKERS
+          valueFrom:
+            configMapKeyRef:
+              name: ml-api-config
+              key: workers
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: ml-api-secrets
+              key: api-key
+
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        volumeMounts:
+        - name: model-storage
+          mountPath: /models
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: ml-model-pvc
+      - name: tmp
+        emptyDir: {}
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - ml-api
+              topologyKey: kubernetes.io/hostname

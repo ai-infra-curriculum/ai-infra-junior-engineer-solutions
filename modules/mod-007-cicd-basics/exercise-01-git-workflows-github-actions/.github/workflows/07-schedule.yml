@@ -1,0 +1,455 @@
+name: Scheduled Jobs
+
+on:
+  schedule:
+    # Run dependency updates check every Monday at 9 AM UTC
+    - cron: '0 9 * * 1'
+    # Run security scans daily at midnight UTC
+    - cron: '0 0 * * *'
+    # Run performance tests every Sunday at 3 AM UTC
+    - cron: '0 3 * * 0'
+  workflow_dispatch:  # Allow manual triggers
+
+jobs:
+  dependency-updates:
+    name: Check for Dependency Updates
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 9 * * 1' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Check for outdated packages
+        id: check-updates
+        run: |
+          pip install pip-audit pip-upgrader
+
+          echo "Checking for outdated packages..."
+          pip list --outdated --format=json > outdated.json
+
+          if [ -s outdated.json ] && [ "$(cat outdated.json)" != "[]" ]; then
+            echo "has-updates=true" >> $GITHUB_OUTPUT
+            echo "Outdated packages found:"
+            cat outdated.json | python -m json.tool
+          else
+            echo "has-updates=false" >> $GITHUB_OUTPUT
+            echo "All packages are up to date"
+          fi
+
+      - name: Generate update report
+        if: steps.check-updates.outputs.has-updates == 'true'
+        run: |
+          cat > update-report.md << 'EOF'
+          # Dependency Update Report
+
+          ## Outdated Packages
+
+          The following packages have updates available:
+
+          ```json
+          $(cat outdated.json | python -m json.tool)
+          ```
+
+          ## Recommended Actions
+
+          1. Review the changes for each package
+          2. Update packages in a feature branch
+          3. Run tests to ensure compatibility
+          4. Create a PR with updates
+
+          ## Commands
+
+          ```bash
+          # Update specific package
+          pip install --upgrade <package-name>
+
+          # Update all packages
+          pip install --upgrade -r requirements.txt
+          ```
+          EOF
+
+      - name: Create issue for updates
+        if: steps.check-updates.outputs.has-updates == 'true'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('update-report.md', 'utf8');
+
+            // Check if an issue already exists
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'dependencies'
+            });
+
+            const existingIssue = issues.data.find(issue =>
+              issue.title.includes('Dependency Updates Available')
+            );
+
+            if (existingIssue) {
+              // Update existing issue
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: `## Update (${new Date().toISOString().split('T')[0]})\n\n${report}`
+              });
+            } else {
+              // Create new issue
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '📦 Dependency Updates Available',
+                body: report,
+                labels: ['dependencies', 'maintenance']
+              });
+            }
+
+  security-scan:
+    name: Security Vulnerability Scan
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 0 * * *' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install security tools
+        run: |
+          pip install safety bandit pip-audit
+
+      - name: Run Safety check
+        id: safety
+        continue-on-error: true
+        run: |
+          echo "Running Safety vulnerability scan..."
+          safety check --json > safety-report.json || true
+          safety check --output text > safety-report.txt || true
+
+          if [ -s safety-report.json ] && [ "$(cat safety-report.json)" != "{}" ]; then
+            echo "has-vulnerabilities=true" >> $GITHUB_OUTPUT
+          else
+            echo "has-vulnerabilities=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Bandit security scan
+        id: bandit
+        continue-on-error: true
+        run: |
+          echo "Running Bandit security scan..."
+          bandit -r examples/ -f json -o bandit-report.json || true
+          bandit -r examples/ -f txt -o bandit-report.txt || true
+
+          if grep -q '"issue_confidence": "HIGH"' bandit-report.json; then
+            echo "has-high-severity=true" >> $GITHUB_OUTPUT
+          else
+            echo "has-high-severity=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run pip-audit
+        id: pip-audit
+        continue-on-error: true
+        run: |
+          echo "Running pip-audit..."
+          pip-audit --format json > pip-audit-report.json || true
+          pip-audit > pip-audit-report.txt || true
+
+      - name: Generate security report
+        if: |
+          steps.safety.outputs.has-vulnerabilities == 'true' ||
+          steps.bandit.outputs.has-high-severity == 'true'
+        run: |
+          cat > security-report.md << 'EOF'
+          # 🔒 Security Scan Report
+
+          ## Summary
+
+          Security scan completed on $(date)
+
+          ### Findings
+
+          **Dependency Vulnerabilities:** ${{ steps.safety.outputs.has-vulnerabilities == 'true' && '⚠️ Found' || '✅ None' }}
+          **Code Security Issues:** ${{ steps.bandit.outputs.has-high-severity == 'true' && '⚠️ High severity issues found' || '✅ No high severity issues' }}
+
+          ## Safety Report
+
+          ```
+          $(cat safety-report.txt)
+          ```
+
+          ## Bandit Report
+
+          ```
+          $(cat bandit-report.txt | head -50)
+          ```
+
+          ## Recommended Actions
+
+          1. Review all findings carefully
+          2. Update vulnerable dependencies
+          3. Fix high-severity code issues
+          4. Re-run security scan after fixes
+
+          ## Resources
+
+          - [OWASP Top 10](https://owasp.org/www-project-top-ten/)
+          - [Python Security Best Practices](https://cheatsheetseries.owasp.org/cheatsheets/Python_Security_Cheat_Sheet.html)
+          EOF
+
+      - name: Upload security reports
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-reports
+          path: |
+            safety-report.*
+            bandit-report.*
+            pip-audit-report.*
+
+      - name: Create security issue
+        if: |
+          steps.safety.outputs.has-vulnerabilities == 'true' ||
+          steps.bandit.outputs.has-high-severity == 'true'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('security-report.md', 'utf8');
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🔒 Security Vulnerabilities Detected',
+              body: report,
+              labels: ['security', 'high-priority']
+            });
+
+  performance-tests:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 3 * * 0' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pytest pytest-benchmark
+          pip install -r examples/requirements.txt
+
+      - name: Run performance benchmarks
+        run: |
+          pytest examples/ \
+            --benchmark-only \
+            --benchmark-json=benchmark.json \
+            --benchmark-autosave || echo "No benchmarks found"
+
+      - name: Compare with previous benchmarks
+        if: hashFiles('benchmark.json') != ''
+        run: |
+          echo "Performance benchmark results:"
+          cat benchmark.json | python -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          for bench in data.get('benchmarks', []):
+              name = bench['name']
+              mean = bench['stats']['mean']
+              stddev = bench['stats']['stddev']
+              print(f'{name}: {mean:.6f}s ± {stddev:.6f}s')
+          "
+
+      - name: Upload benchmark results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: benchmark-results
+          path: benchmark.json
+
+  code-metrics:
+    name: Code Quality Metrics
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 9 * * 1' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install analysis tools
+        run: |
+          pip install radon pylint
+
+      - name: Calculate code metrics
+        run: |
+          echo "# Code Metrics Report" > metrics-report.md
+          echo "" >> metrics-report.md
+          echo "Generated: $(date)" >> metrics-report.md
+          echo "" >> metrics-report.md
+
+          echo "## Cyclomatic Complexity" >> metrics-report.md
+          echo '```' >> metrics-report.md
+          radon cc examples/ -a -s >> metrics-report.md
+          echo '```' >> metrics-report.md
+          echo "" >> metrics-report.md
+
+          echo "## Maintainability Index" >> metrics-report.md
+          echo '```' >> metrics-report.md
+          radon mi examples/ -s >> metrics-report.md
+          echo '```' >> metrics-report.md
+          echo "" >> metrics-report.md
+
+          echo "## Raw Metrics" >> metrics-report.md
+          echo '```' >> metrics-report.md
+          radon raw examples/ -s >> metrics-report.md
+          echo '```' >> metrics-report.md
+
+      - name: Upload metrics report
+        uses: actions/upload-artifact@v3
+        with:
+          name: code-metrics
+          path: metrics-report.md
+
+  cleanup-old-artifacts:
+    name: Cleanup Old Artifacts
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 0 * * *' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Delete old workflow runs
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const days = 30;
+            const timestamp = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+
+            const runs = await github.rest.actions.listWorkflowRunsForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+              status: 'completed'
+            });
+
+            let deletedCount = 0;
+            for (const run of runs.data.workflow_runs) {
+              if (new Date(run.created_at) < timestamp) {
+                try {
+                  await github.rest.actions.deleteWorkflowRun({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    run_id: run.id
+                  });
+                  deletedCount++;
+                } catch (error) {
+                  console.log(`Failed to delete run ${run.id}: ${error.message}`);
+                }
+              }
+            }
+
+            console.log(`Deleted ${deletedCount} old workflow runs`);
+
+  health-check:
+    name: Repository Health Check
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 9 * * 1' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check repository health
+        run: |
+          echo "# Repository Health Check" > health-report.md
+          echo "" >> health-report.md
+          echo "Generated: $(date)" >> health-report.md
+          echo "" >> health-report.md
+
+          # Check for required files
+          echo "## Required Files" >> health-report.md
+          for file in README.md LICENSE .gitignore requirements.txt; do
+            if [ -f "$file" ]; then
+              echo "- ✅ $file" >> health-report.md
+            else
+              echo "- ❌ $file (missing)" >> health-report.md
+            fi
+          done
+          echo "" >> health-report.md
+
+          # Check documentation
+          echo "## Documentation" >> health-report.md
+          DOC_FILES=$(find . -name "*.md" | wc -l)
+          echo "- Documentation files: $DOC_FILES" >> health-report.md
+          echo "" >> health-report.md
+
+          # Check test coverage
+          echo "## Test Files" >> health-report.md
+          TEST_FILES=$(find . -name "test_*.py" | wc -l)
+          PY_FILES=$(find . -name "*.py" -not -name "test_*.py" | wc -l)
+          if [ $PY_FILES -gt 0 ]; then
+            COVERAGE_RATIO=$(echo "scale=2; $TEST_FILES / $PY_FILES * 100" | bc)
+            echo "- Test files: $TEST_FILES" >> health-report.md
+            echo "- Python files: $PY_FILES" >> health-report.md
+            echo "- Test ratio: ${COVERAGE_RATIO}%" >> health-report.md
+          fi
+          echo "" >> health-report.md
+
+          cat health-report.md
+
+      - name: Upload health report
+        uses: actions/upload-artifact@v3
+        with:
+          name: health-report
+          path: health-report.md
+
+  scheduled-summary:
+    name: Scheduled Jobs Summary
+    needs:
+      - dependency-updates
+      - security-scan
+      - performance-tests
+      - code-metrics
+      - cleanup-old-artifacts
+      - health-check
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Generate summary
+        run: |
+          cat > $GITHUB_STEP_SUMMARY << 'EOF'
+          # Scheduled Jobs Summary
+
+          | Job | Status |
+          |-----|--------|
+          | Dependency Updates | ${{ needs.dependency-updates.result }} |
+          | Security Scan | ${{ needs.security-scan.result }} |
+          | Performance Tests | ${{ needs.performance-tests.result }} |
+          | Code Metrics | ${{ needs.code-metrics.result }} |
+          | Cleanup Artifacts | ${{ needs.cleanup-old-artifacts.result }} |
+          | Health Check | ${{ needs.health-check.result }} |
+
+          ---
+          *Next scheduled run: Check workflow schedule*
+          EOF

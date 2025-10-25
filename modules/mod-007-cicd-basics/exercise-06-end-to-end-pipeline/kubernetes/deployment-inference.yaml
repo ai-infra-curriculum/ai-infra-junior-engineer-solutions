@@ -1,0 +1,204 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ml-production
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-inference
+  namespace: ml-production
+  labels:
+    app: ml-inference
+    version: blue
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ml-inference
+      version: blue
+  template:
+    metadata:
+      labels:
+        app: ml-inference
+        version: blue
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: ml-inference
+        image: ghcr.io/your-org/ml-pipeline:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        env:
+        - name: MODEL_URI
+          valueFrom:
+            configMapKeyRef:
+              name: ml-config
+              key: model-uri
+        - name: MLFLOW_TRACKING_URI
+          valueFrom:
+            secretKeyRef:
+              name: mlflow-secrets
+              key: tracking-uri
+        - name: LOG_LEVEL
+          value: "INFO"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      imagePullSecrets:
+      - name: ghcr-secret
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-inference-green
+  namespace: ml-production
+  labels:
+    app: ml-inference
+    version: green
+spec:
+  replicas: 0  # Start with 0, scale up during deployment
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: ml-inference
+      version: green
+  template:
+    metadata:
+      labels:
+        app: ml-inference
+        version: green
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: ml-inference
+        image: ghcr.io/your-org/ml-pipeline:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        env:
+        - name: MODEL_URI
+          valueFrom:
+            configMapKeyRef:
+              name: ml-config
+              key: model-uri
+        - name: MLFLOW_TRACKING_URI
+          valueFrom:
+            secretKeyRef:
+              name: mlflow-secrets
+              key: tracking-uri
+        - name: LOG_LEVEL
+          value: "INFO"
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ml-inference
+  namespace: ml-production
+  labels:
+    app: ml-inference
+spec:
+  type: LoadBalancer
+  selector:
+    app: ml-inference
+    version: blue  # Points to blue by default
+  ports:
+  - port: 80
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  sessionAffinity: ClientIP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ml-config
+  namespace: ml-production
+data:
+  model-uri: "models:/RandomForestClassifier/Production"
+  log-level: "INFO"
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ml-inference-hpa
+  namespace: ml-production
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ml-inference
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80

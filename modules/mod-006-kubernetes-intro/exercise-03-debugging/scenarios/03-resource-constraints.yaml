@@ -1,0 +1,165 @@
+---
+# Scenario 03: Resource Constraints
+#
+# Problem: Pod cannot be scheduled due to insufficient cluster resources
+# Symptoms: Pending status, FailedScheduling events
+# Learning Objective: Understand resource requests/limits and scheduling constraints
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: debug-scenario-03
+  labels:
+    scenario: resource-constraints
+    exercise: debugging
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: resource-hungry-app
+  namespace: debug-scenario-03
+  labels:
+    app: resource-hungry
+    scenario: resource-constraints
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: resource-hungry
+  template:
+    metadata:
+      labels:
+        app: resource-hungry
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.21-alpine
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            # ISSUE: Requesting too much memory - may exceed cluster capacity
+            memory: "8Gi"
+            cpu: "4000m"
+          limits:
+            memory: "16Gi"
+            cpu: "8000m"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: no-resources-app
+  namespace: debug-scenario-03
+  labels:
+    app: no-resources
+    scenario: resource-constraints
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: no-resources
+  template:
+    metadata:
+      labels:
+        app: no-resources
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.21-alpine
+        # ISSUE: No resource requests/limits defined (bad practice)
+        # This can lead to resource contention and eviction
+        ports:
+        - containerPort: 80
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oom-app
+  namespace: debug-scenario-03
+  labels:
+    app: oom-app
+    scenario: resource-constraints
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: oom-app
+  template:
+    metadata:
+      labels:
+        app: oom-app
+    spec:
+      containers:
+      - name: app
+        image: polinux/stress:latest
+        # ISSUE: App will exceed memory limit and get OOMKilled
+        command:
+        - stress
+        - --vm
+        - "1"
+        - --vm-bytes
+        - "256M"  # Requesting more memory than limit
+        - --vm-hang
+        - "0"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"  # Will be exceeded
+            cpu: "200m"
+
+---
+# Debugging Commands for this scenario:
+#
+# 1. Check pod status (look for Pending or OOMKilled):
+#    kubectl get pods -n debug-scenario-03
+#
+# 2. Check why pod is pending:
+#    kubectl describe pod -n debug-scenario-03 <pod-name>
+#    # Look for "FailedScheduling" events
+#
+# 3. Check node resources:
+#    kubectl top nodes
+#    kubectl describe nodes
+#
+# 4. Check pod resource usage:
+#    kubectl top pods -n debug-scenario-03
+#
+# 5. Check events for OOMKilled:
+#    kubectl get events -n debug-scenario-03 --sort-by='.lastTimestamp'
+#    # Look for "OOMKilled" or "Evicted"
+#
+# 6. View detailed pod resource info:
+#    kubectl describe pod -n debug-scenario-03 <pod-name>
+#    # Check "Status", "Reason", "Message" fields
+#
+# 7. Fix resource-hungry-app:
+#    kubectl set resources deployment/resource-hungry-app -n debug-scenario-03 \
+#      --requests=cpu=100m,memory=128Mi \
+#      --limits=cpu=200m,memory=256Mi
+#
+# 8. Fix no-resources-app (add resource limits):
+#    kubectl patch deployment no-resources-app -n debug-scenario-03 -p '
+#    {
+#      "spec": {
+#        "template": {
+#          "spec": {
+#            "containers": [{
+#              "name": "app",
+#              "resources": {
+#                "requests": {"cpu": "100m", "memory": "64Mi"},
+#                "limits": {"cpu": "200m", "memory": "128Mi"}
+#              }
+#            }]
+#          }
+#        }
+#      }
+#    }'
+#
+# 9. Fix oom-app (increase memory limit):
+#    kubectl set resources deployment/oom-app -n debug-scenario-03 \
+#      --limits=cpu=200m,memory=512Mi

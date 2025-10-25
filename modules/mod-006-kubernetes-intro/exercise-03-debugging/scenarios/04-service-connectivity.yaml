@@ -1,0 +1,185 @@
+---
+# Scenario 04: Service Connectivity Issues
+#
+# Problem: Service not routing traffic to pods correctly
+# Symptoms: Connection refused, no endpoints, service unreachable
+# Learning Objective: Debug service networking and pod selection
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: debug-scenario-04
+  labels:
+    scenario: service-connectivity
+    exercise: debugging
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-app
+  namespace: debug-scenario-04
+  labels:
+    app: backend
+    tier: api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: backend
+      tier: api
+  template:
+    metadata:
+      labels:
+        app: backend
+        tier: api
+    spec:
+      containers:
+      - name: backend
+        image: hashicorp/http-echo:latest
+        args:
+        - "-text=Backend API v1.0"
+        - "-listen=:8080"
+        ports:
+        - containerPort: 8080
+          name: http
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service-broken
+  namespace: debug-scenario-04
+spec:
+  selector:
+    # ISSUE: Wrong selector - doesn't match pod labels
+    app: backend-api  # Should be "backend"
+    tier: service     # Should be "api"
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service-wrong-port
+  namespace: debug-scenario-04
+spec:
+  selector:
+    app: backend
+    tier: api
+  ports:
+    - protocol: TCP
+      port: 80
+      # ISSUE: Wrong target port - pods listen on 8080, not 80
+      targetPort: 80
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service-correct
+  namespace: debug-scenario-04
+spec:
+  selector:
+    app: backend
+    tier: api
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080  # Correct port
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: client-test-pod
+  namespace: debug-scenario-04
+  labels:
+    app: client
+spec:
+  containers:
+  - name: curl
+    image: curlimages/curl:latest
+    command:
+    - sleep
+    - "3600"
+  restartPolicy: Always
+
+---
+# Debugging Commands for this scenario:
+#
+# 1. Check if pods are running:
+#    kubectl get pods -n debug-scenario-04 -l app=backend
+#
+# 2. Check service endpoints:
+#    kubectl get endpoints -n debug-scenario-04
+#    # backend-service-broken should have NO endpoints
+#
+# 3. Describe the broken service:
+#    kubectl describe svc backend-service-broken -n debug-scenario-04
+#    # Check "Endpoints" field - should be empty or <none>
+#
+# 4. Compare service selector with pod labels:
+#    kubectl get svc backend-service-broken -n debug-scenario-04 -o yaml | grep -A 5 selector
+#    kubectl get pods -n debug-scenario-04 -l app=backend --show-labels
+#
+# 5. Test connectivity from client pod:
+#    # This should fail:
+#    kubectl exec -n debug-scenario-04 client-test-pod -- curl -v http://backend-service-broken
+#
+#    # This should also fail (wrong port):
+#    kubectl exec -n debug-scenario-04 client-test-pod -- curl -v http://backend-service-wrong-port
+#
+#    # This should work:
+#    kubectl exec -n debug-scenario-04 client-test-pod -- curl http://backend-service-correct
+#
+# 6. Debug with temporary pod:
+#    kubectl run -n debug-scenario-04 test-curl --rm -it --image=curlimages/curl -- sh
+#    # Inside pod:
+#    curl http://backend-service-correct
+#    nslookup backend-service-correct
+#
+# 7. Check DNS resolution:
+#    kubectl exec -n debug-scenario-04 client-test-pod -- nslookup backend-service-correct
+#
+# 8. Fix the broken service selector:
+#    kubectl patch svc backend-service-broken -n debug-scenario-04 -p '
+#    {
+#      "spec": {
+#        "selector": {
+#          "app": "backend",
+#          "tier": "api"
+#        }
+#      }
+#    }'
+#
+# 9. Fix the wrong port:
+#    kubectl patch svc backend-service-wrong-port -n debug-scenario-04 -p '
+#    {
+#      "spec": {
+#        "ports": [{
+#          "protocol": "TCP",
+#          "port": 80,
+#          "targetPort": 8080
+#        }]
+#      }
+#    }'
+#
+# 10. Verify endpoints are now populated:
+#     kubectl get endpoints -n debug-scenario-04
+#
+# 11. Test again:
+#     kubectl exec -n debug-scenario-04 client-test-pod -- curl http://backend-service-broken

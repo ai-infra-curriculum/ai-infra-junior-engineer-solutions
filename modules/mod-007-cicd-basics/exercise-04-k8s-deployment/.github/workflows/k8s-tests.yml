@@ -1,0 +1,185 @@
+name: Kubernetes Tests
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'manifests/**'
+      - 'helm-chart/**'
+      - '.github/workflows/k8s-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  validate-manifests:
+    name: Validate Kubernetes Manifests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'v1.28.0'
+
+      - name: Validate manifests
+        run: |
+          echo "Validating Kubernetes manifests..."
+          for file in manifests/*.yaml; do
+            echo "Validating $file..."
+            kubectl apply --dry-run=client -f "$file" || exit 1
+          done
+
+      - name: Check for common issues
+        run: |
+          echo "Checking for common issues in manifests..."
+
+          # Check for latest tag
+          if grep -r "image.*:latest" manifests/; then
+            echo "Warning: Found 'latest' tag in manifests"
+          fi
+
+          # Check for missing resource limits
+          if ! grep -r "resources:" manifests/deployment.yaml; then
+            echo "Error: No resource limits defined"
+            exit 1
+          fi
+
+          echo "Manifest validation passed!"
+
+  validate-helm-chart:
+    name: Validate Helm Chart
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: '3.12.0'
+
+      - name: Lint Helm chart
+        run: |
+          helm lint ./helm-chart/ml-api
+
+      - name: Template Helm chart (default values)
+        run: |
+          helm template ml-api ./helm-chart/ml-api > /tmp/rendered-default.yaml
+          echo "Default values rendered successfully"
+
+      - name: Template Helm chart (dev values)
+        run: |
+          helm template ml-api ./helm-chart/ml-api \
+            --values helm-chart/ml-api/values-dev.yaml \
+            > /tmp/rendered-dev.yaml
+          echo "Dev values rendered successfully"
+
+      - name: Template Helm chart (prod values)
+        run: |
+          helm template ml-api ./helm-chart/ml-api \
+            --values helm-chart/ml-api/values-prod.yaml \
+            > /tmp/rendered-prod.yaml
+          echo "Prod values rendered successfully"
+
+      - name: Validate rendered manifests
+        run: |
+          kubectl apply --dry-run=client -f /tmp/rendered-default.yaml
+          kubectl apply --dry-run=client -f /tmp/rendered-dev.yaml
+          kubectl apply --dry-run=client -f /tmp/rendered-prod.yaml
+
+      - name: Check Helm chart best practices
+        run: |
+          echo "Checking Helm chart best practices..."
+
+          # Check if Chart.yaml exists
+          if [ ! -f "helm-chart/ml-api/Chart.yaml" ]; then
+            echo "Error: Chart.yaml not found"
+            exit 1
+          fi
+
+          # Check if values.yaml exists
+          if [ ! -f "helm-chart/ml-api/values.yaml" ]; then
+            echo "Error: values.yaml not found"
+            exit 1
+          fi
+
+          # Check if _helpers.tpl exists
+          if [ ! -f "helm-chart/ml-api/templates/_helpers.tpl" ]; then
+            echo "Warning: _helpers.tpl not found"
+          fi
+
+          echo "Helm chart structure validated!"
+
+      - name: Upload rendered manifests
+        uses: actions/upload-artifact@v3
+        with:
+          name: rendered-manifests
+          path: /tmp/rendered-*.yaml
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Install kubesec
+        run: |
+          wget https://github.com/controlplaneio/kubesec/releases/download/v2.13.0/kubesec_linux_amd64.tar.gz
+          tar -xzf kubesec_linux_amd64.tar.gz
+          sudo mv kubesec /usr/local/bin/
+          kubesec version
+
+      - name: Scan manifests with kubesec
+        run: |
+          echo "Scanning manifests for security issues..."
+          for file in manifests/*.yaml; do
+            echo "Scanning $file..."
+            kubesec scan "$file" | jq .
+          done
+
+      - name: Check for secrets in manifests
+        run: |
+          echo "Checking for hardcoded secrets..."
+
+          # Check for common secret patterns
+          if grep -r -i "password.*:" manifests/ | grep -v "REPLACE_WITH"; then
+            echo "Warning: Possible hardcoded passwords found"
+          fi
+
+          if grep -r -i "api[_-]key.*:" manifests/ | grep -v "REPLACE_WITH"; then
+            echo "Warning: Possible hardcoded API keys found"
+          fi
+
+          echo "Secret scan completed"
+
+  test-summary:
+    name: Test Summary
+    needs: [validate-manifests, validate-helm-chart, security-scan]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Create test summary
+        run: |
+          echo "## Kubernetes Tests Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Validate Manifests:** ${{ needs.validate-manifests.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Validate Helm Chart:** ${{ needs.validate-helm-chart.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Security Scan:** ${{ needs.security-scan.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ needs.validate-manifests.result }}" == "success" ] && \
+             [ "${{ needs.validate-helm-chart.result }}" == "success" ] && \
+             [ "${{ needs.security-scan.result }}" == "success" ]; then
+            echo "✅ All tests passed!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Some tests failed. Please check the logs above." >> $GITHUB_STEP_SUMMARY
+          fi

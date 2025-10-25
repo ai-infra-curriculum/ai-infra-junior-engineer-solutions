@@ -1,0 +1,54 @@
+apiVersion: v2
+name: flask-app
+description: A production-ready Helm chart for Flask applications with ML inference capabilities
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+
+keywords:
+  - flask
+  - python
+  - api
+  - web
+  - ml
+  - machine-learning
+  - inference
+
+maintainers:
+  - name: AI Infrastructure Team
+    email: ai-infra@example.com
+
+home: https://github.com/ai-infra-curriculum/flask-app
+sources:
+  - https://github.com/ai-infra-curriculum/flask-app
+
+# Optional dependencies (can be enabled in values.yaml)
+dependencies:
+  - name: postgresql
+    version: "12.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: postgresql.enabled
+    tags:
+      - database
+  - name: redis
+    version: "17.x.x"
+    repository: https://charts.bitnami.com/bitnami
+    condition: redis.enabled
+    tags:
+      - cache
+
+# Chart icon for Helm repository
+icon: https://raw.githubusercontent.com/docker-library/docs/master/python/logo.png
+
+# Annotations for additional metadata
+annotations:
+  category: Application
+  license: MIT
+  # Artifacthub.io annotations for better discovery
+  artifacthub.io/changes: |
+    - Initial release with production-ready configuration
+    - Support for multiple environments (dev, staging, prod)
+    - ML inference optimization features
+    - Built-in PostgreSQL and Redis integration
+  artifacthub.io/containsSecurityUpdates: "false"
+  artifacthub.io/prerelease: "false"

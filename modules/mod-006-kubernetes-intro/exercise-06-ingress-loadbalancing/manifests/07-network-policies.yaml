@@ -1,0 +1,371 @@
+---
+# Network Policy: Deny All Ingress Traffic (Default Deny)
+# Start with denying all traffic, then explicitly allow what's needed
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-all-ingress
+  namespace: ingress-demo
+spec:
+  podSelector: {}  # Apply to all pods in namespace
+  policyTypes:
+  - Ingress
+
+---
+# Network Policy: Allow Ingress from Ingress Controller
+# Allow traffic from ingress controller to backend pods
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-ingress-controller
+  namespace: ingress-demo
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    # Allow from ingress-nginx namespace
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8080
+
+---
+# Network Policy: Allow Specific Pod to Pod Communication
+# Allow API service to access backend
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-to-backend
+  namespace: ingress-demo
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: api
+    ports:
+    - protocol: TCP
+      port: 8080
+
+---
+# Network Policy: Allow from Specific Namespace
+# Allow traffic from monitoring namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-from-monitoring
+  namespace: ingress-demo
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8080
+
+---
+# Network Policy: Allow DNS
+# Always allow DNS queries
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: ingress-demo
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+
+---
+# Network Policy: Egress to External Services
+# Allow pods to access external APIs
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-external-egress
+  namespace: ingress-demo
+spec:
+  podSelector:
+    matchLabels:
+      app: api
+  policyTypes:
+  - Egress
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow HTTPS to internet
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+        except:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+        - 192.168.0.0/16
+    ports:
+    - protocol: TCP
+      port: 443
+
+---
+# Network Policy: Database Access
+# Only specific pods can access database
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: database-access-policy
+  namespace: ingress-demo
+spec:
+  podSelector:
+    matchLabels:
+      app: database
+  policyTypes:
+  - Ingress
+  ingress:
+  # Only backend and API can access database
+  - from:
+    - podSelector:
+        matchLabels:
+          app: backend
+    - podSelector:
+        matchLabels:
+          app: api
+    ports:
+    - protocol: TCP
+      port: 5432
+
+---
+# Network Policy: Deny Egress (Restrict Outbound)
+# Prevent pods from making external connections
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-egress
+  namespace: ingress-demo
+spec:
+  podSelector:
+    matchLabels:
+      security: restricted
+  policyTypes:
+  - Egress
+  egress: []  # Empty egress rules = deny all
+
+---
+# Network Policy: Multiple Rules
+# Complex policy with multiple allow rules
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: web-app-policy
+  namespace: ingress-demo
+spec:
+  podSelector:
+    matchLabels:
+      app: web
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow from ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow from same namespace
+  - from:
+    - podSelector: {}
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  # Allow DNS
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow to API service
+  - to:
+    - podSelector:
+        matchLabels:
+          app: api
+    ports:
+    - protocol: TCP
+      port: 80
+  # Allow to backend service
+  - to:
+    - podSelector:
+        matchLabels:
+          app: backend
+    ports:
+    - protocol: TCP
+      port: 80
+
+---
+# Network Policy: Admin Access Only from Specific IPs
+# Combine with Ingress whitelist for defense in depth
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: admin-ip-restriction
+  namespace: ingress-demo
+spec:
+  podSelector:
+    matchLabels:
+      app: admin
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    # Allow from internal network only
+    - ipBlock:
+        cidr: 10.0.0.0/8
+    # Allow from ingress controller
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8080
+
+---
+# Network Policy: Health Check Access
+# Allow health checks from any namespace
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-health-checks
+  namespace: ingress-demo
+spec:
+  podSelector:
+    matchLabels:
+      app: health
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    # Allow from any namespace (for monitoring)
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 8080
+
+---
+# Network Policy: Graduated Access
+# Backend v2 has more restricted access (security testing)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-v2-restricted
+  namespace: ingress-demo
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+      version: v2
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Only allow from ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  # Only allow DNS
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: UDP
+      port: 53
+
+---
+# Network Policy: Rate Limiting with Multiple Ports
+# Allow multiple ports with rate limits
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: multi-port-policy
+  namespace: ingress-demo
+spec:
+  podSelector:
+    matchLabels:
+      app: api
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector: {}
+    ports:
+    # HTTP
+    - protocol: TCP
+      port: 80
+    # HTTPS
+    - protocol: TCP
+      port: 443
+    # Metrics
+    - protocol: TCP
+      port: 9090
+    # Health check
+    - protocol: TCP
+      port: 8080
+
+---
+# IMPORTANT NOTES ON NETWORK POLICIES:
+#
+# 1. Network policies are additive - multiple policies are OR'd together
+# 2. Empty selector {} matches all pods/namespaces
+# 3. If no policies exist, all traffic is allowed
+# 4. If any policy exists, only allowed traffic is permitted
+# 5. Requires a network plugin that supports NetworkPolicy (Calico, Cilium, etc.)
+# 6. Policies are namespace-scoped
+# 7. Use labels for flexible policy management
+#
+# Testing Network Policies:
+#
+# Test ingress from another pod:
+# kubectl run test-pod --rm -it --image=busybox -n ingress-demo -- wget -O- http://backend-v1
+#
+# Test from different namespace:
+# kubectl run test-pod --rm -it --image=busybox -n default -- wget -O- http://backend-v1.ingress-demo
+#
+# Check policy:
+# kubectl describe networkpolicy <policy-name> -n ingress-demo
+#
+# View all policies:
+# kubectl get networkpolicies -n ingress-demo

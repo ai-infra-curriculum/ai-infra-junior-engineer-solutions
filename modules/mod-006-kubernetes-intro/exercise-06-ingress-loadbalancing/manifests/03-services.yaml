@@ -1,0 +1,260 @@
+---
+# Service for Backend v1
+# ClusterIP - Internal cluster access only
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-v1
+  namespace: ingress-demo
+  labels:
+    app: backend
+    version: v1
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+    version: v1
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  sessionAffinity: None  # Round-robin load balancing
+
+---
+# Service for Backend v2
+# ClusterIP - Internal cluster access only
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-v2
+  namespace: ingress-demo
+  labels:
+    app: backend
+    version: v2
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+    version: v2
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+
+---
+# Service for Backend (All Versions)
+# Used when we want to load balance across all backend versions
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: ingress-demo
+  labels:
+    app: backend
+spec:
+  type: ClusterIP
+  selector:
+    app: backend  # Matches both v1 and v2
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+
+---
+# Service for API
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+  namespace: ingress-demo
+  labels:
+    app: api
+spec:
+  type: ClusterIP
+  selector:
+    app: api
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+
+---
+# Service for Web
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-service
+  namespace: ingress-demo
+  labels:
+    app: web
+spec:
+  type: ClusterIP
+  selector:
+    app: web
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+
+---
+# Service for Admin
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-service
+  namespace: ingress-demo
+  labels:
+    app: admin
+spec:
+  type: ClusterIP
+  selector:
+    app: admin
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+
+---
+# Service for Health
+apiVersion: v1
+kind: Service
+metadata:
+  name: health-service
+  namespace: ingress-demo
+  labels:
+    app: health
+spec:
+  type: ClusterIP
+  selector:
+    app: health
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+
+---
+# NodePort Service Example
+# Exposes service on each node's IP at a static port
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-nodeport
+  namespace: ingress-demo
+  labels:
+    app: backend
+    type: nodeport
+  annotations:
+    description: "NodePort service - accessible via <NodeIP>:<NodePort>"
+spec:
+  type: NodePort
+  selector:
+    app: backend
+    version: v1
+  ports:
+  - port: 80
+    targetPort: 8080
+    nodePort: 30080  # Optional: specify port (30000-32767), otherwise auto-assigned
+    protocol: TCP
+    name: http
+
+---
+# LoadBalancer Service Example
+# Creates an external load balancer (cloud provider dependent)
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-loadbalancer
+  namespace: ingress-demo
+  labels:
+    app: backend
+    type: loadbalancer
+  annotations:
+    description: "LoadBalancer service - gets external IP from cloud provider"
+spec:
+  type: LoadBalancer
+  selector:
+    app: backend
+    version: v1
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  # Optional: Specific cloud provider annotations
+  # For AWS:
+  # service.beta.kubernetes.io/aws-load-balancer-type: nlb
+  # For GCP:
+  # cloud.google.com/load-balancer-type: "Internal"
+
+---
+# Headless Service Example
+# No load balancing, returns pod IPs directly
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-headless
+  namespace: ingress-demo
+  labels:
+    app: backend
+    type: headless
+spec:
+  clusterIP: None  # Makes it headless
+  selector:
+    app: backend
+    version: v1
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+
+---
+# Service with Session Affinity
+# Ensures client requests go to the same pod
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-sticky
+  namespace: ingress-demo
+  labels:
+    app: backend
+    type: sticky
+  annotations:
+    description: "Service with session affinity (sticky sessions)"
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+    version: v1
+  sessionAffinity: ClientIP  # Sticky sessions based on client IP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800  # 3 hours
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+
+---
+# External Name Service Example
+# Maps to an external DNS name
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-api
+  namespace: ingress-demo
+  labels:
+    type: external-name
+spec:
+  type: ExternalName
+  externalName: api.external-service.com
+  ports:
+  - port: 80

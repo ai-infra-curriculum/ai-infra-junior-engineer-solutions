@@ -1,0 +1,80 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+*.md
+docs/
+README.md
+
+# Tests
+tests/
+test_*.py
+*_test.py
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+Jenkinsfile
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Models (if large - better to mount at runtime)
+*.h5
+*.pkl
+*.pth
+*.onnx
+*.pb
+
+# Data
+data/
+*.csv
+*.json
+*.parquet
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Secrets
+.env
+.env.local
+secrets/
+*.pem
+*.key

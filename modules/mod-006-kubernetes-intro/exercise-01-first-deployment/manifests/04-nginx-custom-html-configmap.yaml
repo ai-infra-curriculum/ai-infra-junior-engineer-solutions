@@ -1,0 +1,78 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-html
+  labels:
+    app: nginx
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>My First Kubernetes App</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                max-width: 800px;
+                margin: 50px auto;
+                padding: 20px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+            }
+            .container {
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 30px;
+                backdrop-filter: blur(10px);
+            }
+            h1 {
+                color: #fff;
+                text-align: center;
+            }
+            .info {
+                background: rgba(255, 255, 255, 0.2);
+                padding: 15px;
+                border-radius: 5px;
+                margin: 10px 0;
+            }
+            .label {
+                font-weight: bold;
+                color: #f0f0f0;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>🚀 Hello from Kubernetes!</h1>
+            <p style="text-align: center; font-size: 1.2em;">
+                This is my first deployment on Kubernetes.
+            </p>
+
+            <div class="info">
+                <p><span class="label">Exercise:</span> First Kubernetes Deployment</p>
+                <p><span class="label">Module:</span> MOD-006 Kubernetes Introduction</p>
+                <p><span class="label">Deployment Type:</span> nginx with custom HTML from ConfigMap</p>
+            </div>
+
+            <div class="info">
+                <p><span class="label">Pod Hostname:</span> <span id="hostname">Loading...</span></p>
+                <p><span class="label">Timestamp:</span> <span id="timestamp"></span></p>
+            </div>
+
+            <script>
+                // Display hostname (from environment variable injected by Kubernetes)
+                document.getElementById('hostname').textContent = window.location.hostname;
+
+                // Display current timestamp
+                document.getElementById('timestamp').textContent = new Date().toLocaleString();
+
+                // Refresh timestamp every second
+                setInterval(() => {
+                    document.getElementById('timestamp').textContent = new Date().toLocaleString();
+                }, 1000);
+            </script>
+        </div>
+    </body>
+    </html>

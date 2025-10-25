@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ml-api
+  labels:
+    app: ml-api
+    environment: production
+    team: ml-platform
+  annotations:
+    description: "Namespace for ML API deployment"

@@ -1,0 +1,138 @@
+name: Deploy to Production
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag to deploy'
+        required: true
+        type: string
+
+env:
+  ENVIRONMENT: prod
+  NAMESPACE: ml-api
+
+jobs:
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://ml-api.example.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "release" ]; then
+            VERSION=${{ github.event.release.tag_name }}
+          else
+            VERSION=${{ github.event.inputs.tag }}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Configure kubectl
+        uses: azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBECONFIG_PROD }}
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: '3.12.0'
+
+      - name: Lint Helm chart
+        run: |
+          helm lint ./helm-chart/ml-api
+
+      - name: Validate Helm values (prod)
+        run: |
+          helm template ml-api ./helm-chart/ml-api \
+            --values helm-chart/ml-api/values-prod.yaml \
+            --set image.tag=${{ steps.version.outputs.version }} \
+            --validate
+
+      - name: Create backup of current deployment
+        id: backup
+        run: |
+          CURRENT_REVISION=$(helm list -n ${{ env.NAMESPACE }} -o json | jq -r '.[] | select(.name=="ml-api") | .revision')
+          echo "current_revision=$CURRENT_REVISION" >> $GITHUB_OUTPUT
+          echo "Backing up current revision: $CURRENT_REVISION"
+
+      - name: Deploy with Helm
+        id: deploy
+        run: |
+          helm upgrade --install ml-api ./helm-chart/ml-api \
+            --namespace ${{ env.NAMESPACE }} \
+            --create-namespace \
+            --values helm-chart/ml-api/values-prod.yaml \
+            --set image.tag=${{ steps.version.outputs.version }} \
+            --wait \
+            --timeout 10m \
+            --atomic
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/ml-api -n ${{ env.NAMESPACE }} --timeout=10m
+          kubectl get pods -n ${{ env.NAMESPACE }} -l "app.kubernetes.io/name=ml-api"
+
+      - name: Run smoke tests
+        run: |
+          chmod +x ./scripts/test-deployment.sh
+          ./scripts/test-deployment.sh --environment prod --skip-port-forward
+
+      - name: Monitor for 5 minutes
+        run: |
+          echo "Monitoring deployment for 5 minutes..."
+          for i in {1..10}; do
+            echo "Check $i/10..."
+            kubectl get pods -n ${{ env.NAMESPACE }} -l "app.kubernetes.io/name=ml-api"
+            sleep 30
+          done
+
+      - name: Create deployment summary
+        if: success()
+        run: |
+          echo "## 🚀 Production Deployment Successful" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** Production" >> $GITHUB_STEP_SUMMARY
+          echo "**Namespace:** ${{ env.NAMESPACE }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Previous revision:** ${{ steps.backup.outputs.current_revision }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Deployment Status" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          kubectl get pods -n ${{ env.NAMESPACE }} -l "app.kubernetes.io/name=ml-api" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Rollback Command" >> $GITHUB_STEP_SUMMARY
+          echo "If needed, rollback with:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "helm rollback ml-api ${{ steps.backup.outputs.current_revision }} -n ${{ env.NAMESPACE }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "## ❌ Deployment Failed - Rolling Back" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Attempting automatic rollback to revision ${{ steps.backup.outputs.current_revision }}..." >> $GITHUB_STEP_SUMMARY
+
+          if [ -n "${{ steps.backup.outputs.current_revision }}" ]; then
+            helm rollback ml-api ${{ steps.backup.outputs.current_revision }} -n ${{ env.NAMESPACE }} --wait
+            echo "Rollback completed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No previous revision found for rollback" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Send notification
+        if: always()
+        run: |
+          # Add your notification logic here (Slack, email, etc.)
+          echo "Deployment status: ${{ job.status }}"

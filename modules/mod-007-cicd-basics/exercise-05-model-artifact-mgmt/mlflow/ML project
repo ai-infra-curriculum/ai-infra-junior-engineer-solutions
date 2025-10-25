@@ -1,0 +1,30 @@
+name: ML Model Training
+
+conda_env: conda.yaml
+
+entry_points:
+  main:
+    parameters:
+      data_path: {type: string, default: "data/dataset.csv"}
+      test_size: {type: float, default: 0.2}
+      random_state: {type: int, default: 42}
+      model_type: {type: string, default: "random_forest"}
+      n_estimators: {type: int, default: 100}
+      max_depth: {type: int, default: 10}
+      min_samples_split: {type: int, default: 2}
+      experiment_name: {type: string, default: "default"}
+    command: "python train.py --data-path {data_path} --test-size {test_size} --random-state {random_state} --model-type {model_type} --n-estimators {n_estimators} --max-depth {max_depth} --min-samples-split {min_samples_split} --experiment-name {experiment_name}"
+
+  register:
+    parameters:
+      run_id: {type: string}
+      model_name: {type: string, default: "RandomForestClassifier"}
+      stage: {type: string, default: "None"}
+    command: "python register_model.py --run-id {run_id} --model-name {model_name} --stage {stage}"
+
+  promote:
+    parameters:
+      model_name: {type: string}
+      version: {type: int}
+      stage: {type: string}
+    command: "python promote_model.py --model-name {model_name} --version {version} --stage {stage}"

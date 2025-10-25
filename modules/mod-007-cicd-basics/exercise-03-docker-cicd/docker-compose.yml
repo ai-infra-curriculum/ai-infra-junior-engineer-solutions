@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  # ML API Service
+  ml-api:
+    build:
+      context: .
+      dockerfile: dockerfiles/Dockerfile.optimized
+      args:
+        - PYTHON_VERSION=3.11
+    image: ml-api:latest
+    container_name: ml-api
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_PATH=/models/model.pkl
+      - DEBUG=false
+    volumes:
+      - ./models:/models:ro  # Read-only model volume
+      - api-logs:/var/log
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+    networks:
+      - ml-network
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  # PostgreSQL Database (for storing predictions)
+  postgres:
+    image: postgres:15-alpine
+    container_name: ml-postgres
+    environment:
+      - POSTGRES_DB=ml_db
+      - POSTGRES_USER=ml_user
+      - POSTGRES_PASSWORD=ml_password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ml_user -d ml_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ml-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: ml-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - ml-network
+    command: redis-server --appendonly yes
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: ml-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx-logs:/var/log/nginx
+    depends_on:
+      - ml-api
+    restart: unless-stopped
+    networks:
+      - ml-network
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  api-logs:
+    driver: local
+  nginx-logs:
+    driver: local
+
+networks:
+  ml-network:
+    driver: bridge

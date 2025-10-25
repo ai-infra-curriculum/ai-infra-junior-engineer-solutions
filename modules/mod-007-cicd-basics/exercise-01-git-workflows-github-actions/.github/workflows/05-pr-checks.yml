@@ -1,0 +1,390 @@
+name: PR Validation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+jobs:
+  validate-pr-title:
+    name: Validate PR Title
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check PR title format
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const prTitle = context.payload.pull_request.title;
+            const conventionalCommitRegex = /^(feat|fix|docs|style|refactor|test|chore|ci|perf|build|revert)(\(.+\))?!?: .+/;
+
+            if (!conventionalCommitRegex.test(prTitle)) {
+              core.setFailed(
+                'PR title must follow Conventional Commits format: ' +
+                '<type>(<scope>): <description>\n\n' +
+                'Valid types: feat, fix, docs, style, refactor, test, chore, ci, perf, build, revert\n\n' +
+                'Examples:\n' +
+                '  feat(training): Add distributed training support\n' +
+                '  fix(api): Handle edge case in preprocessing\n' +
+                '  docs: Update deployment instructions'
+              );
+            }
+
+            core.info(`✅ PR title follows conventional commits format: ${prTitle}`);
+
+  validate-branch-name:
+    name: Validate Branch Name
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check branch naming convention
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const branch = context.payload.pull_request.head.ref;
+            const validPrefixes = ['feature/', 'bugfix/', 'hotfix/', 'release/', 'docs/'];
+
+            const isValid = validPrefixes.some(prefix => branch.startsWith(prefix));
+
+            if (!isValid) {
+              core.setFailed(
+                'Branch name must start with one of: ' + validPrefixes.join(', ') + '\n\n' +
+                'Examples:\n' +
+                '  feature/add-model-training\n' +
+                '  bugfix/fix-inference-error\n' +
+                '  hotfix/critical-security-fix\n' +
+                '  docs/update-readme'
+              );
+            }
+
+            core.info(`✅ Branch name follows convention: ${branch}`);
+
+  check-pr-size:
+    name: Check PR Size
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check PR size
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+
+            const additions = pr.additions;
+            const deletions = pr.deletions;
+            const changes = additions + deletions;
+            const filesChanged = pr.changed_files;
+
+            core.info(`Files changed: ${filesChanged}`);
+            core.info(`Lines added: ${additions}`);
+            core.info(`Lines deleted: ${deletions}`);
+            core.info(`Total changes: ${changes}`);
+
+            // Label based on size
+            let sizeLabel = 'size/S';
+            if (changes > 1000) sizeLabel = 'size/XXL';
+            else if (changes > 500) sizeLabel = 'size/XL';
+            else if (changes > 250) sizeLabel = 'size/L';
+            else if (changes > 100) sizeLabel = 'size/M';
+
+            core.info(`PR size: ${sizeLabel}`);
+
+            // Warn if PR is too large
+            if (changes > 500) {
+              core.warning(
+                `This PR is large (${changes} lines changed). ` +
+                'Consider splitting it into smaller PRs for easier review.'
+              );
+            }
+
+            if (filesChanged > 20) {
+              core.warning(
+                `This PR changes many files (${filesChanged}). ` +
+                'Consider splitting it into smaller, focused PRs.'
+              );
+            }
+
+  check-large-files:
+    name: Check for Large Files
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for large files
+        run: |
+          echo "Checking for large files (>10MB)..."
+
+          # Get list of changed files
+          git diff --name-only origin/${{ github.base_ref }}...HEAD > changed_files.txt
+
+          # Check file sizes
+          LARGE_FILES=""
+          while IFS= read -r file; do
+            if [ -f "$file" ]; then
+              SIZE=$(stat -f%z "$file" 2>/dev/null || stat -c%s "$file" 2>/dev/null || echo 0)
+              SIZE_MB=$((SIZE / 1024 / 1024))
+
+              if [ $SIZE_MB -gt 10 ]; then
+                LARGE_FILES="${LARGE_FILES}${file} (${SIZE_MB}MB)\n"
+              fi
+            fi
+          done < changed_files.txt
+
+          if [ -n "$LARGE_FILES" ]; then
+            echo "❌ Large files detected:"
+            echo -e "$LARGE_FILES"
+            echo ""
+            echo "Large files should not be committed to the repository."
+            echo "Consider using Git LFS or hosting large files externally."
+            exit 1
+          fi
+
+          echo "✅ No large files detected"
+
+  check-secrets:
+    name: Check for Secrets
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install TruffleHog
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b /usr/local/bin
+
+      - name: Scan for secrets
+        run: |
+          trufflehog git file://. --since-commit origin/${{ github.base_ref }} --only-verified --fail
+
+      - name: Basic secret pattern check
+        run: |
+          echo "Checking for common secret patterns..."
+
+          PATTERNS=(
+            "password\s*=\s*['\"][^'\"]+['\"]"
+            "api_key\s*=\s*['\"][^'\"]+['\"]"
+            "secret\s*=\s*['\"][^'\"]+['\"]"
+            "token\s*=\s*['\"][^'\"]+['\"]"
+            "aws_access_key_id"
+            "aws_secret_access_key"
+            "PRIVATE KEY"
+            "Bearer [A-Za-z0-9\-\._~\+\/]+=*"
+          )
+
+          FOUND_SECRETS=0
+
+          for pattern in "${PATTERNS[@]}"; do
+            if git diff origin/${{ github.base_ref }}...HEAD | grep -iE "$pattern" | grep -v "# " | grep -v "example"; then
+              echo "❌ Potential secret found: $pattern"
+              FOUND_SECRETS=1
+            fi
+          done
+
+          if [ $FOUND_SECRETS -eq 1 ]; then
+            echo ""
+            echo "Potential secrets detected in PR changes!"
+            echo "Please review and remove any sensitive data before merging."
+            exit 1
+          fi
+
+          echo "✅ No secrets detected"
+
+  check-pr-description:
+    name: Check PR Description
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate PR description
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const body = pr.body || '';
+
+            if (body.length < 50) {
+              core.setFailed(
+                'PR description is too short. Please provide:\n' +
+                '- Summary of changes\n' +
+                '- Why these changes are needed\n' +
+                '- How to test the changes\n' +
+                '- Any relevant issues or dependencies'
+              );
+            }
+
+            // Check for required sections
+            const requiredSections = ['## Summary', '## Changes', '## Testing'];
+            const missingSections = requiredSections.filter(section =>
+              !body.includes(section)
+            );
+
+            if (missingSections.length > 0) {
+              core.warning(
+                'PR description is missing recommended sections: ' +
+                missingSections.join(', ') + '\n\n' +
+                'Consider adding these sections for better documentation.'
+              );
+            }
+
+            core.info('✅ PR description is adequate');
+
+  check-linked-issues:
+    name: Check Linked Issues
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check for linked issues
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const body = pr.body || '';
+
+            // Check for issue references
+            const issueReferences = body.match(/#\d+|https:\/\/github\.com\/.*\/issues\/\d+/g);
+
+            if (!issueReferences) {
+              core.warning(
+                'No linked issues found. Consider linking related issues using:\n' +
+                '- Fixes #123\n' +
+                '- Closes #123\n' +
+                '- Related to #123'
+              );
+            } else {
+              core.info(`✅ Linked issues: ${issueReferences.join(', ')}`);
+            }
+
+  check-breaking-changes:
+    name: Check for Breaking Changes
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check for breaking changes
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const title = pr.title;
+            const body = pr.body || '';
+
+            // Check for breaking change indicator
+            const hasBreakingInTitle = title.includes('!:') || title.toLowerCase().includes('breaking');
+            const hasBreakingInBody = body.toLowerCase().includes('breaking change');
+
+            if (hasBreakingInTitle || hasBreakingInBody) {
+              core.warning('⚠️ This PR contains BREAKING CHANGES!');
+              core.warning('Ensure proper documentation and migration guides are provided.');
+
+              // Check for migration guide
+              if (!body.toLowerCase().includes('migration')) {
+                core.warning('Consider adding a migration guide for breaking changes.');
+              }
+            }
+
+  check-test-coverage:
+    name: Check Test Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pytest pytest-cov
+          pip install -r examples/requirements.txt || true
+
+      - name: Check if tests were added
+        run: |
+          # Check if any Python files were added/modified
+          PYTHON_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep "\.py$" | grep -v "test_" || true)
+
+          # Check if test files were added/modified
+          TEST_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD | grep "test_.*\.py$" || true)
+
+          if [ -n "$PYTHON_FILES" ] && [ -z "$TEST_FILES" ]; then
+            echo "⚠️ Warning: Python files were modified but no test files were updated."
+            echo "Consider adding tests for new functionality."
+          else
+            echo "✅ Tests appear to be included"
+          fi
+
+  pr-validation-summary:
+    name: PR Validation Summary
+    needs:
+      - validate-pr-title
+      - validate-branch-name
+      - check-pr-size
+      - check-large-files
+      - check-secrets
+      - check-pr-description
+      - check-linked-issues
+      - check-breaking-changes
+      - check-test-coverage
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Check results
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const results = {
+              'PR Title': '${{ needs.validate-pr-title.result }}',
+              'Branch Name': '${{ needs.validate-branch-name.result }}',
+              'PR Size': '${{ needs.check-pr-size.result }}',
+              'Large Files': '${{ needs.check-large-files.result }}',
+              'Secrets Check': '${{ needs.check-secrets.result }}',
+              'PR Description': '${{ needs.check-pr-description.result }}',
+              'Linked Issues': '${{ needs.check-linked-issues.result }}',
+              'Breaking Changes': '${{ needs.check-breaking-changes.result }}',
+              'Test Coverage': '${{ needs.check-test-coverage.result }}'
+            };
+
+            let comment = '## PR Validation Results\n\n';
+            comment += '| Check | Status |\n';
+            comment += '|-------|--------|\n';
+
+            let hasFailed = false;
+            for (const [check, result] of Object.entries(results)) {
+              const emoji = result === 'success' ? '✅' : result === 'failure' ? '❌' : '⚠️';
+              comment += `| ${check} | ${emoji} ${result} |\n`;
+
+              if (result === 'failure') {
+                hasFailed = true;
+              }
+            }
+
+            comment += '\n';
+
+            if (hasFailed) {
+              comment += '⚠️ **Some checks failed.** Please review the workflow logs and fix the issues.\n';
+              core.setFailed('One or more PR validation checks failed');
+            } else {
+              comment += '✅ **All checks passed!** This PR is ready for review.\n';
+            }
+
+            // Post comment on PR
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });

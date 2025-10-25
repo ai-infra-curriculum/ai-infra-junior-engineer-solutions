@@ -1,0 +1,277 @@
+# Production environment values
+# Usage: helm install flask-app ./flask-app -f values-prod.yaml
+
+# Higher replica count for production
+replicaCount: 3
+
+# Strict image pulling policy
+image:
+  pullPolicy: IfNotPresent
+  tag: "1.0.0"  # Use specific version tag in production
+
+# Production Flask configuration
+flask:
+  env: production
+  debug: false
+  # IMPORTANT: Change this secret key before deploying!
+  # Use external secret manager (Vault, Sealed Secrets, etc.)
+  secretKey: "REPLACE_WITH_SECURE_SECRET_KEY"
+  logLevel: "INFO"
+
+# Production resource requirements
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+# Use external database in production
+database:
+  enabled: true
+  # Point to external managed database
+  host: prod-postgres.database.svc.cluster.local
+  port: 5432
+  name: flaskdb_prod
+  username: prod_user
+  # Use existing secret for database credentials
+  existingSecret: flask-app-db-credentials
+  sslMode: "require"
+  poolSize: 10
+  maxOverflow: 20
+
+# Use external Redis in production
+redis:
+  enabled: true
+  # Point to external managed Redis
+  host: prod-redis.cache.svc.cluster.local
+  port: 6379
+  database: 0
+  # Use existing secret for Redis password
+  # password: set via existingSecret
+  maxConnections: 100
+
+# Enable ML model in production
+mlModel:
+  enabled: true
+  modelPath: "/models/prod-model.pkl"
+  modelVersion: "1.0.0"
+  modelType: "sklearn"
+  warmup: true
+  workers: 4
+  batchSize: 64
+  batchTimeout: 100
+
+# Enable autoscaling in production
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Use external storage in production
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClass: "fast-ssd"
+  mountPath: /data
+
+# Production health checks
+healthCheck:
+  livenessProbe:
+    enabled: true
+    path: /health
+    initialDelaySeconds: 60
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
+  readinessProbe:
+    enabled: true
+    path: /ready
+    initialDelaySeconds: 30
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+    successThreshold: 1
+  startupProbe:
+    enabled: true
+    path: /health
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 30
+    successThreshold: 1
+
+# Enable pod disruption budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Strict security context for production
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 2000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+  allowPrivilegeEscalation: false
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Production ingress with TLS
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/limit-rps: "50"
+    nginx.ingress.kubernetes.io/enable-cors: "false"
+    nginx.ingress.kubernetes.io/proxy-body-size: "16m"
+  hosts:
+    - host: api.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: flask-app-tls
+      hosts:
+        - api.example.com
+
+# Disable subcharts in production (use external services)
+postgresql:
+  enabled: false
+
+redis:
+  enabled: false
+
+# Production annotations
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "9090"
+  prometheus.io/path: "/metrics"
+  environment: "production"
+  version: "1.0.0"
+
+# Enable Prometheus monitoring
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  scrapeTimeout: 10s
+  labels:
+    prometheus: kube-prometheus
+
+# Enable network policies in production
+networkPolicy:
+  enabled: true
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 80
+  egress:
+    # Allow DNS
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+    # Allow database
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: database
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Allow Redis
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: cache
+      ports:
+        - protocol: TCP
+          port: 6379
+    # Allow HTTPS for external APIs
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
+
+# Pod anti-affinity for high availability
+affinity:
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+            - key: app.kubernetes.io/name
+              operator: In
+              values:
+                - flask-app
+        topologyKey: kubernetes.io/hostname
+
+# Node selector for production nodes
+nodeSelector:
+  workload-type: production
+  node-pool: apps
+
+# Tolerations for production node taints
+tolerations:
+  - key: "workload-type"
+    operator: "Equal"
+    value: "production"
+    effect: "NoSchedule"
+
+# Rolling update strategy
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+
+# Lifecycle hooks for graceful shutdown
+lifecycle:
+  preStop:
+    exec:
+      command:
+        - /bin/sh
+        - -c
+        - sleep 15
+
+# Priority class for production workloads
+priorityClassName: "high-priority"
+
+# Keep more revision history in production
+revisionHistoryLimit: 20
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 80
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: http
+    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: arn:aws:acm:region:account:certificate/cert-id
+  # Session affinity for stateful sessions
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800

@@ -1,0 +1,237 @@
+---
+# Comparison: StatefulSet vs Deployment
+#
+# This file demonstrates the key differences between StatefulSets and Deployments
+# by deploying the same application (nginx) using both approaches
+
+# ============================================================================
+# DEPLOYMENT EXAMPLE
+# ============================================================================
+# Deployments are for stateless applications
+# - Pods are interchangeable
+# - No stable network identity
+# - No persistent storage per pod
+# - Can scale up/down in any order
+# - Use cases: web servers, API servers, microservices
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  namespace: statefulset-demo
+  labels:
+    type: deployment-example
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx-deployment
+  template:
+    metadata:
+      labels:
+        app: nginx-deployment
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: shared-data
+          mountPath: /usr/share/nginx/html
+      # All pods share the same volume
+      volumes:
+      - name: shared-data
+        emptyDir: {}
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-deployment-svc
+  namespace: statefulset-demo
+spec:
+  selector:
+    app: nginx-deployment
+  ports:
+  - port: 80
+    targetPort: 80
+  type: ClusterIP
+
+---
+# ============================================================================
+# STATEFULSET EXAMPLE
+# ============================================================================
+# StatefulSets are for stateful applications
+# - Each pod has stable, unique identity
+# - Stable network hostname (pod-name.service-name)
+# - Persistent storage per pod
+# - Ordered, graceful deployment and scaling
+# - Use cases: databases, message queues, distributed systems
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-statefulset-svc
+  namespace: statefulset-demo
+spec:
+  clusterIP: None  # Headless service
+  selector:
+    app: nginx-statefulset
+  ports:
+  - port: 80
+    targetPort: 80
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nginx-statefulset
+  namespace: statefulset-demo
+  labels:
+    type: statefulset-example
+spec:
+  serviceName: nginx-statefulset-svc
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx-statefulset
+  template:
+    metadata:
+      labels:
+        app: nginx-statefulset
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: www
+          mountPath: /usr/share/nginx/html
+        # Lifecycle hook to write pod identity
+        lifecycle:
+          postStart:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - |
+                echo "Pod: $HOSTNAME" > /usr/share/nginx/html/index.html
+                echo "IP: $(hostname -i)" >> /usr/share/nginx/html/index.html
+                echo "Created: $(date)" >> /usr/share/nginx/html/index.html
+  # Each pod gets its own PVC
+  volumeClaimTemplates:
+  - metadata:
+      name: www
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      storageClassName: standard
+      resources:
+        requests:
+          storage: 100Mi
+
+---
+# ============================================================================
+# KEY DIFFERENCES SUMMARY
+# ============================================================================
+#
+# 1. POD NAMING:
+#    Deployment: nginx-deployment-<random-hash>-<random-hash>
+#               (e.g., nginx-deployment-7d8f9c5b4-x7k2m)
+#    StatefulSet: nginx-statefulset-0, nginx-statefulset-1, nginx-statefulset-2
+#                (stable, predictable names)
+#
+# 2. NETWORK IDENTITY:
+#    Deployment: Pods get random IP addresses
+#               No stable DNS names for individual pods
+#               Service load-balances across all pods
+#    StatefulSet: Each pod has stable DNS name:
+#                nginx-statefulset-0.nginx-statefulset-svc.statefulset-demo.svc.cluster.local
+#                nginx-statefulset-1.nginx-statefulset-svc.statefulset-demo.svc.cluster.local
+#                nginx-statefulset-2.nginx-statefulset-svc.statefulset-demo.svc.cluster.local
+#
+# 3. STORAGE:
+#    Deployment: Shared storage or no persistence
+#               If pod is deleted, data may be lost
+#    StatefulSet: Each pod has its own PersistentVolumeClaim
+#                If pod is deleted and recreated, it reattaches to same PVC
+#                Data persists across pod restarts
+#
+# 4. SCALING:
+#    Deployment: Pods created/deleted in parallel
+#               Order doesn't matter
+#               New pods get random names
+#    StatefulSet: Pods created in order (0, 1, 2...)
+#                Pods deleted in reverse order (2, 1, 0)
+#                New pods maintain sequential naming
+#
+# 5. UPDATES:
+#    Deployment: Can use various strategies (RollingUpdate, Recreate)
+#               Updates can happen in any order
+#    StatefulSet: RollingUpdate happens in reverse order (2, 1, 0)
+#                Can use partition for canary deployments
+#
+# 6. USE CASES:
+#    Deployment: - Stateless web applications
+#               - REST APIs
+#               - Microservices
+#               - Background workers (no state)
+#    StatefulSet: - Databases (PostgreSQL, MySQL, MongoDB)
+#                - Message queues (Kafka, RabbitMQ)
+#                - Distributed systems (etcd, ZooKeeper)
+#                - Applications requiring stable network identity
+
+---
+# ============================================================================
+# TESTING THE DIFFERENCES
+# ============================================================================
+#
+# After deploying both, run these commands to see the differences:
+#
+# 1. Check pod names:
+#    kubectl get pods -n statefulset-demo -l type=deployment-example
+#    kubectl get pods -n statefulset-demo -l type=statefulset-example
+#
+# 2. Check DNS resolution:
+#    kubectl run -it dns-test --rm --image=busybox -n statefulset-demo -- sh
+#    # Try to resolve individual Deployment pods (won't work):
+#    nslookup nginx-deployment-xxx-yyy.nginx-deployment-svc
+#    # Resolve StatefulSet pods (works!):
+#    nslookup nginx-statefulset-0.nginx-statefulset-svc
+#    nslookup nginx-statefulset-1.nginx-statefulset-svc
+#
+# 3. Check PVCs:
+#    kubectl get pvc -n statefulset-demo
+#    # Deployment has no PVCs
+#    # StatefulSet has one PVC per pod (www-nginx-statefulset-0, www-nginx-statefulset-1, etc.)
+#
+# 4. Test persistence:
+#    # Write data to StatefulSet pod
+#    kubectl exec nginx-statefulset-0 -n statefulset-demo -- sh -c 'echo "Persistent data" > /usr/share/nginx/html/data.txt'
+#    # Delete the pod
+#    kubectl delete pod nginx-statefulset-0 -n statefulset-demo
+#    # Wait for recreation
+#    kubectl wait --for=condition=ready pod/nginx-statefulset-0 -n statefulset-demo --timeout=60s
+#    # Check data persists
+#    kubectl exec nginx-statefulset-0 -n statefulset-demo -- cat /usr/share/nginx/html/data.txt
+#
+# 5. Test scaling order:
+#    # Scale up StatefulSet
+#    kubectl scale statefulset nginx-statefulset --replicas=5 -n statefulset-demo
+#    # Watch pods created in order (3, then 4)
+#    kubectl get pods -n statefulset-demo -l app=nginx-statefulset -w
+#
+#    # Scale down StatefulSet
+#    kubectl scale statefulset nginx-statefulset --replicas=2 -n statefulset-demo
+#    # Watch pods deleted in reverse order (4, then 3)
+#    kubectl get pods -n statefulset-demo -l app=nginx-statefulset -w
+#
+# 6. Access specific StatefulSet pod:
+#    kubectl run -it curl-test --rm --image=curlimages/curl -n statefulset-demo -- sh
+#    # Access specific pod via stable DNS name
+#    curl http://nginx-statefulset-0.nginx-statefulset-svc
+#    curl http://nginx-statefulset-1.nginx-statefulset-svc
+#    curl http://nginx-statefulset-2.nginx-statefulset-svc
+#    # Each pod shows its unique identity!

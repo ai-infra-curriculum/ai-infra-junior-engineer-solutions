@@ -1,0 +1,557 @@
+---
+# Canary Deployment with Traffic Splitting
+# Gradually route traffic to new version
+
+# Production Ingress (90% traffic to v1)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: production-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: canary.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-v1
+            port:
+              number: 80
+
+---
+# Canary Ingress (10% traffic to v2)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: canary-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # Enable canary
+    nginx.ingress.kubernetes.io/canary: "true"
+    # Route 10% of traffic to canary
+    nginx.ingress.kubernetes.io/canary-weight: "10"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: canary.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-v2
+            port:
+              number: 80
+
+---
+# Header-Based Canary Routing
+# Route based on specific header value
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: canary-header-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/canary: "true"
+    # Route if header "X-Canary: always" is present
+    nginx.ingress.kubernetes.io/canary-by-header: "X-Canary"
+    nginx.ingress.kubernetes.io/canary-by-header-value: "always"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: canary-header.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-v2
+            port:
+              number: 80
+
+---
+# Cookie-Based Canary Routing
+# Route based on cookie value
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: canary-cookie-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/canary: "true"
+    # Route if cookie "user_group=beta" is present
+    nginx.ingress.kubernetes.io/canary-by-cookie: "user_group"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: canary-cookie.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-v2
+            port:
+              number: 80
+
+---
+# Rate Limiting
+# Limit requests per second/minute
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rate-limited-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # Limit to 10 requests per second per IP
+    nginx.ingress.kubernetes.io/limit-rps: "10"
+    # Limit to 100 requests per minute per IP
+    nginx.ingress.kubernetes.io/limit-rpm: "100"
+    # Limit concurrent connections per IP
+    nginx.ingress.kubernetes.io/limit-connections: "5"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: ratelimit.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 80
+
+---
+# Basic Authentication
+# Protect endpoints with username/password
+apiVersion: v1
+kind: Secret
+metadata:
+  name: basic-auth-secret
+  namespace: ingress-demo
+type: Opaque
+data:
+  # Generate with: htpasswd -c auth username
+  # This example: username=admin, password=admin123
+  auth: YWRtaW46JGFwcjEkSDY1dnBKVEkkZ0J1a1ZadGp0Si9EREw4ZUJpa2EvLgo=
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: basic-auth-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # Enable basic auth
+    nginx.ingress.kubernetes.io/auth-type: basic
+    nginx.ingress.kubernetes.io/auth-secret: basic-auth-secret
+    nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required'
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: auth.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: admin-service
+            port:
+              number: 80
+
+---
+# OAuth2 Authentication
+# External OAuth2 provider authentication
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: oauth2-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # OAuth2 proxy
+    nginx.ingress.kubernetes.io/auth-url: "https://oauth2-proxy.example.com/oauth2/auth"
+    nginx.ingress.kubernetes.io/auth-signin: "https://oauth2-proxy.example.com/oauth2/start?rd=$escaped_request_uri"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: oauth.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: admin-service
+            port:
+              number: 80
+
+---
+# IP Whitelist
+# Allow only specific IP addresses
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: whitelist-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # Comma-separated list of allowed CIDR blocks
+    nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: internal.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: admin-service
+            port:
+              number: 80
+
+---
+# CORS Configuration
+# Cross-Origin Resource Sharing settings
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cors-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # Enable CORS
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://frontend.example.com"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+    nginx.ingress.kubernetes.io/cors-max-age: "86400"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: api-cors.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-service
+            port:
+              number: 80
+
+---
+# Custom Timeouts
+# Configure connection and request timeouts
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: timeout-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # Connection timeout
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "60"
+    # Read timeout
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    # Send timeout
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    # Request body size limit
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: timeout.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-v1
+            port:
+              number: 80
+
+---
+# Custom Response Headers
+# Add or modify response headers
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: custom-headers-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # Add custom headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Custom-Header: MyValue";
+      more_set_headers "X-Application: MyApp";
+      more_set_headers "X-Version: 1.0.0";
+      # Security headers
+      more_set_headers "X-Frame-Options: SAMEORIGIN";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: headers.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-v1
+            port:
+              number: 80
+
+---
+# Redirect Rules
+# HTTP redirects
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: redirect-ingress
+  namespace: ingress-demo
+  annotations:
+    # Permanent redirect
+    nginx.ingress.kubernetes.io/permanent-redirect: "https://newdomain.example.com"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: oldsite.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-v1
+            port:
+              number: 80
+
+---
+# URL Rewriting
+# Modify request path before forwarding
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: rewrite-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # Rewrite /app/something to /something
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    # Use capture groups in path
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: rewrite.example.com
+    http:
+      paths:
+      - path: /app(/|$)(.*)
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: backend-v1
+            port:
+              number: 80
+
+---
+# Sticky Sessions (Session Affinity)
+# Route user to same backend pod
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sticky-sessions-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # Enable session affinity
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/session-cookie-name: "route"
+    nginx.ingress.kubernetes.io/session-cookie-expires: "172800"
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "172800"
+    nginx.ingress.kubernetes.io/session-cookie-path: "/"
+    nginx.ingress.kubernetes.io/affinity-mode: "persistent"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: sticky.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-v1
+            port:
+              number: 80
+
+---
+# Load Balancing Algorithm
+# Configure upstream load balancing
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: lb-algorithm-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # Load balancing algorithm: round_robin (default), least_conn, ip_hash
+    nginx.ingress.kubernetes.io/upstream-hash-by: "$request_uri"
+    # Keep-alive connections to upstream
+    nginx.ingress.kubernetes.io/upstream-keepalive-connections: "64"
+    nginx.ingress.kubernetes.io/upstream-keepalive-timeout: "60"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: lb.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 80
+
+---
+# WebSocket Support
+# Enable WebSocket connections
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: websocket-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # WebSocket configuration
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_set_header Upgrade $http_upgrade;
+      proxy_set_header Connection "upgrade";
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: ws.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-v1
+            port:
+              number: 80
+
+---
+# gRPC Support
+# Route gRPC traffic
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grpc-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # Enable gRPC
+    nginx.ingress.kubernetes.io/backend-protocol: "GRPC"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: grpc.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-v1
+            port:
+              number: 80
+
+---
+# Circuit Breaker Pattern
+# Fail fast when backend is unhealthy
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: circuit-breaker-ingress
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # Upstream configuration for circuit breaking
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      proxy_next_upstream error timeout http_502 http_503 http_504;
+      proxy_next_upstream_tries 2;
+      proxy_next_upstream_timeout 5s;
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: circuit.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-v1
+            port:
+              number: 80
+
+---
+# Blue-Green Deployment
+# Switch all traffic between versions
+
+# Blue deployment (active)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: blue-green-blue
+  namespace: ingress-demo
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: bluegreen.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: backend-v1  # Blue version
+            port:
+              number: 80
+
+# To switch to green:
+# 1. Deploy green version
+# 2. Test green at green.bluegreen.example.com
+# 3. Update this ingress to point to backend-v2
+# 4. Monitor for issues
+# 5. Rollback to v1 if needed

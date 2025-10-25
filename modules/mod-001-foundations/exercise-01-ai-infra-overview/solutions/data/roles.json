@@ -1,0 +1,439 @@
+{
+  "roles": [
+    {
+      "title": "Junior AI Infrastructure Engineer",
+      "level": "Entry Level",
+      "experience": "0-2 years",
+      "salary_range": {
+        "min": 80000,
+        "max": 120000,
+        "currency": "USD",
+        "notes": "Varies by location and company size"
+      },
+      "required_skills": {
+        "programming": [
+          {"skill": "Python", "proficiency": "Intermediate", "priority": "Critical"},
+          {"skill": "SQL", "proficiency": "Basic", "priority": "Important"},
+          {"skill": "Bash/Shell", "proficiency": "Basic", "priority": "Important"}
+        ],
+        "infrastructure": [
+          {"skill": "Docker", "proficiency": "Basic", "priority": "Critical"},
+          {"skill": "Linux", "proficiency": "Basic", "priority": "Critical"},
+          {"skill": "Git", "proficiency": "Intermediate", "priority": "Critical"},
+          {"skill": "Cloud Platforms (AWS/GCP/Azure)", "proficiency": "Basic", "priority": "Important"}
+        ],
+        "ml_knowledge": [
+          {"skill": "ML Basics", "proficiency": "Fundamental", "priority": "Important"},
+          {"skill": "Model Deployment", "proficiency": "Basic", "priority": "Important"},
+          {"skill": "Data Pipelines", "proficiency": "Basic", "priority": "Helpful"}
+        ],
+        "soft_skills": [
+          "Communication",
+          "Problem Solving",
+          "Debugging",
+          "Documentation",
+          "Teamwork"
+        ]
+      },
+      "typical_tasks": [
+        "Write deployment scripts for ML models",
+        "Containerize ML applications with Docker",
+        "Set up monitoring dashboards",
+        "Fix bugs in existing ML pipelines",
+        "Document infrastructure processes",
+        "Support data scientists with tooling",
+        "Maintain CI/CD pipelines"
+      ],
+      "day_in_life": {
+        "morning": [
+          "Review overnight model performance metrics",
+          "Attend stand-up with ML team",
+          "Debug failed training job",
+          "Update model serving API"
+        ],
+        "afternoon": [
+          "Implement monitoring for new endpoint",
+          "Review code from team member",
+          "Optimize Docker image size",
+          "Write deployment documentation"
+        ]
+      },
+      "growth_path": "AI Infrastructure Engineer (Mid-level) in 2-3 years"
+    },
+    {
+      "title": "AI Infrastructure Engineer",
+      "level": "Mid Level",
+      "experience": "2-5 years",
+      "salary_range": {
+        "min": 120000,
+        "max": 180000,
+        "currency": "USD"
+      },
+      "required_skills": {
+        "programming": [
+          {"skill": "Python", "proficiency": "Advanced", "priority": "Critical"},
+          {"skill": "Go/Rust", "proficiency": "Intermediate", "priority": "Helpful"},
+          {"skill": "SQL", "proficiency": "Intermediate", "priority": "Important"}
+        ],
+        "infrastructure": [
+          {"skill": "Kubernetes", "proficiency": "Intermediate", "priority": "Critical"},
+          {"skill": "Docker", "proficiency": "Advanced", "priority": "Critical"},
+          {"skill": "Terraform/IaC", "proficiency": "Intermediate", "priority": "Critical"},
+          {"skill": "CI/CD (Jenkins/GitHub Actions)", "proficiency": "Intermediate", "priority": "Critical"},
+          {"skill": "Cloud Platforms", "proficiency": "Intermediate", "priority": "Critical"}
+        ],
+        "ml_knowledge": [
+          {"skill": "ML Frameworks (PyTorch/TensorFlow)", "proficiency": "Intermediate", "priority": "Important"},
+          {"skill": "Model Serving", "proficiency": "Intermediate", "priority": "Critical"},
+          {"skill": "Feature Stores", "proficiency": "Basic", "priority": "Important"},
+          {"skill": "ML Pipelines", "proficiency": "Intermediate", "priority": "Critical"}
+        ],
+        "soft_skills": [
+          "System Design",
+          "Technical Leadership",
+          "Cross-team Collaboration",
+          "Mentoring",
+          "On-call Management"
+        ]
+      },
+      "typical_tasks": [
+        "Design scalable ML infrastructure",
+        "Build model serving systems",
+        "Optimize training pipelines",
+        "Implement feature stores",
+        "Lead infrastructure projects",
+        "Mentor junior engineers",
+        "Participate in on-call rotation"
+      ],
+      "growth_path": "Senior AI Infrastructure Engineer in 2-3 years"
+    },
+    {
+      "title": "Senior AI Infrastructure Engineer",
+      "level": "Senior",
+      "experience": "5+ years",
+      "salary_range": {
+        "min": 180000,
+        "max": 250000,
+        "currency": "USD",
+        "notes": "Can exceed $300k+ at top companies"
+      },
+      "required_skills": {
+        "programming": [
+          {"skill": "Python", "proficiency": "Expert", "priority": "Critical"},
+          {"skill": "Go/Rust/C++", "proficiency": "Advanced", "priority": "Important"},
+          {"skill": "System Programming", "proficiency": "Intermediate", "priority": "Helpful"}
+        ],
+        "infrastructure": [
+          {"skill": "Kubernetes", "proficiency": "Advanced", "priority": "Critical"},
+          {"skill": "Distributed Systems", "proficiency": "Advanced", "priority": "Critical"},
+          {"skill": "Infrastructure as Code", "proficiency": "Advanced", "priority": "Critical"},
+          {"skill": "Multi-cloud Architecture", "proficiency": "Advanced", "priority": "Important"},
+          {"skill": "Performance Optimization", "proficiency": "Advanced", "priority": "Critical"}
+        ],
+        "ml_knowledge": [
+          {"skill": "MLOps Best Practices", "proficiency": "Expert", "priority": "Critical"},
+          {"skill": "Model Optimization", "proficiency": "Advanced", "priority": "Important"},
+          {"skill": "A/B Testing Infrastructure", "proficiency": "Advanced", "priority": "Important"},
+          {"skill": "ML Platform Design", "proficiency": "Advanced", "priority": "Critical"}
+        ],
+        "soft_skills": [
+          "Architecture Design",
+          "Technical Strategy",
+          "Team Leadership",
+          "Stakeholder Management",
+          "Incident Management"
+        ]
+      },
+      "typical_tasks": [
+        "Architect ML platform infrastructure",
+        "Design multi-region deployment strategies",
+        "Lead cross-functional ML initiatives",
+        "Establish ML engineering best practices",
+        "Mentor team members",
+        "Drive technical roadmap",
+        "Evaluate and adopt new technologies"
+      ],
+      "growth_path": "Staff Engineer, Principal Engineer, or Engineering Manager"
+    }
+  ],
+  "skill_categories": {
+    "programming": {
+      "name": "Programming Languages",
+      "skills": [
+        {
+          "name": "Python",
+          "importance": "Critical",
+          "learning_time": "3-6 months (intermediate level)",
+          "resources": [
+            "Python.org official tutorial",
+            "Real Python courses",
+            "LeetCode for practice"
+          ]
+        },
+        {
+          "name": "SQL",
+          "importance": "Important",
+          "learning_time": "1-2 months (basic queries)",
+          "resources": [
+            "Mode Analytics SQL tutorial",
+            "SQLZoo",
+            "PostgreSQL documentation"
+          ]
+        },
+        {
+          "name": "Bash/Shell Scripting",
+          "importance": "Important",
+          "learning_time": "2-4 weeks",
+          "resources": [
+            "Linux Command Line book",
+            "ShellCheck for practice",
+            "Bash scripting guide"
+          ]
+        }
+      ]
+    },
+    "infrastructure": {
+      "name": "Infrastructure & DevOps",
+      "skills": [
+        {
+          "name": "Docker",
+          "importance": "Critical",
+          "learning_time": "2-4 weeks (basics), 2-3 months (advanced)",
+          "resources": [
+            "Docker official documentation",
+            "Docker for beginners course",
+            "Practice with sample projects"
+          ]
+        },
+        {
+          "name": "Kubernetes",
+          "importance": "Critical",
+          "learning_time": "2-3 months",
+          "resources": [
+            "Kubernetes.io tutorials",
+            "Kubernetes the Hard Way",
+            "CKA certification prep"
+          ]
+        },
+        {
+          "name": "CI/CD",
+          "importance": "Critical",
+          "learning_time": "1-2 months",
+          "resources": [
+            "GitHub Actions documentation",
+            "Jenkins tutorials",
+            "GitLab CI/CD guides"
+          ]
+        },
+        {
+          "name": "Terraform",
+          "importance": "Important",
+          "learning_time": "1-2 months",
+          "resources": [
+            "HashiCorp Learn",
+            "Terraform Up & Running book",
+            "Practice with AWS/GCP"
+          ]
+        }
+      ]
+    },
+    "ml_knowledge": {
+      "name": "ML & Data Engineering",
+      "skills": [
+        {
+          "name": "ML Fundamentals",
+          "importance": "Important",
+          "learning_time": "3-6 months",
+          "resources": [
+            "Andrew Ng's ML course",
+            "Fast.ai courses",
+            "Scikit-learn documentation"
+          ]
+        },
+        {
+          "name": "ML Frameworks (PyTorch/TensorFlow)",
+          "importance": "Important",
+          "learning_time": "2-4 months (one framework)",
+          "resources": [
+            "PyTorch tutorials",
+            "TensorFlow guides",
+            "Hands-on projects"
+          ]
+        },
+        {
+          "name": "Model Deployment",
+          "importance": "Critical",
+          "learning_time": "2-3 months",
+          "resources": [
+            "TensorFlow Serving docs",
+            "TorchServe tutorials",
+            "MLOps courses"
+          ]
+        }
+      ]
+    },
+    "cloud": {
+      "name": "Cloud Platforms",
+      "skills": [
+        {
+          "name": "AWS",
+          "importance": "Important",
+          "learning_time": "3-6 months",
+          "resources": [
+            "AWS Free Tier practice",
+            "AWS Solutions Architect Associate",
+            "AWS ML services documentation"
+          ]
+        },
+        {
+          "name": "GCP",
+          "importance": "Important",
+          "learning_time": "3-6 months",
+          "resources": [
+            "GCP free tier",
+            "Qwiklabs",
+            "Google Cloud certifications"
+          ]
+        }
+      ]
+    }
+  },
+  "learning_paths": {
+    "beginner_to_junior": {
+      "name": "From Beginner to Junior AI Infrastructure Engineer",
+      "duration": "6-12 months",
+      "phases": [
+        {
+          "phase": 1,
+          "name": "Foundations",
+          "duration": "2-3 months",
+          "focus": [
+            "Python programming (intermediate level)",
+            "Linux command line basics",
+            "Git and version control",
+            "Basic SQL"
+          ]
+        },
+        {
+          "phase": 2,
+          "name": "Infrastructure Basics",
+          "duration": "2-3 months",
+          "focus": [
+            "Docker fundamentals",
+            "Basic Kubernetes",
+            "CI/CD concepts",
+            "Cloud platform basics (choose one)"
+          ]
+        },
+        {
+          "phase": 3,
+          "name": "ML Fundamentals",
+          "duration": "1-2 months",
+          "focus": [
+            "ML basics and concepts",
+            "One ML framework (PyTorch or TensorFlow)",
+            "Model training basics",
+            "Simple model deployment"
+          ]
+        },
+        {
+          "phase": 4,
+          "name": "Integration & Projects",
+          "duration": "2-3 months",
+          "focus": [
+            "Build end-to-end ML pipeline",
+            "Deploy ML model to production",
+            "Set up monitoring",
+            "Portfolio projects"
+          ]
+        }
+      ]
+    },
+    "junior_to_mid": {
+      "name": "From Junior to Mid-Level Engineer",
+      "duration": "12-18 months",
+      "focus": [
+        "Advanced Kubernetes (CKA certification)",
+        "Infrastructure as Code (Terraform)",
+        "ML model optimization",
+        "System design for ML",
+        "Feature stores and ML platforms",
+        "Leading small projects",
+        "Mentoring"
+      ]
+    }
+  },
+  "certifications": [
+    {
+      "name": "AWS Certified Solutions Architect - Associate",
+      "provider": "Amazon Web Services",
+      "relevance": "High",
+      "cost": "$150",
+      "time_to_prepare": "2-3 months"
+    },
+    {
+      "name": "Certified Kubernetes Administrator (CKA)",
+      "provider": "Linux Foundation",
+      "relevance": "Very High",
+      "cost": "$395",
+      "time_to_prepare": "2-4 months"
+    },
+    {
+      "name": "TensorFlow Developer Certificate",
+      "provider": "Google",
+      "relevance": "Medium",
+      "cost": "$100",
+      "time_to_prepare": "1-2 months"
+    },
+    {
+      "name": "HashiCorp Certified: Terraform Associate",
+      "provider": "HashiCorp",
+      "relevance": "High",
+      "cost": "$70",
+      "time_to_prepare": "1-2 months"
+    }
+  ],
+  "job_market": {
+    "demand_by_location": {
+      "San Francisco Bay Area": "Very High",
+      "New York City": "Very High",
+      "Seattle": "Very High",
+      "Austin": "High",
+      "Boston": "High",
+      "Remote": "High (and growing)"
+    },
+    "company_types": {
+      "big_tech": {
+        "examples": ["Google", "Meta", "Amazon", "Microsoft", "Apple"],
+        "salary_range": "$150k-$400k+ total comp",
+        "competition": "Very High",
+        "interview_difficulty": "Very Hard"
+      },
+      "unicorn_startups": {
+        "examples": ["OpenAI", "Anthropic", "Scale AI", "Databricks"],
+        "salary_range": "$130k-$300k + equity",
+        "competition": "High",
+        "interview_difficulty": "Hard"
+      },
+      "mid_size_tech": {
+        "examples": ["Medium tech companies", "Growing startups"],
+        "salary_range": "$100k-$200k",
+        "competition": "Medium",
+        "interview_difficulty": "Medium"
+      },
+      "traditional_companies": {
+        "examples": ["Banks", "Healthcare", "Retail"],
+        "salary_range": "$80k-$150k",
+        "competition": "Low-Medium",
+        "interview_difficulty": "Medium"
+      }
+    },
+    "trends_2024": [
+      "Growing demand for LLM infrastructure engineers",
+      "Increased focus on cost optimization",
+      "More remote opportunities",
+      "Kubernetes skills highly valued",
+      "MLOps platform engineering in demand"
+    ]
+  }
+}

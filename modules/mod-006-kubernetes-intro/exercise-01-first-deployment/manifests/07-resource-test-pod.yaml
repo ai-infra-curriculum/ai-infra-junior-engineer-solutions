@@ -1,0 +1,35 @@
+# Resource limits testing Pod
+# Purpose: Demonstrate what happens when a container exceeds its memory limit
+#
+# Expected behavior:
+# - May get OOMKilled (Out Of Memory Killed) if stress exceeds limit
+# - Use 'kubectl describe pod resource-test' to see OOM event
+# - Events will show: "Memory cgroup out of memory"
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: resource-test
+  labels:
+    app: resource-test
+    purpose: stress-testing
+spec:
+  containers:
+  - name: stress
+    image: polinux/stress
+    command: ["stress"]
+    args:
+      - "--vm"
+      - "1"
+      - "--vm-bytes"
+      - "250M"  # Try to allocate 250MB
+      - "--vm-hang"
+      - "1"
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "100m"
+      limits:
+        memory: "256Mi"  # Will be killed if exceeds this
+        cpu: "200m"
+  restartPolicy: Never

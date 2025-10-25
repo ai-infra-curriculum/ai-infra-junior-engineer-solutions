@@ -1,0 +1,14 @@
+# Requirements for AI/ML Landscape Explorer and Career Analyzer
+#
+# Installation:
+#   pip install -r requirements.txt
+
+# No external dependencies required!
+# These tools use only Python standard library.
+
+# Optional: For enhanced terminal output
+# rich>=13.0.0
+
+# Development/Testing (optional)
+pytest>=7.4.0
+pytest-cov>=4.1.0

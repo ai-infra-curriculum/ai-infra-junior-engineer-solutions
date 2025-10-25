@@ -1,0 +1,16 @@
+# Git Version Control Exercise - Solutions
+# All tools use Python standard library only for maximum compatibility
+# Optional dependencies for enhanced functionality:
+
+# Code formatting (optional, recommended)
+black>=23.0.0
+
+# Linting (optional, recommended)
+flake8>=6.0.0
+
+# Testing
+pytest>=7.0.0
+pytest-cov>=4.0.0
+
+# YAML support for best practices checker
+PyYAML>=6.0

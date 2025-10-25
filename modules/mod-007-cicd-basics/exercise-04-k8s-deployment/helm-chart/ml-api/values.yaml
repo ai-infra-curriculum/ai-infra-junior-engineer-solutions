@@ -1,0 +1,175 @@
+# Default values for ml-api
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+replicaCount: 3
+
+image:
+  repository: ghcr.io/your-org/ml-api
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8000"
+  prometheus.io/path: "/metrics"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: false
+  allowPrivilegeEscalation: false
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8000
+  annotations: {}
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+  hosts:
+    - host: ml-api.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+   - secretName: ml-api-tls
+     hosts:
+       - ml-api.example.com
+
+resources:
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  limits:
+    cpu: 500m
+    memory: 1Gi
+  requests:
+    cpu: 250m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+  # behavior:
+  #   scaleUp:
+  #     stabilizationWindowSeconds: 60
+  #   scaleDown:
+  #     stabilizationWindowSeconds: 300
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - ml-api
+        topologyKey: kubernetes.io/hostname
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+  # maxUnavailable: 1
+
+# Application configuration
+config:
+  logLevel: INFO
+  workers: 4
+  maxRequests: 1000
+  timeout: 60
+  modelName: random_forest_classifier
+  modelVersion: v1.0.0
+  batchSize: 32
+  inferenceTimeout: 5
+  metricsEnabled: true
+  metricsPort: 9090
+
+# Secrets (use external secret management in production)
+secrets:
+  # These should be provided via --set or external secrets
+  apiKey: ""
+  dbPassword: ""
+  redisPassword: ""
+
+# Persistent storage for models
+persistence:
+  enabled: true
+  storageClass: "standard"
+  accessMode: ReadOnlyMany
+  size: 5Gi
+  mountPath: /models
+
+# Liveness and readiness probes
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Environment-specific configurations can override these
+env: []
+# - name: CUSTOM_ENV_VAR
+#   value: "custom-value"
+
+# Additional volumes
+extraVolumes: []
+# - name: extra-config
+#   configMap:
+#     name: extra-config
+
+# Additional volume mounts
+extraVolumeMounts: []
+# - name: extra-config
+#   mountPath: /etc/extra-config
+#   readOnly: true

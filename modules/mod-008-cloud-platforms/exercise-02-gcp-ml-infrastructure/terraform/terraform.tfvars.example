@@ -1,0 +1,14 @@
+# Example Terraform variables
+# Copy this file to terraform.tfvars and fill in your values
+
+project_id  = "your-gcp-project-id"
+region      = "us-central1"
+environment = "dev"
+
+# Network configuration
+subnet_cidr    = "10.0.0.0/20"
+pods_cidr      = "10.4.0.0/14"
+services_cidr  = "10.8.0.0/20"
+
+# Node pool configuration
+general_node_count = 3

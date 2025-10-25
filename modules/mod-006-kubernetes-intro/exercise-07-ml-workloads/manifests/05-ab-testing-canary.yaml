@@ -1,0 +1,553 @@
+---
+# Model v1 Deployment (Production)
+# Stable production model
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-v1
+  namespace: ml-workloads
+  labels:
+    app: ml-model
+    version: v1
+    stage: production
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: ml-model
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: ml-model
+        version: v1
+        stage: production
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: model-server
+        image: python:3.11-slim
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            pip install --no-cache-dir flask prometheus-client
+            cat > /app/server.py << 'PYEOF'
+            from flask import Flask, request, jsonify
+            from prometheus_client import Counter, Histogram, generate_latest
+            import time
+            import random
+
+            app = Flask(__name__)
+
+            # Prometheus metrics
+            REQUEST_COUNT = Counter('model_requests_total', 'Total requests', ['version', 'endpoint'])
+            REQUEST_LATENCY = Histogram('model_request_latency_seconds', 'Request latency', ['version'])
+            PREDICTION_COUNT = Counter('model_predictions_total', 'Total predictions', ['version', 'result'])
+
+            @app.route('/health', methods=['GET'])
+            def health():
+                return jsonify({"status": "healthy", "version": "v1"})
+
+            @app.route('/predict', methods=['POST'])
+            def predict():
+                start_time = time.time()
+                REQUEST_COUNT.labels(version='v1', endpoint='predict').inc()
+
+                data = request.json
+                # Simulate prediction (v1 model)
+                time.sleep(random.uniform(0.01, 0.05))
+
+                result = "positive" if random.random() > 0.3 else "negative"
+                PREDICTION_COUNT.labels(version='v1', result=result).inc()
+
+                latency = time.time() - start_time
+                REQUEST_LATENCY.labels(version='v1').observe(latency)
+
+                return jsonify({
+                    "prediction": result,
+                    "confidence": round(random.uniform(0.85, 0.95), 2),
+                    "model_version": "v1",
+                    "latency_ms": round(latency * 1000, 2)
+                })
+
+            @app.route('/metrics', methods=['GET'])
+            def metrics():
+                return generate_latest()
+
+            if __name__ == '__main__':
+                app.run(host='0.0.0.0', port=8080)
+            PYEOF
+
+            python /app/server.py
+        ports:
+        - containerPort: 8080
+          name: http
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+# Model v2 Deployment (Canary)
+# New model version being tested
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-v2
+  namespace: ml-workloads
+  labels:
+    app: ml-model
+    version: v2
+    stage: canary
+spec:
+  replicas: 1  # Start with 1 replica (canary)
+  selector:
+    matchLabels:
+      app: ml-model
+      version: v2
+  template:
+    metadata:
+      labels:
+        app: ml-model
+        version: v2
+        stage: canary
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      containers:
+      - name: model-server
+        image: python:3.11-slim
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            pip install --no-cache-dir flask prometheus-client
+            cat > /app/server.py << 'PYEOF'
+            from flask import Flask, request, jsonify
+            from prometheus_client import Counter, Histogram, generate_latest
+            import time
+            import random
+
+            app = Flask(__name__)
+
+            REQUEST_COUNT = Counter('model_requests_total', 'Total requests', ['version', 'endpoint'])
+            REQUEST_LATENCY = Histogram('model_request_latency_seconds', 'Request latency', ['version'])
+            PREDICTION_COUNT = Counter('model_predictions_total', 'Total predictions', ['version', 'result'])
+
+            @app.route('/health', methods=['GET'])
+            def health():
+                return jsonify({"status": "healthy", "version": "v2"})
+
+            @app.route('/predict', methods=['POST'])
+            def predict():
+                start_time = time.time()
+                REQUEST_COUNT.labels(version='v2', endpoint='predict').inc()
+
+                data = request.json
+                # Simulate improved prediction (v2 model - faster, more accurate)
+                time.sleep(random.uniform(0.005, 0.03))
+
+                result = "positive" if random.random() > 0.25 else "negative"
+                PREDICTION_COUNT.labels(version='v2', result=result).inc()
+
+                latency = time.time() - start_time
+                REQUEST_LATENCY.labels(version='v2').observe(latency)
+
+                return jsonify({
+                    "prediction": result,
+                    "confidence": round(random.uniform(0.90, 0.98), 2),  # Higher confidence
+                    "model_version": "v2",
+                    "latency_ms": round(latency * 1000, 2)
+                })
+
+            @app.route('/metrics', methods=['GET'])
+            def metrics():
+                return generate_latest()
+
+            if __name__ == '__main__':
+                app.run(host='0.0.0.0', port=8080)
+            PYEOF
+
+            python /app/server.py
+        ports:
+        - containerPort: 8080
+          name: http
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+# Service for model v1 (stable)
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-v1-service
+  namespace: ml-workloads
+  labels:
+    app: ml-model
+    version: v1
+spec:
+  type: ClusterIP
+  selector:
+    app: ml-model
+    version: v1
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+
+---
+# Service for model v2 (canary)
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-v2-service
+  namespace: ml-workloads
+  labels:
+    app: ml-model
+    version: v2
+spec:
+  type: ClusterIP
+  selector:
+    app: ml-model
+    version: v2
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+
+---
+# Service for all model versions (for load balancing)
+apiVersion: v1
+kind: Service
+metadata:
+  name: ml-model-service
+  namespace: ml-workloads
+  labels:
+    app: ml-model
+spec:
+  type: ClusterIP
+  selector:
+    app: ml-model  # Matches both v1 and v2
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+
+---
+# Ingress for A/B Testing (Traffic Split)
+# Production ingress (75% to v1)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: model-production
+  namespace: ml-workloads
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: ml-model.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: model-v1-service
+            port:
+              number: 80
+
+---
+# Canary Ingress (25% to v2)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: model-canary
+  namespace: ml-workloads
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # Enable canary
+    nginx.ingress.kubernetes.io/canary: "true"
+    # Route 25% of traffic to v2
+    nginx.ingress.kubernetes.io/canary-weight: "25"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: ml-model.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: model-v2-service
+            port:
+              number: 80
+
+---
+# Header-based routing for explicit v2 testing
+# Use header "X-Model-Version: v2" to always get v2
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: model-header-routing
+  namespace: ml-workloads
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/canary: "true"
+    nginx.ingress.kubernetes.io/canary-by-header: "X-Model-Version"
+    nginx.ingress.kubernetes.io/canary-by-header-value: "v2"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: ml-model.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: model-v2-service
+            port:
+              number: 80
+
+---
+# Load Testing Job
+# Generate traffic to test model performance
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: model-load-test
+  namespace: ml-workloads
+  labels:
+    app: load-test
+spec:
+  parallelism: 5  # 5 concurrent clients
+  completions: 5
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: load-test
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: load-generator
+        image: curlimages/curl:latest
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "===== Load Test Started ====="
+            echo "Worker: $HOSTNAME"
+
+            # Test endpoint
+            ENDPOINT="http://ml-model-service/predict"
+
+            # Generate 100 requests
+            for i in $(seq 1 100); do
+              RESPONSE=$(curl -s -X POST $ENDPOINT \
+                -H "Content-Type: application/json" \
+                -d '{"text": "This is a test input"}')
+
+              VERSION=$(echo $RESPONSE | grep -o '"model_version":"[^"]*"' | cut -d'"' -f4)
+              LATENCY=$(echo $RESPONSE | grep -o '"latency_ms":[0-9.]*' | cut -d':' -f2)
+
+              echo "Request $i: Version=$VERSION, Latency=${LATENCY}ms"
+
+              # Random sleep between requests
+              sleep 0.$((RANDOM % 10))
+            done
+
+            echo "===== Load Test Completed ====="
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+
+---
+# Model Comparison Job
+# Compare v1 and v2 performance
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: model-comparison
+  namespace: ml-workloads
+  labels:
+    app: model-comparison
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: model-comparison
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: comparator
+        image: python:3.11-slim
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "===== Model Comparison Test ====="
+
+            pip install --no-cache-dir requests numpy
+
+            cat > /app/compare.py << 'PYEOF'
+            import requests
+            import time
+            import statistics
+
+            def test_model(url, version, num_requests=50):
+                latencies = []
+                confidences = []
+
+                print(f"\nTesting {version}...")
+                for i in range(num_requests):
+                    start = time.time()
+                    response = requests.post(url, json={"text": "test"})
+                    latency = (time.time() - start) * 1000
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        latencies.append(latency)
+                        confidences.append(data.get('confidence', 0))
+
+                return {
+                    'avg_latency': statistics.mean(latencies),
+                    'p95_latency': statistics.quantiles(latencies, n=20)[18],
+                    'avg_confidence': statistics.mean(confidences),
+                    'requests': len(latencies)
+                }
+
+            # Test both versions
+            v1_results = test_model('http://model-v1-service/predict', 'v1')
+            v2_results = test_model('http://model-v2-service/predict', 'v2')
+
+            print("\n===== Comparison Results =====")
+            print(f"\nModel v1:")
+            print(f"  Avg Latency: {v1_results['avg_latency']:.2f}ms")
+            print(f"  P95 Latency: {v1_results['p95_latency']:.2f}ms")
+            print(f"  Avg Confidence: {v1_results['avg_confidence']:.2%}")
+
+            print(f"\nModel v2:")
+            print(f"  Avg Latency: {v2_results['avg_latency']:.2f}ms")
+            print(f"  P95 Latency: {v2_results['p95_latency']:.2f}ms")
+            print(f"  Avg Confidence: {v2_results['avg_confidence']:.2%}")
+
+            print(f"\n===== Winner Analysis =====")
+            if v2_results['avg_latency'] < v1_results['avg_latency']:
+                print(f"✓ v2 is {(1 - v2_results['avg_latency']/v1_results['avg_latency'])*100:.1f}% faster")
+            if v2_results['avg_confidence'] > v1_results['avg_confidence']:
+                print(f"✓ v2 has {(v2_results['avg_confidence'] - v1_results['avg_confidence'])*100:.1f}% higher confidence")
+
+            PYEOF
+
+            python /app/compare.py
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+---
+# Canary Rollout Strategy ConfigMap
+# Documentation of rollout phases
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: canary-rollout-strategy
+  namespace: ml-workloads
+data:
+  rollout-plan.md: |
+    # Canary Rollout Strategy for Model v2
+
+    ## Phase 1: Initial Canary (Day 1)
+    - Deploy v2 with 1 replica
+    - Route 5% traffic to v2
+    - Monitor for 24 hours
+    - Check: error rate, latency, accuracy
+
+    ## Phase 2: Expanded Canary (Day 2-3)
+    - If Phase 1 successful, increase to 25% traffic
+    - Scale v2 to 2 replicas
+    - Monitor for 48 hours
+    - A/B test results comparison
+
+    ## Phase 3: Majority Canary (Day 4-5)
+    - If Phase 2 successful, increase to 50% traffic
+    - Scale v2 to 3 replicas
+    - Equal traffic split
+    - Full metrics comparison
+
+    ## Phase 4: Full Rollout (Day 6)
+    - Route 100% traffic to v2
+    - Scale v2 to match v1 replica count
+    - Keep v1 running for quick rollback
+
+    ## Phase 5: Decommission v1 (Day 7+)
+    - After 24h of v2 at 100% with no issues
+    - Scale down v1 to 0
+    - Keep v1 deployment for emergency rollback
+
+    ## Rollback Criteria
+    - Error rate increase > 1%
+    - Latency increase > 20%
+    - User complaints
+    - Accuracy drop > 2%
+
+    ## Commands
+    ```bash
+    # Increase canary weight to 50%
+    kubectl patch ingress model-canary -n ml-workloads \
+      -p '{"metadata":{"annotations":{"nginx.ingress.kubernetes.io/canary-weight":"50"}}}'
+
+    # Scale v2
+    kubectl scale deployment model-v2 -n ml-workloads --replicas=3
+
+    # Rollback to v1
+    kubectl patch ingress model-canary -n ml-workloads \
+      -p '{"metadata":{"annotations":{"nginx.ingress.kubernetes.io/canary-weight":"0"}}}'
+    ```

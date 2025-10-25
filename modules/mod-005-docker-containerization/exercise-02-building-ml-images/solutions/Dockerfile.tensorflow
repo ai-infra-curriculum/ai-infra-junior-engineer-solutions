@@ -1,0 +1,28 @@
+# Optimized TensorFlow Docker Image
+FROM tensorflow/tensorflow:2.14.0-gpu AS builder
+
+WORKDIR /build
+COPY requirements.txt .
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+FROM tensorflow/tensorflow:2.14.0-gpu
+LABEL maintainer="ml-infrastructure@example.com"
+
+# Copy installed packages
+COPY --from=builder /root/.local /root/.local
+ENV PATH=/root/.local/bin:$PATH
+
+# Create non-root user
+RUN useradd -m -u 1000 mluser && \
+    mkdir -p /workspace /models && \
+    chown -R mluser:mluser /workspace /models
+
+WORKDIR /workspace
+COPY --chown=mluser:mluser . .
+
+USER mluser
+EXPOSE 8000
+
+HEALTHCHECK CMD python3 -c "import tensorflow as tf; print(len(tf.config.list_physical_devices('GPU')))" || exit 1
+
+CMD ["python3", "train.py"]

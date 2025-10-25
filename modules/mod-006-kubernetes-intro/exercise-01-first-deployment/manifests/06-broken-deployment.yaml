@@ -1,0 +1,38 @@
+# This deployment intentionally uses an invalid image tag for troubleshooting practice
+#
+# Expected behavior:
+# - Pods will fail to start
+# - Status will show: ImagePullBackOff or ErrImagePull
+# - Events will show: "Failed to pull image" error
+#
+# To fix: Change image to nginx:1.21 or another valid tag
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: broken-app
+  labels:
+    app: broken
+    purpose: troubleshooting-exercise
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: broken
+  template:
+    metadata:
+      labels:
+        app: broken
+    spec:
+      containers:
+      - name: app
+        image: nginx:invalid-tag  # ❌ This image doesn't exist!
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"

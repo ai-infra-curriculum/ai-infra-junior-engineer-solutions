@@ -1,0 +1,33 @@
+# Production Dependencies for Inference Gateway
+
+# FastAPI and web server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Observability - Metrics
+prometheus-client==0.19.0
+
+# Observability - Logging
+structlog==23.2.0
+python-json-logger==2.0.7
+
+# Observability - Tracing
+opentelemetry-api==1.21.0
+opentelemetry-sdk==1.21.0
+opentelemetry-instrumentation-fastapi==0.42b0
+opentelemetry-instrumentation-logging==0.42b0
+opentelemetry-exporter-otlp==1.21.0
+opentelemetry-exporter-otlp-proto-http==1.21.0
+
+# ML Libraries (for model inference)
+torch==2.1.1
+torchvision==0.16.1
+Pillow==10.1.0
+numpy==1.26.2
+
+# Utilities
+python-multipart==0.0.6
+httpx==0.25.2
+tenacity==8.2.3

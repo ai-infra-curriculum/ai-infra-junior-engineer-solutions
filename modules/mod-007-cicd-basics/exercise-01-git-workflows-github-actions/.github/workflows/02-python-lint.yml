@@ -1,0 +1,268 @@
+name: Python Lint
+
+# Run on all pushes and pull requests
+on: [push, pull_request]
+
+jobs:
+  flake8:
+    name: Flake8 Linting
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-flake8-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-flake8-
+            ${{ runner.os }}-pip-
+
+      - name: Install Flake8
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 flake8-docstrings flake8-bugbear
+
+      - name: Run Flake8
+        run: |
+          echo "Running Flake8 on Python files..."
+          flake8 examples/ \
+            --max-line-length=100 \
+            --max-complexity=10 \
+            --ignore=E203,W503,D100,D101,D102,D103,D104 \
+            --statistics \
+            --count \
+            --show-source
+
+      - name: Flake8 with annotations
+        if: github.event_name == 'pull_request'
+        run: |
+          flake8 examples/ \
+            --max-line-length=100 \
+            --format='::error file=%(path)s,line=%(row)d,col=%(col)d::%(code)s: %(text)s'
+
+  black:
+    name: Black Formatting
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-black-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-black-
+            ${{ runner.os }}-pip-
+
+      - name: Install Black
+        run: |
+          python -m pip install --upgrade pip
+          pip install black
+
+      - name: Check Black formatting
+        run: |
+          echo "Checking Python code formatting with Black..."
+          black --check --diff examples/
+
+      - name: Show Black formatting suggestions
+        if: failure()
+        run: |
+          echo "========================================="
+          echo "Black would reformat the following files:"
+          echo "========================================="
+          black --check examples/ || true
+          echo ""
+          echo "To fix formatting, run: black examples/"
+
+  isort:
+    name: Import Sorting
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-isort-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-isort-
+            ${{ runner.os }}-pip-
+
+      - name: Install isort
+        run: |
+          python -m pip install --upgrade pip
+          pip install isort
+
+      - name: Check import sorting
+        run: |
+          echo "Checking import sorting with isort..."
+          isort --check-only --diff examples/
+
+      - name: Show isort suggestions
+        if: failure()
+        run: |
+          echo "========================================="
+          echo "isort would reformat the following files:"
+          echo "========================================="
+          isort --check-only examples/ || true
+          echo ""
+          echo "To fix imports, run: isort examples/"
+
+  mypy:
+    name: Type Checking
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-mypy-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-mypy-
+            ${{ runner.os }}-pip-
+
+      - name: Install mypy and dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install mypy types-requests
+          if [ -f examples/requirements.txt ]; then
+            pip install -r examples/requirements.txt
+          fi
+
+      - name: Run mypy type checking
+        run: |
+          echo "Running mypy type checking..."
+          mypy examples/ \
+            --ignore-missing-imports \
+            --show-error-codes \
+            --pretty \
+            --no-strict-optional
+
+      - name: Run mypy with strict mode
+        if: always()
+        continue-on-error: true
+        run: |
+          echo "Running mypy in strict mode (informational only)..."
+          mypy examples/ \
+            --strict \
+            --show-error-codes \
+            --pretty || true
+
+  pylint:
+    name: Pylint Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Cache pip packages
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-pylint-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-pylint-
+            ${{ runner.os }}-pip-
+
+      - name: Install pylint and dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pylint
+          if [ -f examples/requirements.txt ]; then
+            pip install -r examples/requirements.txt
+          fi
+
+      - name: Run pylint
+        run: |
+          echo "Running pylint analysis..."
+          pylint examples/ \
+            --max-line-length=100 \
+            --disable=C0111,R0903,W0511 \
+            --output-format=colorized \
+            --score=yes
+
+      - name: Generate pylint report
+        if: always()
+        run: |
+          pylint examples/ \
+            --max-line-length=100 \
+            --disable=C0111,R0903,W0511 \
+            --output-format=text \
+            --score=yes > pylint-report.txt || true
+
+      - name: Upload pylint report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: pylint-report
+          path: pylint-report.txt
+
+  code-quality-summary:
+    name: Code Quality Summary
+    needs: [flake8, black, isort, mypy, pylint]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Check results
+        run: |
+          echo "========================================="
+          echo "Code Quality Check Results"
+          echo "========================================="
+          echo "Flake8: ${{ needs.flake8.result }}"
+          echo "Black: ${{ needs.black.result }}"
+          echo "isort: ${{ needs.isort.result }}"
+          echo "mypy: ${{ needs.mypy.result }}"
+          echo "pylint: ${{ needs.pylint.result }}"
+          echo "========================================="
+
+      - name: Fail if any check failed
+        if: |
+          needs.flake8.result == 'failure' ||
+          needs.black.result == 'failure' ||
+          needs.isort.result == 'failure' ||
+          needs.mypy.result == 'failure' ||
+          needs.pylint.result == 'failure'
+        run: |
+          echo "One or more code quality checks failed!"
+          exit 1

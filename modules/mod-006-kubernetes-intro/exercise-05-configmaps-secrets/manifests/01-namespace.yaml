@@ -1,0 +1,9 @@
+---
+# Namespace for ConfigMaps and Secrets exercises
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: config-demo
+  labels:
+    exercise: configmaps-secrets
+    module: mod-006-kubernetes-intro

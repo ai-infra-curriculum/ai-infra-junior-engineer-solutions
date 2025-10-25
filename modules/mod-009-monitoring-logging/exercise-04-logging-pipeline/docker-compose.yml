@@ -1,0 +1,199 @@
+version: '3.8'
+
+# Centralized Logging Pipeline with Loki and Promtail
+# Collects logs from all services and provides unified log exploration
+
+services:
+  # ===========================
+  # Loki - Log Aggregation System
+  # ===========================
+  loki:
+    image: grafana/loki:2.9.3
+    container_name: loki
+    hostname: loki
+    restart: unless-stopped
+    user: "10001"  # Loki user
+    command: -config.file=/etc/loki/loki-config.yaml
+    ports:
+      - "3100:3100"  # HTTP API
+    volumes:
+      - ./config/loki/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki_data:/loki
+    networks:
+      - monitoring
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3100/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      com.example.monitoring: "loki"
+      com.example.team: "ml-platform"
+      logging: "promtail"  # Enable Promtail collection
+
+  # ===========================
+  # Promtail - Log Collector
+  # ===========================
+  promtail:
+    image: grafana/promtail:2.9.3
+    container_name: promtail
+    hostname: promtail
+    restart: unless-stopped
+    command: -config.file=/etc/promtail/promtail-config.yaml
+    volumes:
+      # Promtail configuration
+      - ./config/promtail/promtail-config.yaml:/etc/promtail/promtail-config.yaml:ro
+
+      # Docker socket for container discovery
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+      # System logs (optional)
+      - /var/log:/var/log:ro
+
+      # Promtail positions file (tracking which logs have been read)
+      - promtail_positions:/tmp/positions
+    networks:
+      - monitoring
+    depends_on:
+      - loki
+    labels:
+      com.example.monitoring: "promtail"
+
+  # ===========================
+  # Grafana - Visualization (from Exercise 03)
+  # ===========================
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: grafana
+    hostname: grafana
+    restart: unless-stopped
+    user: "472"
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GF_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_ADMIN_PASSWORD:-admin}
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_UNIFIED_ALERTING_ENABLED=true
+      - GF_FEATURE_TOGGLES_ENABLE=publicDashboards,correlations
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - monitoring
+    depends_on:
+      - loki
+      - prometheus
+    labels:
+      com.example.monitoring: "grafana"
+      logging: "promtail"
+
+  # ===========================
+  # Prometheus (from Exercise 02)
+  # ===========================
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: prometheus
+    hostname: prometheus
+    restart: unless-stopped
+    user: "65534"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    volumes:
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - monitoring
+    labels:
+      com.example.monitoring: "prometheus"
+      logging: "promtail"
+
+  # ===========================
+  # Inference Gateway (from Exercise 01)
+  # ===========================
+  inference-gateway:
+    image: inference-gateway:latest
+    container_name: inference-gateway
+    hostname: inference-gateway
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=inference-gateway
+      - ENVIRONMENT=production
+      - LOG_LEVEL=info
+      - LOG_FORMAT=json  # Critical: JSON structured logging
+    ports:
+      - "8000:8000"
+    networks:
+      - monitoring
+    labels:
+      com.example.monitoring: "application"
+      com.example.service: "inference-gateway"
+      logging: "promtail"  # Enable log collection
+      logging.parser: "json"  # Use JSON parser
+
+  # ===========================
+  # Jaeger (Tracing - from Exercise 01)
+  # ===========================
+  jaeger:
+    image: jaegertracing/all-in-one:1.51
+    container_name: jaeger
+    hostname: jaeger
+    restart: unless-stopped
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"
+      - "4318:4318"
+    networks:
+      - monitoring
+    labels:
+      com.example.monitoring: "jaeger"
+      logging: "promtail"
+
+# ===========================
+# Networks
+# ===========================
+networks:
+  monitoring:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# ===========================
+# Volumes
+# ===========================
+volumes:
+  loki_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${PWD}/data/loki
+      o: bind
+
+  promtail_positions:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${PWD}/data/promtail-positions
+      o: bind
+
+  grafana_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${PWD}/data/grafana
+      o: bind
+
+  prometheus_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${PWD}/data/prometheus
+      o: bind

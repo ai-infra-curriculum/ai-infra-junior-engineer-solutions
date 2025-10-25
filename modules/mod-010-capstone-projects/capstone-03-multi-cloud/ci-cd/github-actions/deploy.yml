@@ -1,0 +1,312 @@
+name: Multi-Cloud Deployment
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+        - dev
+        - staging
+        - prod
+
+env:
+  TERRAFORM_VERSION: 1.6.0
+  KUBECTL_VERSION: 1.27.0
+  HELM_VERSION: 3.12.0
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-asyncio
+
+      - name: Run unit tests
+        run: |
+          pytest tests/unit/ -v --cov=src --cov-report=xml
+
+      - name: Run integration tests
+        run: |
+          pytest tests/integration/ -v
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.xml
+
+  build:
+    name: Build and Push Docker Images
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [api-gateway, model-serving, data-sync]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to AWS ECR
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          registry-type: private
+
+      - name: Login to GCP Artifact Registry
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Login to Azure Container Registry
+        uses: azure/docker-login@v1
+        with:
+          login-server: mlplatformacrprod.azurecr.io
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and push to all registries
+        run: |
+          IMAGE_TAG=${GITHUB_SHA::8}
+          SERVICE=${{ matrix.service }}
+
+          # Build image
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --cache-from type=registry,ref=ml-platform/${SERVICE}:cache \
+            --cache-to type=registry,ref=ml-platform/${SERVICE}:cache,mode=max \
+            -t ml-platform/${SERVICE}:${IMAGE_TAG} \
+            -t ml-platform/${SERVICE}:latest \
+            --push \
+            src/${SERVICE}/
+
+          # Tag and push to AWS ECR
+          docker tag ml-platform/${SERVICE}:${IMAGE_TAG} \
+            ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/ml-platform/${SERVICE}:${IMAGE_TAG}
+          docker push ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/ml-platform/${SERVICE}:${IMAGE_TAG}
+
+          # Tag and push to GCP Artifact Registry
+          docker tag ml-platform/${SERVICE}:${IMAGE_TAG} \
+            us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/ml-platform-prod/${SERVICE}:${IMAGE_TAG}
+          docker push us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/ml-platform-prod/${SERVICE}:${IMAGE_TAG}
+
+          # Tag and push to Azure ACR
+          docker tag ml-platform/${SERVICE}:${IMAGE_TAG} \
+            mlplatformacrprod.azurecr.io/${SERVICE}:${IMAGE_TAG}
+          docker push mlplatformacrprod.azurecr.io/${SERVICE}:${IMAGE_TAG}
+
+  deploy-infrastructure:
+    name: Deploy Infrastructure
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    strategy:
+      matrix:
+        cloud: [aws, gcp, azure]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+
+      - name: Configure AWS credentials
+        if: matrix.cloud == 'aws'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Configure GCP credentials
+        if: matrix.cloud == 'gcp'
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Configure Azure credentials
+        if: matrix.cloud == 'azure'
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Terraform Init
+        run: |
+          cd terraform/${{ matrix.cloud }}
+          terraform init
+
+      - name: Terraform Plan
+        run: |
+          cd terraform/${{ matrix.cloud }}
+          terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        run: |
+          cd terraform/${{ matrix.cloud }}
+          terraform apply -auto-approve tfplan
+
+  deploy-kubernetes:
+    name: Deploy to Kubernetes
+    needs: deploy-infrastructure
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        cloud: [aws, gcp, azure]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: ${{ env.KUBECTL_VERSION }}
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Configure kubectl for AWS
+        if: matrix.cloud == 'aws'
+        run: |
+          aws eks update-kubeconfig \
+            --name ml-platform-prod \
+            --region us-east-1
+
+      - name: Configure kubectl for GCP
+        if: matrix.cloud == 'gcp'
+        run: |
+          gcloud container clusters get-credentials ml-platform-prod \
+            --region us-central1 \
+            --project ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Configure kubectl for Azure
+        if: matrix.cloud == 'azure'
+        run: |
+          az aks get-credentials \
+            --name ml-platform-aks-prod \
+            --resource-group ml-platform-rg-prod
+
+      - name: Deploy applications
+        run: |
+          IMAGE_TAG=${GITHUB_SHA::8}
+
+          # Update image tags in deployments
+          kubectl set image deployment/api-gateway \
+            api-gateway=ml-platform/api-gateway:${IMAGE_TAG} \
+            -n ml-platform
+
+          kubectl set image deployment/model-serving \
+            model-serving=ml-platform/model-serving:${IMAGE_TAG} \
+            -n ml-serving
+
+          # Wait for rollout
+          kubectl rollout status deployment/api-gateway -n ml-platform --timeout=300s
+          kubectl rollout status deployment/model-serving -n ml-serving --timeout=300s
+
+      - name: Run health checks
+        run: |
+          # Wait for pods to be ready
+          sleep 30
+
+          # Check API Gateway health
+          kubectl wait --for=condition=ready pod \
+            -l app=api-gateway \
+            -n ml-platform \
+            --timeout=300s
+
+          # Test API endpoint
+          API_ENDPOINT=$(kubectl get svc api-gateway -n ml-platform -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          curl -f http://${API_ENDPOINT}/health || exit 1
+
+  deploy-monitoring:
+    name: Deploy Monitoring Stack
+    needs: deploy-kubernetes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+
+      - name: Deploy Prometheus
+        run: |
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo update
+
+          for context in aws-prod gcp-prod azure-prod; do
+            helm upgrade --install prometheus \
+              prometheus-community/kube-prometheus-stack \
+              --namespace monitoring \
+              --create-namespace \
+              --values monitoring/prometheus/values.yaml \
+              --kube-context ${context}
+          done
+
+      - name: Deploy Grafana dashboards
+        run: |
+          for context in aws-prod gcp-prod azure-prod; do
+            kubectl apply -f monitoring/grafana/dashboards/ \
+              -n monitoring \
+              --context ${context}
+          done
+
+  e2e-tests:
+    name: End-to-End Tests
+    needs: deploy-kubernetes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run E2E tests
+        run: |
+          pytest tests/e2e/ -v -m e2e
+
+  notify:
+    name: Send Notifications
+    needs: [e2e-tests]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Send Slack notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: |
+            Multi-Cloud Deployment ${{ job.status }}
+            Branch: ${{ github.ref }}
+            Commit: ${{ github.sha }}
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}

@@ -1,0 +1,118 @@
+# Production environment values
+# Override default values for prod environment
+
+replicaCount: 5
+
+image:
+  repository: ghcr.io/your-org/ml-api
+  pullPolicy: IfNotPresent
+  # Tag should be set via --set flag during deployment
+  # tag: "v1.2.3"
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/limit-rps: "200"
+    nginx.ingress.kubernetes.io/rate-limit: "1000"
+  hosts:
+    - host: ml-api.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+    - host: api.example.com
+      paths:
+        - path: /ml
+          pathType: Prefix
+  tls:
+   - secretName: ml-api-prod-tls
+     hosts:
+       - ml-api.example.com
+       - api.example.com
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 1Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 60
+  targetMemoryUtilizationPercentage: 70
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+      - type: Pods
+        value: 1
+        periodSeconds: 60
+      selectPolicy: Min
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+config:
+  logLevel: INFO
+  workers: 8
+  maxRequests: 2000
+  timeout: 120
+
+persistence:
+  enabled: true
+  storageClass: "fast-ssd"
+  size: 10Gi
+
+# Node affinity for production workloads
+affinity:
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      preference:
+        matchExpressions:
+        - key: node.kubernetes.io/instance-type
+          operator: In
+          values:
+          - c5.2xlarge
+          - c5.4xlarge
+  podAntiAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+    - labelSelector:
+        matchExpressions:
+        - key: app.kubernetes.io/name
+          operator: In
+          values:
+          - ml-api
+      topologyKey: kubernetes.io/hostname
+
+# Production environment variables
+env:
+  - name: ENVIRONMENT
+    value: "production"
+  - name: DEBUG
+    value: "false"
+  - name: ENABLE_MONITORING
+    value: "true"
+  - name: ENABLE_TRACING
+    value: "true"

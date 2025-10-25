@@ -1,0 +1,153 @@
+# Development environment values
+# Usage: helm install flask-app ./flask-app -f values-dev.yaml
+
+# Reduce replicas for development
+replicaCount: 1
+
+# Use development image settings
+image:
+  pullPolicy: Always
+  tag: "latest"
+
+# Development Flask configuration
+flask:
+  env: development
+  debug: true
+  secretKey: "dev-secret-key-not-for-production"
+  logLevel: "DEBUG"
+
+# Lower resource requirements for dev
+resources:
+  limits:
+    cpu: 100m
+    memory: 128Mi
+  requests:
+    cpu: 50m
+    memory: 64Mi
+
+# Enable local database for development
+database:
+  enabled: true
+  host: postgresql
+  port: 5432
+  name: flaskdb_dev
+  username: devuser
+  password: devpassword
+  sslMode: "disable"
+
+# Enable Redis for development
+redis:
+  enabled: true
+  host: redis-master
+  port: 6379
+
+# Enable ML model in dev mode
+mlModel:
+  enabled: true
+  modelPath: "/models/dev-model.pkl"
+  modelVersion: "dev"
+  modelType: "sklearn"
+  warmup: false
+  workers: 1
+
+# Disable autoscaling in development
+autoscaling:
+  enabled: false
+
+# Enable local persistence
+persistence:
+  enabled: true
+  size: 500Mi
+  storageClass: ""
+
+# Relaxed health checks for development
+healthCheck:
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 10
+    periodSeconds: 30
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 5
+    periodSeconds: 10
+
+# Disable pod disruption budget in dev
+podDisruptionBudget:
+  enabled: false
+
+# Relaxed security context for development
+podSecurityContext:
+  runAsNonRoot: false
+  runAsUser: 0
+  fsGroup: 0
+
+securityContext:
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false
+  allowPrivilegeEscalation: true
+  runAsNonRoot: false
+  runAsUser: 0
+
+# Enable ingress with dev hostname
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  hosts:
+    - host: flask-app.dev.local
+      paths:
+        - path: /
+          pathType: Prefix
+
+# Enable PostgreSQL subchart for local development
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: "postgres"
+    username: "devuser"
+    password: "devpassword"
+    database: "flaskdb_dev"
+  primary:
+    persistence:
+      enabled: false
+    resources:
+      limits:
+        memory: 256Mi
+        cpu: 250m
+      requests:
+        memory: 128Mi
+        cpu: 100m
+
+# Enable Redis subchart for local development
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+  master:
+    persistence:
+      enabled: false
+    resources:
+      limits:
+        memory: 128Mi
+        cpu: 100m
+      requests:
+        memory: 64Mi
+        cpu: 50m
+
+# Add debug annotations
+podAnnotations:
+  debug: "true"
+  environment: "development"
+  prometheus.io/scrape: "false"
+
+# Disable monitoring in dev
+serviceMonitor:
+  enabled: false
+
+# Disable network policies in development
+networkPolicy:
+  enabled: false

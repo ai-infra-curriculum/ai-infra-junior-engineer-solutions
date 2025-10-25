@@ -1,0 +1,109 @@
+---
+# Scenario 02: CrashLoopBackOff
+#
+# Problem: Application crashes immediately after starting
+# Symptoms: CrashLoopBackOff status, container restarts continuously
+# Learning Objective: Debug application crashes and understand container lifecycle
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: debug-scenario-02
+  labels:
+    scenario: crashloop-backoff
+    exercise: debugging
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: broken-app-config
+  namespace: debug-scenario-02
+data:
+  # ISSUE: Invalid JSON format - missing closing quote and brace
+  config.json: |
+    {
+      "database": {
+        "host": "localhost,
+        "port": 5432
+      }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crashloop-app
+  namespace: debug-scenario-02
+  labels:
+    app: crashloop-app
+    scenario: crashloop-backoff
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crashloop-app
+  template:
+    metadata:
+      labels:
+        app: crashloop-app
+    spec:
+      containers:
+      - name: app
+        image: busybox:latest
+        # ISSUE: Command tries to parse broken JSON and exits with error
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Starting application..."
+          cat /config/config.json
+          echo "Validating JSON..."
+          # This will fail because the JSON is malformed
+          if ! grep -q '"}' /config/config.json; then
+            echo "ERROR: Invalid JSON configuration!"
+            exit 1
+          fi
+          echo "Application running..."
+          sleep 3600
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
+      volumes:
+      - name: config
+        configMap:
+          name: broken-app-config
+
+---
+# Debugging Commands for this scenario:
+#
+# 1. Check pod status (will show CrashLoopBackOff):
+#    kubectl get pods -n debug-scenario-02
+#
+# 2. View container logs:
+#    kubectl logs -n debug-scenario-02 <pod-name>
+#
+# 3. View previous container logs (after crash):
+#    kubectl logs -n debug-scenario-02 <pod-name> --previous
+#
+# 4. Check pod events:
+#    kubectl describe pod -n debug-scenario-02 <pod-name>
+#
+# 5. Check ConfigMap content:
+#    kubectl get configmap broken-app-config -n debug-scenario-02 -o yaml
+#
+# 6. Fix the ConfigMap:
+#    kubectl edit configmap broken-app-config -n debug-scenario-02
+#    # Fix the JSON: add closing quote and brace
+#
+# 7. Restart deployment:
+#    kubectl rollout restart deployment/crashloop-app -n debug-scenario-02
+#
+# 8. Verify fix:
+#    kubectl get pods -n debug-scenario-02 -w

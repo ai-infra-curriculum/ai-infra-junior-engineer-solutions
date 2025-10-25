@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  # PostgreSQL for user management
+  postgres:
+    image: postgres:15-alpine
+    container_name: production-api-postgres
+    environment:
+      POSTGRES_USER: api_user
+      POSTGRES_PASSWORD: api_password
+      POSTGRES_DB: api_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U api_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - api-network
+
+  # Redis for caching and rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: production-api-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - api-network
+
+  # ML API Application
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: production-ml-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    environment:
+      # Database
+      DATABASE_URL: postgresql://api_user:api_password@postgres:5432/api_db
+
+      # Redis
+      REDIS_URL: redis://redis:6379
+
+      # JWT
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+
+      # Rate Limiting
+      RATE_LIMIT_PER_MINUTE: 100
+
+      # Application
+      LOG_LEVEL: INFO
+      ENVIRONMENT: production
+    volumes:
+      - ./models:/app/models
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    networks:
+      - api-network
+
+  # Nginx reverse proxy (optional)
+  nginx:
+    image: nginx:alpine
+    container_name: production-api-nginx
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    networks:
+      - api-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  api-network:
+    driver: bridge

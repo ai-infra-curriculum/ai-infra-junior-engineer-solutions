@@ -1,0 +1,86 @@
+name: Train and Register Model
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mlflow/**'
+      - 'data/**'
+  workflow_dispatch:
+    inputs:
+      experiment_name:
+        description: 'Experiment name'
+        required: true
+        default: 'ci-training'
+      model_type:
+        description: 'Model type'
+        required: true
+        type: choice
+        options:
+          - random_forest
+          - gradient_boosting
+          - logistic_regression
+
+env:
+  MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+jobs:
+  train:
+    name: Train Model
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r mlflow/requirements.txt
+
+      - name: Configure MLflow
+        run: |
+          mlflow experiments list
+
+      - name: Train model
+        id: train
+        run: |
+          OUTPUT=$(python mlflow/train.py \
+            --data-path data/dataset.csv \
+            --model-type ${{ github.event.inputs.model_type || 'random_forest' }} \
+            --experiment-name ${{ github.event.inputs.experiment_name || 'ci-training' }} \
+            --n-estimators 100 \
+            --max-depth 10)
+
+          RUN_ID=$(echo "$OUTPUT" | grep "RUN_ID=" | cut -d= -f2)
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+          echo "Training complete. Run ID: $RUN_ID"
+
+      - name: Register model
+        id: register
+        run: |
+          OUTPUT=$(python mlflow/register_model.py \
+            --run-id ${{ steps.train.outputs.run_id }} \
+            --model-name RandomForestClassifier \
+            --stage Staging)
+
+          VERSION=$(echo "$OUTPUT" | grep "MODEL_VERSION=" | cut -d= -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Model registered. Version: $VERSION"
+
+      - name: Create summary
+        run: |
+          echo "## Model Training Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Run ID:** \`${{ steps.train.outputs.run_id }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Model Version:** \`${{ steps.register.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Stage:** Staging" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "View in MLflow: ${{ secrets.MLFLOW_TRACKING_URI }}" >> $GITHUB_STEP_SUMMARY

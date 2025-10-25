@@ -1,0 +1,9 @@
+---
+# Namespace for Ingress and Load Balancing exercises
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ingress-demo
+  labels:
+    exercise: ingress-loadbalancing
+    module: mod-006-kubernetes-intro

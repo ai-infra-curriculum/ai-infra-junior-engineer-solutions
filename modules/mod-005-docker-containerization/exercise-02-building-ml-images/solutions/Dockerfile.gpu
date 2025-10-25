@@ -1,0 +1,61 @@
+# GPU-enabled Dockerfile for ML workloads
+# Base image with CUDA support
+FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    CUDA_HOME=/usr/local/cuda \
+    PATH=/usr/local/cuda/bin:$PATH \
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+
+# Install Python and dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 \
+    python3.11-dev \
+    python3-pip \
+    git \
+    curl \
+    libgomp1 \
+    && ln -s /usr/bin/python3.11 /usr/bin/python \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create virtual environment
+RUN python -m pip install --no-cache-dir --upgrade pip && \
+    python -m pip install --no-cache-dir virtualenv && \
+    python -m virtualenv /opt/venv
+
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install PyTorch with CUDA support
+RUN pip install --no-cache-dir \
+    torch==2.1.1 \
+    torchvision==0.16.1 \
+    torchaudio==2.1.1 \
+    --index-url https://download.pytorch.org/whl/cu121
+
+# Install other ML packages
+COPY requirements-pytorch.txt /tmp/
+RUN pip install --no-cache-dir -r /tmp/requirements-pytorch.txt
+
+# Create non-root user
+RUN useradd -m -u 1000 gpuuser && \
+    mkdir -p /app /models /data && \
+    chown -R gpuuser:gpuuser /app /models /data
+
+WORKDIR /app
+
+# Copy application
+COPY --chown=gpuuser:gpuuser . /app/
+
+# Switch to non-root user
+USER gpuuser
+
+# Health check that verifies CUDA availability
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python -c "import torch; assert torch.cuda.is_available()" || exit 1
+
+EXPOSE 8000
+
+CMD ["python", "app.py"]

@@ -1,0 +1,114 @@
+name: Docker Security Scan
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: ml-api
+  REGISTRY: ghcr.io
+
+jobs:
+  scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image for scanning
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./dockerfiles/Dockerfile.optimized
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:scan
+          cache-from: type=gha
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:scan
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run Trivy vulnerability scanner (table output)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_NAME }}:scan
+          format: 'table'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+
+      - name: Run Grype scanner
+        uses: anchore/scan-action@v3
+        with:
+          image: ${{ env.IMAGE_NAME }}:scan
+          fail-build: false
+          severity-cutoff: high
+
+      - name: Docker Scout scan
+        uses: docker/scout-action@v1
+        with:
+          command: cves
+          image: ${{ env.IMAGE_NAME }}:scan
+          only-severities: critical,high
+          exit-code: false
+
+      - name: Check image size
+        run: |
+          SIZE=$(docker images ${{ env.IMAGE_NAME }}:scan --format "{{.Size}}")
+          echo "Image size: $SIZE"
+
+          # Fail if image is too large (>2GB)
+          SIZE_MB=$(docker images ${{ env.IMAGE_NAME }}:scan --format "{{.Size}}" | sed 's/[^0-9.]//g')
+          if (( $(echo "$SIZE_MB > 2000" | bc -l) )); then
+            echo "::error::Image size exceeds 2GB limit"
+            exit 1
+          fi
+
+      - name: Scan for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+
+  scan-summary:
+    name: Scan Summary
+    needs: scan
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Create summary
+        run: |
+          echo "## Security Scan Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ needs.scan.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Security scans completed for Docker image." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Scanners Used" >> $GITHUB_STEP_SUMMARY
+          echo "- Trivy (vulnerability scanner)" >> $GITHUB_STEP_SUMMARY
+          echo "- Grype (vulnerability scanner)" >> $GITHUB_STEP_SUMMARY
+          echo "- Docker Scout (CVE scanner)" >> $GITHUB_STEP_SUMMARY
+          echo "- TruffleHog (secret scanner)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Check the workflow logs for detailed results." >> $GITHUB_STEP_SUMMARY

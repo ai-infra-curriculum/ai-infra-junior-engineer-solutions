@@ -1,0 +1,307 @@
+---
+# Redis StatefulSet with Persistence
+# This example demonstrates:
+# - StatefulSet scaling behavior
+# - Stable network identities
+# - Persistent storage per pod
+# - ConfigMap-based configuration
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: statefulset-demo
+  labels:
+    app: redis
+data:
+  redis.conf: |
+    # Redis configuration
+    port 6379
+    bind 0.0.0.0
+
+    # Persistence
+    save 900 1
+    save 300 10
+    save 60 10000
+
+    # AOF persistence
+    appendonly yes
+    appendfsync everysec
+
+    # Memory
+    maxmemory 256mb
+    maxmemory-policy allkeys-lru
+
+    # Logging
+    loglevel notice
+
+    # Security
+    protected-mode no
+
+---
+# Headless Service for Redis StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-headless
+  namespace: statefulset-demo
+  labels:
+    app: redis
+spec:
+  clusterIP: None
+  ports:
+  - name: redis
+    port: 6379
+    targetPort: 6379
+  selector:
+    app: redis
+  # Pods will be accessible as:
+  # redis-0.redis-headless.statefulset-demo.svc.cluster.local
+  # redis-1.redis-headless.statefulset-demo.svc.cluster.local
+  # redis-2.redis-headless.statefulset-demo.svc.cluster.local
+
+---
+# Regular Service for client connections
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: statefulset-demo
+  labels:
+    app: redis
+spec:
+  type: ClusterIP
+  ports:
+  - name: redis
+    port: 6379
+    targetPort: 6379
+  selector:
+    app: redis
+
+---
+# Redis StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: statefulset-demo
+  labels:
+    app: redis
+spec:
+  serviceName: redis-headless
+  replicas: 3
+
+  # Pod Management Policy
+  # OrderedReady: Ensures pods start in order (0, 1, 2)
+  podManagementPolicy: OrderedReady
+
+  # Update Strategy
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # partition: 0 means update all pods
+      # partition: 2 means update only pods >= 2 (redis-2)
+      partition: 0
+
+  selector:
+    matchLabels:
+      app: redis
+
+  template:
+    metadata:
+      labels:
+        app: redis
+      annotations:
+        # Restart pods when config changes
+        checksum/config: "{{ include (print $.Template.BasePath '/configmap.yaml') . | sha256sum }}"
+    spec:
+      # Security context
+      securityContext:
+        fsGroup: 999
+        runAsUser: 999
+        runAsNonRoot: true
+
+      # Init container to set permissions
+      initContainers:
+      - name: init-redis
+        image: redis:7-alpine
+        command:
+        - sh
+        - -c
+        - |
+          # Copy config with proper permissions
+          cp /config/redis.conf /etc/redis/redis.conf
+          chmod 644 /etc/redis/redis.conf
+
+          # Ensure data directory exists
+          mkdir -p /data
+          chown -R 999:999 /data
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: redis-data
+          mountPath: /data
+        - name: redis-config
+          mountPath: /etc/redis
+        securityContext:
+          runAsUser: 0
+
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        imagePullPolicy: IfNotPresent
+
+        # Command to start Redis with custom config
+        command:
+        - redis-server
+        - /etc/redis/redis.conf
+
+        # Environment variables
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+
+        ports:
+        - name: redis
+          containerPort: 6379
+          protocol: TCP
+
+        # Liveness probe
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        # Readiness probe
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        # Resource limits
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+        # Volume mounts
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+        - name: redis-config
+          mountPath: /etc/redis
+
+      # Volumes
+      volumes:
+      - name: config
+        configMap:
+          name: redis-config
+      - name: redis-config
+        emptyDir: {}
+
+  # Volume Claim Templates
+  volumeClaimTemplates:
+  - metadata:
+      name: redis-data
+      labels:
+        app: redis
+    spec:
+      accessModes:
+        - ReadWriteOnce
+      storageClassName: standard
+      resources:
+        requests:
+          storage: 500Mi
+
+---
+# Client pod to test Redis connectivity
+apiVersion: v1
+kind: Pod
+metadata:
+  name: redis-client
+  namespace: statefulset-demo
+  labels:
+    app: redis-client
+spec:
+  containers:
+  - name: redis-cli
+    image: redis:7-alpine
+    command:
+    - sleep
+    - "3600"
+  restartPolicy: Always
+
+---
+# Example commands to test Redis StatefulSet:
+#
+# 1. Check StatefulSet status:
+#    kubectl get statefulset redis -n statefulset-demo
+#
+# 2. Check pods (should be redis-0, redis-1, redis-2):
+#    kubectl get pods -n statefulset-demo -l app=redis
+#
+# 3. Check PVCs (one per pod):
+#    kubectl get pvc -n statefulset-demo -l app=redis
+#
+# 4. Connect to specific Redis instance:
+#    kubectl exec -it redis-0 -n statefulset-demo -- redis-cli
+#    > SET key1 "value from redis-0"
+#    > GET key1
+#
+# 5. Test from client pod:
+#    kubectl exec -it redis-client -n statefulset-demo -- sh
+#    # Connect to specific pod via headless service
+#    redis-cli -h redis-0.redis-headless.statefulset-demo.svc.cluster.local
+#    redis-cli -h redis-1.redis-headless.statefulset-demo.svc.cluster.local
+#    redis-cli -h redis-2.redis-headless.statefulset-demo.svc.cluster.local
+#
+# 6. Scale StatefulSet:
+#    kubectl scale statefulset redis --replicas=5 -n statefulset-demo
+#    # Watch pods scale up in order (redis-3, then redis-4)
+#    kubectl get pods -n statefulset-demo -l app=redis -w
+#
+# 7. Test persistence:
+#    # Write data to redis-0
+#    kubectl exec -it redis-0 -n statefulset-demo -- redis-cli SET test "persistent data"
+#    # Delete the pod
+#    kubectl delete pod redis-0 -n statefulset-demo
+#    # Wait for it to recreate
+#    kubectl get pods -n statefulset-demo -l app=redis -w
+#    # Read data (should persist)
+#    kubectl exec -it redis-0 -n statefulset-demo -- redis-cli GET test
+#
+# 8. Ordered update (rolling update):
+#    kubectl patch statefulset redis -n statefulset-demo -p '{"spec":{"updateStrategy":{"rollingUpdate":{"partition":2}}}}'
+#    # Only redis-2 and higher will be updated
+#
+# 9. Delete StatefulSet (keeps PVCs):
+#    kubectl delete statefulset redis -n statefulset-demo
+#    # PVCs remain
+#    kubectl get pvc -n statefulset-demo
+#
+# 10. Recreate StatefulSet (reuses PVCs):
+#     kubectl apply -f 05-redis-statefulset.yaml
+#     # Data persists from before!

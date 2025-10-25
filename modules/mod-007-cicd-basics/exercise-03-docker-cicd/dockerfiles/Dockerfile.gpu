@@ -1,0 +1,58 @@
+# GPU-Enabled Dockerfile for ML API
+# Requires NVIDIA Docker runtime
+
+FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
+
+LABEL maintainer="ml-team@example.com"
+LABEL description="GPU-enabled ML API Docker image"
+LABEL gpu.required="true"
+
+# Set working directory
+WORKDIR /app
+
+# Prevent interactive prompts
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install Python and dependencies
+RUN apt-get update && apt-get install -y \
+    python3.11 \
+    python3-pip \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Upgrade pip
+RUN pip3 install --upgrade pip
+
+# Copy requirements
+COPY app/requirements.txt .
+
+# Install PyTorch with CUDA support
+RUN pip3 install --no-cache-dir \
+    torch==2.0.0+cu118 \
+    -f https://download.pytorch.org/whl/torch_stable.html
+
+# Install other requirements
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# Copy application
+COPY app/ .
+
+# Create non-root user
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
+
+USER appuser
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Environment variables
+ENV PYTHONUNBUFFERED=1
+ENV CUDA_VISIBLE_DEVICES=0
+
+# Run application
+CMD ["python3", "main.py"]

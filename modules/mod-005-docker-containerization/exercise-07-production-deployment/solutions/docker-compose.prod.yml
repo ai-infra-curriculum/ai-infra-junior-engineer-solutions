@@ -1,0 +1,430 @@
+version: '3.8'
+
+services:
+  # ML API Service
+  ml-api:
+    image: ${ML_API_IMAGE:-ml-api:latest}
+    container_name: ml-api-prod
+    restart: unless-stopped
+    ports:
+      - "${ML_API_PORT:-8000}:8000"
+      - "${ML_API_METRICS_PORT:-8001}:8001"  # Metrics endpoint
+    environment:
+      - ENV=production
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - MODEL_PATH=/models/model.pt
+      - MODEL_VERSION=${MODEL_VERSION:-v1.0.0}
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      - REDIS_URL=redis://redis:6379/0
+      - PROMETHEUS_MULTIPROC_DIR=/tmp/prometheus
+      - WORKERS=${ML_API_WORKERS:-4}
+    volumes:
+      - ml-models:/models:ro
+      - ml-cache:/app/cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '2'
+          memory: 4G
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - backend
+      - frontend
+    labels:
+      - "monitoring=enabled"
+      - "health.port=8000"
+      - "health.path=/health"
+      - "backup=required"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: ml-postgres-prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=en_US.UTF-8"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+      - postgres-backups:/backups
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - backend
+    labels:
+      - "backup=required"
+      - "backup.type=postgres"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: ml-redis-prod
+    restart: unless-stopped
+    command: >
+      redis-server
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory ${REDIS_MAXMEMORY:-2gb}
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 3G
+        reservations:
+          cpus: '0.5'
+          memory: 2G
+    healthcheck:
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - backend
+    labels:
+      - "backup=required"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # NGINX Load Balancer
+  nginx:
+    image: nginx:alpine
+    container_name: ml-nginx-prod
+    restart: unless-stopped
+    ports:
+      - "${NGINX_HTTP_PORT:-80}:80"
+      - "${NGINX_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - nginx-cache:/var/cache/nginx
+      - nginx-logs:/var/log/nginx
+    depends_on:
+      - ml-api
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - frontend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Prometheus Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ml-prometheus-prod
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    depends_on:
+      - ml-api
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    networks:
+      - backend
+      - monitoring
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Grafana Dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ml-grafana-prod
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=https://${DOMAIN}/grafana
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel,grafana-clock-panel
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    depends_on:
+      - prometheus
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    networks:
+      - monitoring
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Elasticsearch for Logging
+  elasticsearch:
+    image: elasticsearch:8.11.0
+    container_name: ml-elasticsearch-prod
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+      - xpack.security.enabled=true
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    ports:
+      - "${ELASTICSEARCH_PORT:-9200}:9200"
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+    healthcheck:
+      test: ["CMD-SHELL", "curl -u elastic:${ELASTIC_PASSWORD} -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Kibana for Log Visualization
+  kibana:
+    image: kibana:8.11.0
+    container_name: ml-kibana-prod
+    restart: unless-stopped
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - ELASTICSEARCH_USERNAME=elastic
+      - ELASTICSEARCH_PASSWORD=${ELASTIC_PASSWORD}
+      - SERVER_NAME=kibana
+      - SERVER_HOST=0.0.0.0
+    ports:
+      - "${KIBANA_PORT:-5601}:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    networks:
+      - logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Fluentd Log Aggregator
+  fluentd:
+    image: fluent/fluentd:v1.16-1
+    container_name: ml-fluentd-prod
+    restart: unless-stopped
+    volumes:
+      - ./fluentd/fluent.conf:/fluentd/etc/fluent.conf:ro
+      - fluentd-data:/fluentd/log
+    ports:
+      - "${FLUENTD_PORT:-24224}:24224"
+      - "${FLUENTD_PORT:-24224}:24224/udp"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    networks:
+      - logging
+      - backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Backup Service
+  backup:
+    image: alpine:latest
+    container_name: ml-backup-prod
+    restart: "no"
+    volumes:
+      - postgres-data:/backup/postgres-data:ro
+      - redis-data:/backup/redis-data:ro
+      - ml-models:/backup/ml-models:ro
+      - /backups:/backups
+      - ./backup_manager.sh:/backup_manager.sh:ro
+    command: /bin/sh -c "echo 'Backup container ready. Run backup_manager.sh manually.'"
+    networks:
+      - backend
+    profiles:
+      - backup
+
+volumes:
+  # Application volumes
+  ml-models:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${ML_MODELS_PATH:-./models}
+
+  ml-cache:
+    driver: local
+
+  # Database volumes
+  postgres-data:
+    driver: local
+
+  postgres-backups:
+    driver: local
+
+  redis-data:
+    driver: local
+
+  # Monitoring volumes
+  prometheus-data:
+    driver: local
+
+  grafana-data:
+    driver: local
+
+  # Logging volumes
+  elasticsearch-data:
+    driver: local
+
+  fluentd-data:
+    driver: local
+
+  # NGINX volumes
+  nginx-cache:
+    driver: local
+
+  nginx-logs:
+    driver: local
+
+networks:
+  # Frontend network (public-facing)
+  frontend:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+  # Backend network (internal services)
+  backend:
+    driver: bridge
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+  # Monitoring network
+  monitoring:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
+
+  # Logging network
+  logging:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.23.0.0/16

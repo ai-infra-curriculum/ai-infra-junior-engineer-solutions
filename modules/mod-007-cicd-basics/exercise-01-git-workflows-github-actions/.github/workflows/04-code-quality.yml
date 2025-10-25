@@ -1,0 +1,334 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run weekly on Mondays at 9 AM UTC
+    - cron: '0 9 * * 1'
+
+jobs:
+  code-quality:
+    name: Comprehensive Code Quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better analysis
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Cache dependencies
+        uses: actions/cache@v3
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-quality-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-quality-
+            ${{ runner.os }}-pip-
+
+      - name: Install quality tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install \
+            flake8 \
+            black \
+            isort \
+            mypy \
+            pylint \
+            bandit \
+            safety \
+            radon \
+            vulture \
+            pydocstyle
+
+      - name: Check code formatting (Black)
+        id: black
+        run: |
+          echo "::group::Black Formatting"
+          black --check --diff examples/ || echo "::set-output name=failed::true"
+          echo "::endgroup::"
+        continue-on-error: true
+
+      - name: Check import sorting (isort)
+        id: isort
+        run: |
+          echo "::group::Import Sorting"
+          isort --check-only --diff examples/ || echo "::set-output name=failed::true"
+          echo "::endgroup::"
+        continue-on-error: true
+
+      - name: Lint with Flake8
+        id: flake8
+        run: |
+          echo "::group::Flake8 Linting"
+          flake8 examples/ \
+            --max-line-length=100 \
+            --max-complexity=10 \
+            --statistics \
+            --count || echo "::set-output name=failed::true"
+          echo "::endgroup::"
+        continue-on-error: true
+
+      - name: Type checking (mypy)
+        id: mypy
+        run: |
+          echo "::group::Type Checking"
+          mypy examples/ \
+            --ignore-missing-imports \
+            --show-error-codes || echo "::set-output name=failed::true"
+          echo "::endgroup::"
+        continue-on-error: true
+
+      - name: Code analysis (Pylint)
+        id: pylint
+        run: |
+          echo "::group::Pylint Analysis"
+          pylint examples/ \
+            --max-line-length=100 \
+            --disable=C0111,R0903,W0511 \
+            --score=yes || echo "::set-output name=failed::true"
+          echo "::endgroup::"
+        continue-on-error: true
+
+      - name: Security analysis (Bandit)
+        id: bandit
+        run: |
+          echo "::group::Security Analysis"
+          bandit -r examples/ -ll || echo "::set-output name=failed::true"
+          echo "::endgroup::"
+        continue-on-error: true
+
+      - name: Dependency vulnerability check (Safety)
+        id: safety
+        run: |
+          echo "::group::Dependency Vulnerabilities"
+          safety check || echo "::set-output name=failed::true"
+          echo "::endgroup::"
+        continue-on-error: true
+
+      - name: Code complexity (Radon)
+        id: radon
+        run: |
+          echo "::group::Cyclomatic Complexity"
+          radon cc examples/ -a -nb
+          echo "::endgroup::"
+          echo ""
+          echo "::group::Maintainability Index"
+          radon mi examples/ -nb
+          echo "::endgroup::"
+        continue-on-error: true
+
+      - name: Dead code detection (Vulture)
+        id: vulture
+        run: |
+          echo "::group::Dead Code Detection"
+          vulture examples/ --min-confidence 80 || echo "::set-output name=failed::true"
+          echo "::endgroup::"
+        continue-on-error: true
+
+      - name: Docstring quality (pydocstyle)
+        id: pydocstyle
+        run: |
+          echo "::group::Docstring Quality"
+          pydocstyle examples/ || echo "::set-output name=failed::true"
+          echo "::endgroup::"
+        continue-on-error: true
+
+      - name: Generate quality report
+        if: always()
+        run: |
+          cat > quality-report.md << 'EOF'
+          # Code Quality Report
+
+          ## Summary
+
+          | Check | Status |
+          |-------|--------|
+          | Black Formatting | ${{ steps.black.outputs.failed && '❌ Failed' || '✅ Passed' }} |
+          | Import Sorting | ${{ steps.isort.outputs.failed && '❌ Failed' || '✅ Passed' }} |
+          | Flake8 Linting | ${{ steps.flake8.outputs.failed && '❌ Failed' || '✅ Passed' }} |
+          | Type Checking | ${{ steps.mypy.outputs.failed && '❌ Failed' || '✅ Passed' }} |
+          | Pylint Analysis | ${{ steps.pylint.outputs.failed && '❌ Failed' || '✅ Passed' }} |
+          | Security (Bandit) | ${{ steps.bandit.outputs.failed && '❌ Failed' || '✅ Passed' }} |
+          | Dependencies (Safety) | ${{ steps.safety.outputs.failed && '❌ Failed' || '✅ Passed' }} |
+          | Dead Code (Vulture) | ${{ steps.vulture.outputs.failed && '❌ Failed' || '✅ Passed' }} |
+          | Docstrings | ${{ steps.pydocstyle.outputs.failed && '❌ Failed' || '✅ Passed' }} |
+
+          ## Workflow
+          - **Run**: ${{ github.run_number }}
+          - **Commit**: ${{ github.sha }}
+          - **Branch**: ${{ github.ref }}
+          - **Actor**: ${{ github.actor }}
+
+          ## Next Steps
+
+          ### If checks failed:
+          1. Review the logs above for specific issues
+          2. Fix issues locally
+          3. Run quality checks: `./scripts/check-code-quality.sh`
+          4. Commit and push changes
+
+          ### Formatting fixes:
+          ```bash
+          # Fix Black formatting
+          black examples/
+
+          # Fix import sorting
+          isort examples/
+          ```
+          EOF
+
+          cat quality-report.md
+
+      - name: Upload quality report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: code-quality-report
+          path: quality-report.md
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('quality-report.md', 'utf8');
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: report
+            });
+
+      - name: Check overall result
+        if: |
+          steps.black.outputs.failed ||
+          steps.isort.outputs.failed ||
+          steps.flake8.outputs.failed ||
+          steps.mypy.outputs.failed ||
+          steps.pylint.outputs.failed ||
+          steps.bandit.outputs.failed
+        run: |
+          echo "========================================="
+          echo "❌ Code quality checks failed!"
+          echo "========================================="
+          echo ""
+          echo "Please review the logs above and fix the issues."
+          echo "You can run quality checks locally with:"
+          echo "  ./scripts/check-code-quality.sh"
+          echo ""
+          exit 1
+
+  complexity-report:
+    name: Complexity Report
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install tools
+        run: |
+          pip install radon
+
+      - name: Generate complexity metrics
+        run: |
+          echo "# Code Complexity Report" > complexity-report.md
+          echo "" >> complexity-report.md
+          echo "## Cyclomatic Complexity" >> complexity-report.md
+          echo "" >> complexity-report.md
+          echo '```' >> complexity-report.md
+          radon cc examples/ -a -s >> complexity-report.md
+          echo '```' >> complexity-report.md
+          echo "" >> complexity-report.md
+          echo "## Maintainability Index" >> complexity-report.md
+          echo "" >> complexity-report.md
+          echo '```' >> complexity-report.md
+          radon mi examples/ -s >> complexity-report.md
+          echo '```' >> complexity-report.md
+          echo "" >> complexity-report.md
+          echo "## Raw Metrics" >> complexity-report.md
+          echo "" >> complexity-report.md
+          echo '```' >> complexity-report.md
+          radon raw examples/ -s >> complexity-report.md
+          echo '```' >> complexity-report.md
+
+      - name: Upload complexity report
+        uses: actions/upload-artifact@v3
+        with:
+          name: complexity-report
+          path: complexity-report.md
+
+  coverage-report:
+    name: Coverage Report
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pytest pytest-cov
+          pip install -r examples/requirements.txt
+
+      - name: Run tests with coverage
+        run: |
+          pytest examples/ \
+            --cov=examples \
+            --cov-report=html \
+            --cov-report=term \
+            --cov-report=xml \
+            --cov-branch
+
+      - name: Coverage badge
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          COVERAGE=$(python -c "import xml.etree.ElementTree as ET; tree = ET.parse('coverage.xml'); root = tree.getroot(); print(round(float(root.attrib['line-rate']) * 100, 2))")
+          echo "Coverage: $COVERAGE%"
+
+          # Create badge (you would typically use a badge service here)
+          echo "Coverage: $COVERAGE%" > coverage-badge.txt
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-reports
+          path: |
+            htmlcov/
+            coverage.xml
+            coverage-badge.txt
+
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v3
+        with:
+          fail-on-severity: moderate

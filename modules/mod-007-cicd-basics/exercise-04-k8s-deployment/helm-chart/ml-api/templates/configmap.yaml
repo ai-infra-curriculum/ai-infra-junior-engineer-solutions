@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ml-api.fullname" . }}-config
+  labels:
+    {{- include "ml-api.labels" . | nindent 4 }}
+data:
+  log_level: {{ .Values.config.logLevel | quote }}
+  workers: {{ .Values.config.workers | quote }}
+  max_requests: {{ .Values.config.maxRequests | quote }}
+  timeout: {{ .Values.config.timeout | quote }}
+  model_name: {{ .Values.config.modelName | quote }}
+  model_version: {{ .Values.config.modelVersion | quote }}
+  batch_size: {{ .Values.config.batchSize | quote }}
+  inference_timeout: {{ .Values.config.inferenceTimeout | quote }}
+  metrics_enabled: {{ .Values.config.metricsEnabled | quote }}
+  metrics_port: {{ .Values.config.metricsPort | quote }}

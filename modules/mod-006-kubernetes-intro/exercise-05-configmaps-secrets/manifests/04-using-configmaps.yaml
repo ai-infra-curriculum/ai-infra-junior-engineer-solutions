@@ -1,0 +1,535 @@
+---
+# Example 1: Using ConfigMap as environment variables
+# Individual keys from ConfigMap as env vars
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-configmap-env
+  namespace: config-demo
+  labels:
+    app: demo-app
+    example: configmap-env
+spec:
+  containers:
+  - name: app
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "=== Environment Variables from ConfigMap ==="
+        echo "APP_NAME: $APP_NAME"
+        echo "APP_VERSION: $APP_VERSION"
+        echo "LOG_LEVEL: $LOG_LEVEL"
+        echo "DATABASE_HOST: $DATABASE_HOST"
+        echo "DATABASE_PORT: $DATABASE_PORT"
+        echo ""
+        echo "Sleeping... (use 'kubectl logs' to see output)"
+        sleep 3600
+    env:
+    # Individual keys from ConfigMap
+    - name: APP_NAME
+      valueFrom:
+        configMapKeyRef:
+          name: app-config-literals
+          key: APP_NAME
+    - name: APP_VERSION
+      valueFrom:
+        configMapKeyRef:
+          name: app-config-literals
+          key: APP_VERSION
+    - name: LOG_LEVEL
+      valueFrom:
+        configMapKeyRef:
+          name: app-config-literals
+          key: LOG_LEVEL
+    - name: DATABASE_HOST
+      valueFrom:
+        configMapKeyRef:
+          name: app-config-literals
+          key: DATABASE_HOST
+    - name: DATABASE_PORT
+      valueFrom:
+        configMapKeyRef:
+          name: app-config-literals
+          key: DATABASE_PORT
+  restartPolicy: Never
+
+---
+# Example 2: Using envFrom to import all ConfigMap keys as environment variables
+# More convenient when you need all keys from a ConfigMap
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-configmap-envfrom
+  namespace: config-demo
+  labels:
+    app: demo-app
+    example: configmap-envfrom
+spec:
+  containers:
+  - name: app
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "=== All Environment Variables ==="
+        env | grep -E "(APP_|LOG_|DATABASE_|FEATURE_|MAX_)" | sort
+        echo ""
+        echo "This imported all keys from app-config-literals ConfigMap"
+        echo "Sleeping... (use 'kubectl logs' to see output)"
+        sleep 3600
+    envFrom:
+    # Import all keys from ConfigMap as environment variables
+    - configMapRef:
+        name: app-config-literals
+  restartPolicy: Never
+
+---
+# Example 3: Using envFrom with prefix
+# Adds a prefix to all imported environment variable names
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-configmap-envfrom-prefix
+  namespace: config-demo
+  labels:
+    app: demo-app
+    example: configmap-envfrom-prefix
+spec:
+  containers:
+  - name: app
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "=== Environment Variables with Prefix ==="
+        env | grep "^CONFIG_" | sort
+        echo ""
+        echo "All ConfigMap keys were prefixed with 'CONFIG_'"
+        echo "Sleeping..."
+        sleep 3600
+    envFrom:
+    # Import all keys with a prefix
+    - prefix: CONFIG_
+      configMapRef:
+        name: app-config-literals
+  restartPolicy: Never
+
+---
+# Example 4: Using ConfigMap as volume mount
+# Mount ConfigMap data as files in the container
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-configmap-volume
+  namespace: config-demo
+  labels:
+    app: demo-app
+    example: configmap-volume
+spec:
+  containers:
+  - name: app
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "=== ConfigMap Files ==="
+        ls -la /etc/config/
+        echo ""
+        echo "=== application.properties ==="
+        cat /etc/config/application.properties
+        echo ""
+        echo "=== nginx.conf (first 20 lines) ==="
+        head -20 /etc/config/nginx.conf
+        echo ""
+        echo "Sleeping... (use 'kubectl exec' to explore files)"
+        sleep 3600
+    volumeMounts:
+    - name: config-volume
+      mountPath: /etc/config
+      readOnly: true
+  volumes:
+  - name: config-volume
+    configMap:
+      name: app-config-files
+
+---
+# Example 5: Mounting specific keys from ConfigMap
+# Only mount selected keys instead of all data
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-configmap-selective
+  namespace: config-demo
+  labels:
+    app: demo-app
+    example: configmap-selective
+spec:
+  containers:
+  - name: app
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "=== Selectively Mounted Files ==="
+        ls -la /etc/config/
+        echo ""
+        echo "Only nginx.conf was mounted from the ConfigMap"
+        echo ""
+        cat /etc/config/nginx.conf
+        echo ""
+        sleep 3600
+    volumeMounts:
+    - name: config-volume
+      mountPath: /etc/config
+      readOnly: true
+  volumes:
+  - name: config-volume
+    configMap:
+      name: app-config-files
+      items:
+      # Only mount specific keys
+      - key: nginx.conf
+        path: nginx.conf
+
+---
+# Example 6: Mounting ConfigMap with custom file permissions
+# Set specific permissions on mounted files
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-configmap-permissions
+  namespace: config-demo
+  labels:
+    app: demo-app
+    example: configmap-permissions
+spec:
+  containers:
+  - name: app
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "=== File Permissions ==="
+        ls -la /etc/config/
+        echo ""
+        echo "Notice the permissions: -rwxr-x---"
+        echo ""
+        echo "=== Testing script execution ==="
+        /etc/config/init.sh || echo "Script completed"
+        echo ""
+        sleep 3600
+    volumeMounts:
+    - name: scripts-volume
+      mountPath: /etc/config
+      readOnly: true
+  volumes:
+  - name: scripts-volume
+    configMap:
+      name: app-scripts
+      defaultMode: 0750  # rwxr-x---
+      items:
+      - key: init.sh
+        path: init.sh
+        mode: 0755  # rwxr-xr-x (more permissive for this file)
+
+---
+# Example 7: Using subPath to mount ConfigMap key as specific file
+# Useful when you want to mount into a directory that already has content
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-configmap-subpath
+  namespace: config-demo
+  labels:
+    app: demo-app
+    example: configmap-subpath
+spec:
+  containers:
+  - name: nginx
+    image: nginx:1.25-alpine
+    ports:
+    - containerPort: 80
+    volumeMounts:
+    # Mount nginx.conf to /etc/nginx/nginx.conf without overwriting the whole directory
+    - name: nginx-config
+      mountPath: /etc/nginx/nginx.conf
+      subPath: nginx.conf
+      readOnly: true
+  volumes:
+  - name: nginx-config
+    configMap:
+      name: app-config-files
+      items:
+      - key: nginx.conf
+        path: nginx.conf
+
+---
+# Example 8: Multiple ConfigMaps in one Pod
+# Using multiple ConfigMaps for different purposes
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-multiple-configmaps
+  namespace: config-demo
+  labels:
+    app: demo-app
+    example: multiple-configmaps
+spec:
+  containers:
+  - name: app
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "=== Environment Variables (from literals) ==="
+        env | grep -E "(APP_|LOG_|DATABASE_)" | sort
+        echo ""
+        echo "=== Configuration Files ==="
+        ls -la /etc/config/
+        echo ""
+        echo "=== Scripts ==="
+        ls -la /scripts/
+        echo ""
+        sleep 3600
+    # Environment variables from one ConfigMap
+    envFrom:
+    - configMapRef:
+        name: app-config-literals
+    volumeMounts:
+    # Files from another ConfigMap
+    - name: config-files
+      mountPath: /etc/config
+      readOnly: true
+    # Scripts from yet another ConfigMap
+    - name: scripts
+      mountPath: /scripts
+      readOnly: true
+  volumes:
+  - name: config-files
+    configMap:
+      name: app-config-files
+  - name: scripts
+    configMap:
+      name: app-scripts
+      defaultMode: 0755
+
+---
+# Example 9: ConfigMap with optional flag
+# Pod will start even if the ConfigMap doesn't exist
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-configmap-optional
+  namespace: config-demo
+  labels:
+    app: demo-app
+    example: configmap-optional
+spec:
+  containers:
+  - name: app
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "Pod started successfully"
+        echo "Optional ConfigMap may or may not be present"
+        if [ -d /etc/optional-config ]; then
+          echo "Optional config is present:"
+          ls -la /etc/optional-config/
+        else
+          echo "Optional config is not present"
+        fi
+        sleep 3600
+    env:
+    # Optional environment variable
+    - name: OPTIONAL_CONFIG
+      valueFrom:
+        configMapKeyRef:
+          name: nonexistent-configmap
+          key: some-key
+          optional: true  # Pod will start even if ConfigMap doesn't exist
+    volumeMounts:
+    # Optional volume mount
+    - name: optional-config
+      mountPath: /etc/optional-config
+      readOnly: true
+  volumes:
+  - name: optional-config
+    configMap:
+      name: nonexistent-configmap
+      optional: true  # Pod will start even if ConfigMap doesn't exist
+
+---
+# Example 10: Deployment using ConfigMap
+# Real-world example of an application deployment with configuration
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-app
+  namespace: config-demo
+  labels:
+    app: demo-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: demo-app
+  template:
+    metadata:
+      labels:
+        app: demo-app
+    spec:
+      containers:
+      - name: app
+        image: busybox:1.36
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "=== Application Starting ==="
+            echo "Name: $APP_NAME"
+            echo "Version: $APP_VERSION"
+            echo "Environment: $ENV"
+            echo "Log Level: $LOG_LEVEL"
+            echo ""
+            echo "=== Configuration Files ==="
+            ls -la /etc/app-config/
+            echo ""
+            echo "=== JSON Config ==="
+            cat /etc/app-config/config.json
+            echo ""
+            echo "Application running..."
+
+            # Simulate a web server
+            while true; do
+              echo "[$(date)] Heartbeat - App: $APP_NAME, Env: $ENV"
+              sleep 30
+            done
+        # Environment variables from ConfigMap
+        env:
+        - name: APP_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: app-config-literals
+              key: APP_NAME
+        - name: APP_VERSION
+          valueFrom:
+            configMapKeyRef:
+              name: app-config-literals
+              key: APP_VERSION
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: app-config-literals
+              key: LOG_LEVEL
+        # Environment-specific config
+        envFrom:
+        - configMapRef:
+            name: app-config-dev  # or app-config-prod
+        # Configuration files as volume
+        volumeMounts:
+        - name: config-files
+          mountPath: /etc/app-config
+          readOnly: true
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+      volumes:
+      - name: config-files
+        configMap:
+          name: app-config-files
+          items:
+          - key: config.json
+            path: config.json
+          - key: config.yaml
+            path: config.yaml
+
+---
+# Example 11: ConfigMap hot-reload demonstration
+# Shows how mounted ConfigMap files update automatically
+# Note: Environment variables do NOT update automatically
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pod-configmap-hot-reload
+  namespace: config-demo
+  labels:
+    app: demo-app
+    example: hot-reload
+  annotations:
+    description: "Demonstrates ConfigMap hot-reloading for volumes (not env vars)"
+spec:
+  containers:
+  - name: watcher
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "=== ConfigMap Hot-Reload Demo ==="
+        echo "Watching /etc/config/config.yaml for changes..."
+        echo ""
+        echo "To test:"
+        echo "1. Run: kubectl exec -it pod-configmap-hot-reload -n config-demo -- cat /etc/config/config.yaml"
+        echo "2. Edit ConfigMap: kubectl edit configmap app-config-files -n config-demo"
+        echo "3. Wait ~60 seconds for kubelet to sync"
+        echo "4. Run step 1 again to see updated content"
+        echo ""
+        echo "Note: Environment variables do NOT update - pod restart required"
+        echo ""
+
+        # Monitor file changes
+        while true; do
+          echo "[$(date)] Current config hash: $(md5sum /etc/config/config.yaml | cut -d' ' -f1)"
+          sleep 10
+        done
+    env:
+    # This will NOT update when ConfigMap changes
+    - name: STATIC_LOG_LEVEL
+      valueFrom:
+        configMapKeyRef:
+          name: app-config-literals
+          key: LOG_LEVEL
+    volumeMounts:
+    # This WILL update when ConfigMap changes (after kubelet sync period)
+    - name: config
+      mountPath: /etc/config
+      readOnly: true
+  volumes:
+  - name: config
+    configMap:
+      name: app-config-files
+
+---
+# Commands to interact with these examples:
+#
+# Deploy all examples:
+# kubectl apply -f 04-using-configmaps.yaml
+#
+# View environment variables in a pod:
+# kubectl exec -n config-demo pod-configmap-env -- env | sort
+#
+# View mounted files:
+# kubectl exec -n config-demo pod-configmap-volume -- ls -la /etc/config/
+# kubectl exec -n config-demo pod-configmap-volume -- cat /etc/config/nginx.conf
+#
+# View logs:
+# kubectl logs -n config-demo pod-configmap-env
+# kubectl logs -n config-demo pod-configmap-envfrom
+#
+# Interactive shell:
+# kubectl exec -it -n config-demo pod-configmap-volume -- /bin/sh
+#
+# Watch deployment:
+# kubectl get pods -n config-demo -l app=demo-app -w
+#
+# Test hot-reload:
+# kubectl logs -n config-demo pod-configmap-hot-reload -f
+# # In another terminal:
+# kubectl edit configmap app-config-files -n config-demo
+#
+# Cleanup:
+# kubectl delete -f 04-using-configmaps.yaml

@@ -1,0 +1,225 @@
+version: '3.8'
+
+services:
+  # Load Balancer
+  nginx:
+    image: nginx:alpine
+    container_name: model-lb
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    networks:
+      - serving-network
+    restart: unless-stopped
+    depends_on:
+      - model-server-1
+      - model-server-2
+      - model-server-3
+
+  # Model Server Replica 1
+  model-server-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.serving
+    container_name: model-server-1
+    environment:
+      - MODEL_NAME=my-model
+      - MODEL_VERSION=1
+      - WORKERS=4
+      - REDIS_URL=redis://redis:6379/0
+      - METRICS_PORT=9091
+    volumes:
+      - ./models:/models:ro
+    expose:
+      - "8000"
+      - "9091"
+    networks:
+      - serving-network
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  # Model Server Replica 2
+  model-server-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.serving
+    container_name: model-server-2
+    environment:
+      - MODEL_NAME=my-model
+      - MODEL_VERSION=1
+      - WORKERS=4
+      - REDIS_URL=redis://redis:6379/0
+      - METRICS_PORT=9092
+    volumes:
+      - ./models:/models:ro
+    expose:
+      - "8000"
+      - "9092"
+    networks:
+      - serving-network
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  # Model Server Replica 3
+  model-server-3:
+    build:
+      context: .
+      dockerfile: Dockerfile.serving
+    container_name: model-server-3
+    environment:
+      - MODEL_NAME=my-model
+      - MODEL_VERSION=1
+      - WORKERS=4
+      - REDIS_URL=redis://redis:6379/0
+      - METRICS_PORT=9093
+    volumes:
+      - ./models:/models:ro
+    expose:
+      - "8000"
+      - "9093"
+    networks:
+      - serving-network
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+
+  # Redis for Caching
+  redis:
+    image: redis:7-alpine
+    container_name: serving-redis
+    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-cache:/data
+    expose:
+      - "6379"
+    networks:
+      - serving-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Prometheus for Metrics
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: serving-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    volumes:
+      - ./prometheus/prometheus-serving.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-serving-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - serving-network
+    restart: unless-stopped
+
+  # Grafana for Visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: serving-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - grafana-serving-data:/var/lib/grafana
+      - ./grafana/dashboards-serving:/etc/grafana/provisioning/dashboards:ro
+    ports:
+      - "3000:3000"
+    networks:
+      - serving-network
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
+  # Locust for Load Testing
+  locust-master:
+    build:
+      context: .
+      dockerfile: Dockerfile.locust
+    container_name: locust-master
+    ports:
+      - "8089:8089"
+    environment:
+      - LOCUST_MODE=master
+      - TARGET_URL=http://nginx
+    volumes:
+      - ./locust:/locust
+    command: -f /locust/locustfile.py --master
+    networks:
+      - serving-network
+
+  locust-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.locust
+    container_name: locust-worker
+    environment:
+      - LOCUST_MODE=worker
+      - LOCUST_MASTER=locust-master
+    volumes:
+      - ./locust:/locust
+    command: -f /locust/locustfile.py --worker --master-host=locust-master
+    networks:
+      - serving-network
+    depends_on:
+      - locust-master
+    deploy:
+      replicas: 3
+
+networks:
+  serving-network:
+    driver: bridge
+
+volumes:
+  redis-cache:
+    driver: local
+  prometheus-serving-data:
+    driver: local
+  grafana-serving-data:
+    driver: local

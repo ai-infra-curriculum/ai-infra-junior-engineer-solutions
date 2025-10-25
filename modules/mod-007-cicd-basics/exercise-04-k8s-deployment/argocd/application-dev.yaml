@@ -1,0 +1,38 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ml-api-dev
+  namespace: argocd
+  labels:
+    app: ml-api
+    environment: dev
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/your-org/ml-api
+    targetRevision: develop  # Track develop branch for dev environment
+    path: helm-chart/ml-api
+
+    helm:
+      releaseName: ml-api-dev
+      valueFiles:
+        - values-dev.yaml
+
+      values: |
+        image:
+          tag: dev  # Will be overridden by CI/CD
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ml-api-dev
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+
+    syncOptions:
+      - CreateNamespace=true
+
+  revisionHistoryLimit: 5

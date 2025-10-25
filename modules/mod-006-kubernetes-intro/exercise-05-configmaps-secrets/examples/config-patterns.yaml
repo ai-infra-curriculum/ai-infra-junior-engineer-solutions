@@ -1,0 +1,760 @@
+---
+# Common Configuration Patterns for Kubernetes Applications
+# This file demonstrates real-world patterns for ConfigMaps and Secrets
+
+# =============================================================================
+# Pattern 1: 12-Factor App Configuration
+# Separate config from code, use environment variables
+# =============================================================================
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: twelve-factor-config
+  namespace: config-demo
+  labels:
+    pattern: twelve-factor
+data:
+  # Environment-specific settings
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "info"
+
+  # Service discovery
+  DATABASE_HOST: "postgres.database.svc.cluster.local"
+  DATABASE_PORT: "5432"
+  DATABASE_NAME: "myapp"
+
+  REDIS_HOST: "redis.cache.svc.cluster.local"
+  REDIS_PORT: "6379"
+
+  # Application settings
+  MAX_WORKERS: "4"
+  REQUEST_TIMEOUT: "30"
+  ENABLE_METRICS: "true"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: twelve-factor-secrets
+  namespace: config-demo
+  labels:
+    pattern: twelve-factor
+type: Opaque
+stringData:
+  DATABASE_PASSWORD: "secure-db-password"
+  REDIS_PASSWORD: "secure-redis-password"
+  SECRET_KEY: "django-secret-key-here"
+  API_TOKEN: "external-api-token"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: twelve-factor-app
+  namespace: config-demo
+  labels:
+    pattern: twelve-factor
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: twelve-factor-app
+  template:
+    metadata:
+      labels:
+        app: twelve-factor-app
+    spec:
+      containers:
+      - name: app
+        image: busybox:1.36
+        command: ["/bin/sh", "-c", "env | sort && sleep 3600"]
+        # All config as environment variables (12-Factor style)
+        envFrom:
+        - configMapRef:
+            name: twelve-factor-config
+        - secretRef:
+            name: twelve-factor-secrets
+
+# =============================================================================
+# Pattern 2: Layered Configuration
+# Base config + environment-specific overrides
+# =============================================================================
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: base-config
+  namespace: config-demo
+  labels:
+    pattern: layered
+    layer: base
+data:
+  # Common settings for all environments
+  APP_NAME: "MyApp"
+  APP_VERSION: "2.1.0"
+  LOG_FORMAT: "json"
+  METRICS_ENABLED: "true"
+  HEALTH_CHECK_PATH: "/health"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dev-overrides
+  namespace: config-demo
+  labels:
+    pattern: layered
+    layer: dev
+    environment: development
+data:
+  # Development-specific overrides
+  LOG_LEVEL: "debug"
+  DEBUG: "true"
+  DATABASE_HOST: "postgres-dev.svc.cluster.local"
+  CACHE_ENABLED: "false"
+  EXTERNAL_API_URL: "https://api-sandbox.example.com"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prod-overrides
+  namespace: config-demo
+  labels:
+    pattern: layered
+    layer: prod
+    environment: production
+data:
+  # Production-specific overrides
+  LOG_LEVEL: "warn"
+  DEBUG: "false"
+  DATABASE_HOST: "postgres-prod.svc.cluster.local"
+  CACHE_ENABLED: "true"
+  EXTERNAL_API_URL: "https://api.example.com"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: layered-config-app-dev
+  namespace: config-demo
+  labels:
+    pattern: layered
+    environment: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: layered-config-app
+      environment: dev
+  template:
+    metadata:
+      labels:
+        app: layered-config-app
+        environment: dev
+    spec:
+      containers:
+      - name: app
+        image: busybox:1.36
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "=== Layered Configuration (Dev) ==="
+            echo "APP_NAME: $APP_NAME (from base)"
+            echo "LOG_LEVEL: $LOG_LEVEL (from dev override)"
+            echo "DATABASE_HOST: $DATABASE_HOST (from dev override)"
+            echo "CACHE_ENABLED: $CACHE_ENABLED (from dev override)"
+            sleep 3600
+        envFrom:
+        # Load base config first
+        - configMapRef:
+            name: base-config
+        # Then load environment-specific overrides (these take precedence)
+        - configMapRef:
+            name: dev-overrides
+
+# =============================================================================
+# Pattern 3: Sidecar Configuration Injection
+# Init container or sidecar generates configuration
+# =============================================================================
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-template
+  namespace: config-demo
+  labels:
+    pattern: sidecar-injection
+data:
+  config.template.yaml: |
+    application:
+      name: ${APP_NAME}
+      version: ${APP_VERSION}
+    database:
+      host: ${DATABASE_HOST}
+      port: ${DATABASE_PORT}
+      username: ${DATABASE_USERNAME}
+      # Password will be injected from secret
+    logging:
+      level: ${LOG_LEVEL}
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sidecar-config-injection
+  namespace: config-demo
+  labels:
+    pattern: sidecar-injection
+spec:
+  initContainers:
+  # Init container renders config template with secrets
+  - name: config-renderer
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "=== Rendering Configuration Template ==="
+
+        # Read template
+        template=$(cat /config-template/config.template.yaml)
+
+        # Substitute environment variables
+        rendered_config=$(echo "$template" | \
+          sed "s/\${APP_NAME}/$APP_NAME/g" | \
+          sed "s/\${APP_VERSION}/$APP_VERSION/g" | \
+          sed "s/\${DATABASE_HOST}/$DATABASE_HOST/g" | \
+          sed "s/\${DATABASE_PORT}/$DATABASE_PORT/g" | \
+          sed "s/\${DATABASE_USERNAME}/$DATABASE_USERNAME/g" | \
+          sed "s/\${LOG_LEVEL}/$LOG_LEVEL/g")
+
+        # Add secret values (from files, not env vars - more secure)
+        db_password=$(cat /secrets/database-password)
+        rendered_config="${rendered_config}\n      password: ${db_password}"
+
+        # Write final config
+        echo "$rendered_config" > /shared-config/config.yaml
+        echo "Configuration rendered successfully"
+        cat /shared-config/config.yaml
+    env:
+    - name: APP_NAME
+      value: "MyApp"
+    - name: APP_VERSION
+      value: "1.0.0"
+    - name: DATABASE_HOST
+      value: "postgres.svc.cluster.local"
+    - name: DATABASE_PORT
+      value: "5432"
+    - name: DATABASE_USERNAME
+      value: "appuser"
+    - name: LOG_LEVEL
+      value: "info"
+    volumeMounts:
+    - name: config-template
+      mountPath: /config-template
+    - name: secrets
+      mountPath: /secrets
+    - name: shared-config
+      mountPath: /shared-config
+
+  containers:
+  - name: app
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "=== Final Rendered Configuration ==="
+        cat /app-config/config.yaml
+        echo ""
+        echo "Application running with rendered config..."
+        sleep 3600
+    volumeMounts:
+    - name: shared-config
+      mountPath: /app-config
+      readOnly: true
+
+  volumes:
+  - name: config-template
+    configMap:
+      name: config-template
+  - name: secrets
+    secret:
+      secretName: app-secrets
+  - name: shared-config
+    emptyDir: {}
+
+# =============================================================================
+# Pattern 4: External Configuration Management
+# Simulating HashiCorp Vault or similar external config source
+# =============================================================================
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vault-config
+  namespace: config-demo
+  labels:
+    pattern: external-config
+data:
+  # Vault configuration
+  VAULT_ADDR: "https://vault.example.com"
+  VAULT_ROLE: "myapp-role"
+  VAULT_SECRET_PATH: "secret/data/myapp"
+
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vault-sidecar-pattern
+  namespace: config-demo
+  labels:
+    pattern: external-config
+  annotations:
+    # In real Vault deployments, these annotations control injection
+    vault.hashicorp.com/agent-inject: "true"
+    vault.hashicorp.com/role: "myapp-role"
+    vault.hashicorp.com/agent-inject-secret-database: "secret/data/myapp/database"
+spec:
+  containers:
+  - name: app
+    image: busybox:1.36
+    command: ["/bin/sh", "-c"]
+    args:
+      - |
+        echo "=== External Configuration Pattern ==="
+        echo "In production, Vault agent sidecar would inject secrets"
+        echo "Secrets would be continuously rotated and updated"
+        echo ""
+        echo "Simulating secret read from Vault..."
+        if [ -f /vault/secrets/database ]; then
+          cat /vault/secrets/database
+        else
+          echo "Vault secrets not yet injected (this is a simulation)"
+        fi
+        sleep 3600
+    volumeMounts:
+    - name: vault-secrets
+      mountPath: /vault/secrets
+      readOnly: true
+    env:
+    - name: VAULT_ADDR
+      valueFrom:
+        configMapKeyRef:
+          name: vault-config
+          key: VAULT_ADDR
+
+  volumes:
+  - name: vault-secrets
+    emptyDir: {}
+    # In real Vault setup, this would be managed by Vault agent
+
+# =============================================================================
+# Pattern 5: Configuration Hot-Reload with Sidecar
+# Watcher sidecar detects config changes and signals main container
+# =============================================================================
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hot-reload-app
+  namespace: config-demo
+  labels:
+    pattern: hot-reload
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hot-reload-app
+  template:
+    metadata:
+      labels:
+        app: hot-reload-app
+    spec:
+      shareProcessNamespace: true  # Allows containers to signal each other
+      containers:
+      # Main application container
+      - name: app
+        image: busybox:1.36
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            # Trap SIGHUP to reload configuration
+            reload_config() {
+              echo "[$(date)] SIGHUP received - reloading configuration"
+              echo "New LOG_LEVEL: $(cat /etc/config/LOG_LEVEL)"
+              echo "Configuration reloaded successfully"
+            }
+
+            trap reload_config HUP
+
+            echo "=== Application Started ==="
+            echo "PID: $$"
+            echo "Waiting for SIGHUP to reload config..."
+
+            while true; do
+              echo "[$(date)] Running with LOG_LEVEL=$(cat /etc/config/LOG_LEVEL)"
+              sleep 30
+            done
+        volumeMounts:
+        - name: config
+          mountPath: /etc/config
+
+      # Config watcher sidecar
+      - name: config-watcher
+        image: busybox:1.36
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "=== Config Watcher Started ==="
+
+            # Get app container PID
+            while [ ! -f /tmp/app.pid ]; do
+              APP_PID=$(pgrep -f "Running with LOG_LEVEL" | head -1)
+              if [ -n "$APP_PID" ]; then
+                echo "$APP_PID" > /tmp/app.pid
+                echo "Found app container PID: $APP_PID"
+                break
+              fi
+              sleep 2
+            done
+
+            APP_PID=$(cat /tmp/app.pid)
+            last_hash=$(md5sum /etc/config/LOG_LEVEL | cut -d' ' -f1)
+
+            echo "Watching /etc/config for changes..."
+            while true; do
+              current_hash=$(md5sum /etc/config/LOG_LEVEL | cut -d' ' -f1)
+
+              if [ "$current_hash" != "$last_hash" ]; then
+                echo "[$(date)] Configuration change detected!"
+                echo "Sending SIGHUP to process $APP_PID"
+                kill -HUP $APP_PID
+                last_hash=$current_hash
+              fi
+
+              sleep 5
+            done
+        volumeMounts:
+        - name: config
+          mountPath: /etc/config
+        - name: tmp
+          mountPath: /tmp
+
+      volumes:
+      - name: config
+        configMap:
+          name: app-config-literals
+      - name: tmp
+        emptyDir: {}
+
+# =============================================================================
+# Pattern 6: Multi-Tenant Configuration
+# Different configurations for different tenants/customers
+# =============================================================================
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tenant-a-config
+  namespace: config-demo
+  labels:
+    pattern: multi-tenant
+    tenant: tenant-a
+data:
+  TENANT_ID: "tenant-a"
+  TENANT_NAME: "Acme Corporation"
+  FEATURE_ADVANCED: "true"
+  RATE_LIMIT: "1000"
+  DATABASE_NAME: "tenant_a_db"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tenant-b-config
+  namespace: config-demo
+  labels:
+    pattern: multi-tenant
+    tenant: tenant-b
+data:
+  TENANT_ID: "tenant-b"
+  TENANT_NAME: "Globex Inc"
+  FEATURE_ADVANCED: "false"
+  RATE_LIMIT: "100"
+  DATABASE_NAME: "tenant_b_db"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tenant-a-secrets
+  namespace: config-demo
+  labels:
+    pattern: multi-tenant
+    tenant: tenant-a
+type: Opaque
+stringData:
+  api-key: "tenant-a-api-key-12345"
+  webhook-secret: "tenant-a-webhook-secret"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tenant-b-secrets
+  namespace: config-demo
+  labels:
+    pattern: multi-tenant
+    tenant: tenant-b
+type: Opaque
+stringData:
+  api-key: "tenant-b-api-key-67890"
+  webhook-secret: "tenant-b-webhook-secret"
+
+---
+# Deployment for Tenant A
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-tenant-a
+  namespace: config-demo
+  labels:
+    pattern: multi-tenant
+    tenant: tenant-a
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: multi-tenant-app
+      tenant: tenant-a
+  template:
+    metadata:
+      labels:
+        app: multi-tenant-app
+        tenant: tenant-a
+    spec:
+      containers:
+      - name: app
+        image: busybox:1.36
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "=== Tenant-Specific Application ==="
+            echo "Tenant: $TENANT_NAME ($TENANT_ID)"
+            echo "Advanced Features: $FEATURE_ADVANCED"
+            echo "Rate Limit: $RATE_LIMIT req/min"
+            echo "Database: $DATABASE_NAME"
+            echo "API Key: $API_KEY"
+            sleep 3600
+        envFrom:
+        - configMapRef:
+            name: tenant-a-config
+        - secretRef:
+            name: tenant-a-secrets
+
+---
+# Deployment for Tenant B
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-tenant-b
+  namespace: config-demo
+  labels:
+    pattern: multi-tenant
+    tenant: tenant-b
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: multi-tenant-app
+      tenant: tenant-b
+  template:
+    metadata:
+      labels:
+        app: multi-tenant-app
+        tenant: tenant-b
+    spec:
+      containers:
+      - name: app
+        image: busybox:1.36
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "=== Tenant-Specific Application ==="
+            echo "Tenant: $TENANT_NAME ($TENANT_ID)"
+            echo "Advanced Features: $FEATURE_ADVANCED"
+            echo "Rate Limit: $RATE_LIMIT req/min"
+            echo "Database: $DATABASE_NAME"
+            sleep 3600
+        envFrom:
+        - configMapRef:
+            name: tenant-b-config
+        - secretRef:
+            name: tenant-b-secrets
+
+# =============================================================================
+# Pattern 7: Blue-Green Configuration
+# Different configurations for blue/green deployments
+# =============================================================================
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config-blue
+  namespace: config-demo
+  labels:
+    pattern: blue-green
+    deployment: blue
+data:
+  DEPLOYMENT_COLOR: "blue"
+  VERSION: "1.0.0"
+  FEATURE_NEW_UI: "false"
+  DATABASE_POOL_SIZE: "10"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config-green
+  namespace: config-demo
+  labels:
+    pattern: blue-green
+    deployment: green
+data:
+  DEPLOYMENT_COLOR: "green"
+  VERSION: "2.0.0"
+  FEATURE_NEW_UI: "true"
+  DATABASE_POOL_SIZE: "20"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-blue
+  namespace: config-demo
+  labels:
+    pattern: blue-green
+    deployment: blue
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: blue-green-app
+      deployment: blue
+  template:
+    metadata:
+      labels:
+        app: blue-green-app
+        deployment: blue
+    spec:
+      containers:
+      - name: app
+        image: busybox:1.36
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            while true; do
+              echo "[$(date)] $DEPLOYMENT_COLOR deployment (v$VERSION) - New UI: $FEATURE_NEW_UI"
+              sleep 10
+            done
+        envFrom:
+        - configMapRef:
+            name: app-config-blue
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-green
+  namespace: config-demo
+  labels:
+    pattern: blue-green
+    deployment: green
+spec:
+  replicas: 0  # Start with 0 replicas, scale up during cutover
+  selector:
+    matchLabels:
+      app: blue-green-app
+      deployment: green
+  template:
+    metadata:
+      labels:
+        app: blue-green-app
+        deployment: green
+    spec:
+      containers:
+      - name: app
+        image: busybox:1.36
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            while true; do
+              echo "[$(date)] $DEPLOYMENT_COLOR deployment (v$VERSION) - New UI: $FEATURE_NEW_UI"
+              sleep 10
+            done
+        envFrom:
+        - configMapRef:
+            name: app-config-green
+
+---
+# Service that can switch between blue and green
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-service
+  namespace: config-demo
+  labels:
+    pattern: blue-green
+spec:
+  selector:
+    app: blue-green-app
+    deployment: blue  # Change to 'green' to switch traffic
+  ports:
+  - port: 80
+    targetPort: 8080
+
+# =============================================================================
+# Testing these patterns:
+#
+# 1. Deploy all patterns:
+#    kubectl apply -f config-patterns.yaml
+#
+# 2. Test 12-Factor App:
+#    kubectl logs -n config-demo deployment/twelve-factor-app
+#
+# 3. Test Layered Config:
+#    kubectl exec -n config-demo deployment/layered-config-app-dev -- env | grep LOG_LEVEL
+#
+# 4. Test Sidecar Injection:
+#    kubectl logs -n config-demo sidecar-config-injection -c config-renderer
+#    kubectl logs -n config-demo sidecar-config-injection -c app
+#
+# 5. Test Hot-Reload:
+#    kubectl logs -n config-demo deployment/hot-reload-app -c app -f
+#    # In another terminal, edit ConfigMap:
+#    kubectl edit configmap app-config-literals -n config-demo
+#    # Change LOG_LEVEL value and save
+#    # Watch logs to see reload trigger
+#
+# 6. Test Multi-Tenant:
+#    kubectl logs -n config-demo deployment/app-tenant-a
+#    kubectl logs -n config-demo deployment/app-tenant-b
+#
+# 7. Test Blue-Green:
+#    kubectl logs -n config-demo deployment/app-blue -f
+#    # Scale up green:
+#    kubectl scale deployment app-green -n config-demo --replicas=3
+#    # Switch service:
+#    kubectl patch service app-service -n config-demo -p '{"spec":{"selector":{"deployment":"green"}}}'
+#    # Scale down blue:
+#    kubectl scale deployment app-blue -n config-demo --replicas=0
+#
+# =============================================================================

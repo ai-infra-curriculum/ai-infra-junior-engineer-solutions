@@ -1,0 +1,109 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ml-api.fullname" . }}
+  labels:
+    {{- include "ml-api.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      {{- include "ml-api.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "ml-api.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "ml-api.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: {{ .Chart.Name }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+        image: {{ include "ml-api.image" . }}
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.service.targetPort }}
+          protocol: TCP
+        env:
+        - name: MODEL_PATH
+          value: "{{ .Values.persistence.mountPath }}/model.pkl"
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ml-api.fullname" . }}-config
+              key: log_level
+        - name: WORKERS
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "ml-api.fullname" . }}-config
+              key: workers
+        {{- if .Values.secrets.apiKey }}
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "ml-api.fullname" . }}-secrets
+              key: api-key
+        {{- end }}
+        {{- with .Values.env }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        livenessProbe:
+          {{- toYaml .Values.livenessProbe | nindent 10 }}
+        readinessProbe:
+          {{- toYaml .Values.readinessProbe | nindent 10 }}
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        volumeMounts:
+        {{- if .Values.persistence.enabled }}
+        - name: model-storage
+          mountPath: {{ .Values.persistence.mountPath }}
+          readOnly: true
+        {{- end }}
+        - name: tmp
+          mountPath: /tmp
+        {{- with .Values.extraVolumeMounts }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      volumes:
+      {{- if .Values.persistence.enabled }}
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: {{ include "ml-api.fullname" . }}-pvc
+      {{- end }}
+      - name: tmp
+        emptyDir: {}
+      {{- with .Values.extraVolumes }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -1,0 +1,73 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ml-api
+  namespace: argocd
+  labels:
+    app: ml-api
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  project: default
+
+  # Source repository
+  source:
+    repoURL: https://github.com/your-org/ml-api
+    targetRevision: HEAD
+    path: helm-chart/ml-api
+
+    # Helm specific configuration
+    helm:
+      releaseName: ml-api
+
+      # Values files to use
+      valueFiles:
+        - values-prod.yaml
+
+      # Override values
+      values: |
+        replicaCount: 5
+
+        image:
+          tag: v1.0.0
+
+        ingress:
+          hosts:
+            - host: ml-api.example.com
+              paths:
+                - path: /
+                  pathType: Prefix
+
+  # Destination cluster and namespace
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ml-api
+
+  # Sync policy
+  syncPolicy:
+    automated:
+      prune: true      # Remove resources that are no longer defined
+      selfHeal: true   # Automatically sync when drift is detected
+      allowEmpty: false
+
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  # Health check configuration
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas  # Ignore replica count if using HPA
+
+  # Notification configuration
+  revisionHistoryLimit: 10

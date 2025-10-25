@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database for MLflow backend
+  postgres:
+    image: postgres:15-alpine
+    container_name: mlflow-postgres
+    environment:
+      POSTGRES_USER: mlflow
+      POSTGRES_PASSWORD: mlflow
+      POSTGRES_DB: mlflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mlflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mlflow-network
+
+  # MinIO for artifact storage (S3-compatible)
+  minio:
+    image: minio/minio:latest
+    container_name: mlflow-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mlflow-network
+
+  # Create MinIO bucket
+  minio-create-bucket:
+    image: minio/mc:latest
+    container_name: mlflow-minio-create-bucket
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc config host add myminio http://minio:9000 minioadmin minioadmin;
+      /usr/bin/mc mb myminio/mlflow;
+      /usr/bin/mc policy set public myminio/mlflow;
+      exit 0;
+      "
+    networks:
+      - mlflow-network
+
+  # MLflow tracking server
+  mlflow:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mlflow-server
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      # Backend store (PostgreSQL)
+      MLFLOW_BACKEND_STORE_URI: postgresql://mlflow:mlflow@postgres:5432/mlflow
+
+      # Artifact store (MinIO/S3)
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+
+      # Default artifact root
+      MLFLOW_DEFAULT_ARTIFACT_ROOT: s3://mlflow/
+
+    ports:
+      - "5000:5000"
+    command: >
+      mlflow server
+      --backend-store-uri postgresql://mlflow:mlflow@postgres:5432/mlflow
+      --default-artifact-root s3://mlflow/
+      --host 0.0.0.0
+      --port 5000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mlflow-network
+
+volumes:
+  postgres_data:
+  minio_data:
+
+networks:
+  mlflow-network:
+    driver: bridge

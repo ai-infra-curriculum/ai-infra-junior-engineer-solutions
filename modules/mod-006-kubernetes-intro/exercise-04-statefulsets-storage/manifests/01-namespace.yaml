@@ -1,0 +1,9 @@
+---
+# Namespace for StatefulSet exercises
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: statefulset-demo
+  labels:
+    exercise: statefulsets-storage
+    module: mod-006-kubernetes-intro

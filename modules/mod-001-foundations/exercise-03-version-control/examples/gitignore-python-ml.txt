@@ -1,0 +1,310 @@
+# Python and ML Project .gitignore Template
+# Comprehensive template for AI/ML infrastructure projects
+
+# ============================================================================
+# Python
+# ============================================================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.log
+.pytest_cache/
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# ============================================================================
+# Machine Learning / AI Specific
+# ============================================================================
+
+# Model files (large binary files)
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.joblib
+*.pt
+*.pth
+*.ckpt
+*.pb
+*.onnx
+*.tflite
+*.caffemodel
+*.pbtxt
+
+# Model directories
+models/checkpoints/
+models/saved/
+saved_models/
+checkpoints/
+
+# Data files
+data/raw/
+data/processed/
+data/external/
+*.csv
+*.tsv
+*.parquet
+*.feather
+*.arrow
+*.tfrecord
+*.tfrecords
+
+# Large datasets
+datasets/
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+
+# Experiment tracking
+mlruns/
+mlartifacts/
+wandb/
+.neptune/
+runs/
+lightning_logs/
+tensorboard_logs/
+logs/
+
+# Weights & Biases
+wandb/
+
+# DVC (Data Version Control)
+.dvc/cache/
+.dvc/tmp/
+
+# ============================================================================
+# Jupyter Notebooks
+# ============================================================================
+
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# IPython
+profile_default/
+ipython_config.py
+
+# Jupyter Notebook outputs (optional - uncomment if you want to ignore outputs)
+# *.ipynb
+
+# ============================================================================
+# IDEs and Editors
+# ============================================================================
+
+# VSCode
+.vscode/
+*.code-workspace
+
+# PyCharm
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# ============================================================================
+# Environment and Configuration
+# ============================================================================
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+.envrc
+
+# Secrets and credentials
+*.key
+*.pem
+*.p12
+*.pfx
+credentials.json
+service-account.json
+secrets.yaml
+secrets.yml
+
+# Configuration (be careful - some configs should be versioned)
+# config/local.yaml
+# config/secrets.yaml
+
+# ============================================================================
+# Operating System
+# ============================================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# ============================================================================
+# Docker
+# ============================================================================
+
+# Docker volumes
+docker-compose.override.yml
+.dockerignore
+
+# ============================================================================
+# Cloud and Infrastructure
+# ============================================================================
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# AWS
+.aws/
+
+# GCP
+.gcloud/
+gcloud-service-key.json
+
+# Azure
+.azure/
+
+# ============================================================================
+# Database
+# ============================================================================
+
+*.db
+*.sqlite
+*.sqlite3
+*.sql
+
+# ============================================================================
+# CI/CD
+# ============================================================================
+
+# GitHub Actions (usually versioned, but local artifacts)
+.github/workflows/*.log
+
+# ============================================================================
+# Project Specific
+# ============================================================================
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+
+# Build artifacts
+build/
+dist/
+out/
+
+# Cache
+.cache/
+*.cache
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Output files
+output/
+outputs/
+results/
+
+# Documentation builds
+docs/_build/
+docs/.doctrees/
+site/
+
+# ============================================================================
+# Testing
+# ============================================================================
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+
+# ============================================================================
+# Optional: Keep some files for reference
+# ============================================================================
+
+# If you need to keep certain patterns, use:
+# !important-file.csv
+# !models/production/*.h5
+
+# ============================================================================
+# Custom additions for your project
+# ============================================================================
+
+# Add your project-specific ignores below:

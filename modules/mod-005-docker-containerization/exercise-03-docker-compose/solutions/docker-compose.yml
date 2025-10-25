@@ -1,0 +1,121 @@
+version: '3.8'
+
+services:
+  # ML API Service
+  ml-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ml-api
+    ports:
+      - "8000:8000"
+    environment:
+      - MODEL_PATH=/models/model.pt
+      - DATABASE_URL=postgresql://mluser:mlpass@postgres:5432/mldb
+      - REDIS_URL=redis://redis:6379
+      - LOG_LEVEL=info
+    volumes:
+      - ./models:/models:ro
+      - ./data:/data
+    depends_on:
+      - postgres
+      - redis
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - ml-network
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: ml-postgres
+    environment:
+      POSTGRES_USER: mluser
+      POSTGRES_PASSWORD: mlpass
+      POSTGRES_DB: mldb
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mluser"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ml-network
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: ml-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    networks:
+      - ml-network
+
+  # Prometheus Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ml-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    restart: unless-stopped
+    networks:
+      - ml-network
+
+  # Grafana Dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ml-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - ml-network
+
+volumes:
+  postgres-data:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  ml-network:
+    driver: bridge

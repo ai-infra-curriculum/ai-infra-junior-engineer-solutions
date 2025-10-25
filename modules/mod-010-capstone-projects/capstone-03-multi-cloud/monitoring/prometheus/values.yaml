@@ -1,0 +1,131 @@
+# Prometheus Stack Configuration
+
+prometheus:
+  prometheusSpec:
+    retention: 30d
+    retentionSize: "50GB"
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 100Gi
+
+    # Service monitors
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+
+    # Resources
+    resources:
+      requests:
+        cpu: 2
+        memory: 4Gi
+      limits:
+        cpu: 4
+        memory: 8Gi
+
+    # Additional scrape configs for multi-cloud
+    additionalScrapeConfigs:
+      - job_name: 'aws-cloudwatch'
+        static_configs:
+          - targets: ['cloudwatch-exporter:9106']
+            labels:
+              cloud: 'aws'
+
+      - job_name: 'gcp-monitoring'
+        static_configs:
+          - targets: ['stackdriver-exporter:9255']
+            labels:
+              cloud: 'gcp'
+
+      - job_name: 'azure-monitor'
+        static_configs:
+          - targets: ['azure-exporter:9276']
+            labels:
+              cloud: 'azure'
+
+grafana:
+  enabled: true
+  adminPassword: "changeme"
+
+  persistence:
+    enabled: true
+    size: 10Gi
+
+  datasources:
+    datasources.yaml:
+      apiVersion: 1
+      datasources:
+        - name: Prometheus
+          type: prometheus
+          url: http://prometheus-kube-prometheus-prometheus:9090
+          isDefault: true
+
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: 'default'
+          orgId: 1
+          folder: ''
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/default
+
+  dashboards:
+    default:
+      multi-cloud-overview:
+        file: dashboards/multi-cloud-overview.json
+      aws-metrics:
+        file: dashboards/aws-metrics.json
+      gcp-metrics:
+        file: dashboards/gcp-metrics.json
+      azure-metrics:
+        file: dashboards/azure-metrics.json
+
+alertmanager:
+  enabled: true
+
+  config:
+    global:
+      resolve_timeout: 5m
+      slack_api_url: 'SLACK_WEBHOOK_URL'
+
+    route:
+      group_by: ['alertname', 'cloud', 'severity']
+      group_wait: 10s
+      group_interval: 10s
+      repeat_interval: 12h
+      receiver: 'default'
+
+      routes:
+        - match:
+            severity: critical
+          receiver: 'critical-alerts'
+          continue: true
+
+        - match:
+            severity: warning
+          receiver: 'warning-alerts'
+
+    receivers:
+      - name: 'default'
+        slack_configs:
+          - channel: '#ml-platform-alerts'
+            title: 'Alert: {{ .GroupLabels.alertname }}'
+            text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+
+      - name: 'critical-alerts'
+        slack_configs:
+          - channel: '#ml-platform-critical'
+            title: 'CRITICAL: {{ .GroupLabels.alertname }}'
+            text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+
+      - name: 'warning-alerts'
+        slack_configs:
+          - channel: '#ml-platform-warnings'
+            title: 'Warning: {{ .GroupLabels.alertname }}'
+            text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'

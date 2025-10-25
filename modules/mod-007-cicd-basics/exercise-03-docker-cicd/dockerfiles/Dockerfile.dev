@@ -1,0 +1,45 @@
+# Development Dockerfile with Hot Reload
+# For local development with live code reloading
+
+FROM python:3.11
+
+LABEL maintainer="ml-team@example.com"
+LABEL description="Development ML API Docker image with hot reload"
+
+WORKDIR /app
+
+# Install development tools
+RUN apt-get update && apt-get install -y \
+    curl \
+    vim \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY app/requirements.txt .
+
+# Install requirements + development tools
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir \
+        watchdog \
+        ipdb \
+        pytest \
+        black \
+        flake8
+
+# Expose port
+EXPOSE 8000
+
+# Debug port for remote debugging
+EXPOSE 5678
+
+# Environment for development
+ENV PYTHONUNBUFFERED=1
+ENV FLASK_ENV=development
+ENV DEBUG=True
+
+# Use watchdog for hot reload
+CMD ["python", "-m", "watchdog.watchmedo", "auto-restart", \
+     "--directory=/app", "--pattern=*.py", "--recursive", \
+     "--", "python", "main.py"]

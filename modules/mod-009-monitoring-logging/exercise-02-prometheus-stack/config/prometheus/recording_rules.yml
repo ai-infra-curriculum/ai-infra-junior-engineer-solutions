@@ -1,0 +1,278 @@
+# Prometheus Recording Rules for ML Infrastructure
+# Purpose: Pre-compute expensive queries for SLO tracking and dashboards
+# Last Updated: 2025-10-23
+
+groups:
+  # ==========================================
+  # SLO Recording Rules - Availability
+  # ==========================================
+  - name: slo_availability
+    interval: 30s
+    rules:
+      # Total requests (all status codes)
+      - record: slo:http_requests:total:rate5m
+        expr: |
+          sum(rate(http_requests_total{service="inference-gateway"}[5m]))
+        labels:
+          slo_type: availability
+
+      # Successful requests (non-5xx)
+      - record: slo:http_requests:success:rate5m
+        expr: |
+          sum(rate(http_requests_total{service="inference-gateway", status!~"5.."}[5m]))
+        labels:
+          slo_type: availability
+
+      # Failed requests (5xx errors)
+      - record: slo:http_requests:errors:rate5m
+        expr: |
+          sum(rate(http_requests_total{service="inference-gateway", status=~"5.."}[5m]))
+        labels:
+          slo_type: availability
+
+      # Availability percentage (5m window)
+      - record: slo:availability:ratio_rate5m
+        expr: |
+          (
+            sum(rate(http_requests_total{service="inference-gateway", status!~"5.."}[5m]))
+            /
+            sum(rate(http_requests_total{service="inference-gateway"}[5m]))
+          ) * 100
+        labels:
+          slo_type: availability
+          slo_target: "99.5"
+
+      # Availability percentage (30d window for SLO compliance)
+      - record: slo:availability:ratio_rate30d
+        expr: |
+          (
+            sum(rate(http_requests_total{service="inference-gateway", status!~"5.."}[30d]))
+            /
+            sum(rate(http_requests_total{service="inference-gateway"}[30d]))
+          ) * 100
+        labels:
+          slo_type: availability
+          slo_target: "99.5"
+
+      # Error budget remaining (30d) - Target: 99.5% availability (0.5% error budget)
+      - record: slo:availability:error_budget_remaining
+        expr: |
+          (
+            1 - (
+              sum(rate(http_requests_total{service="inference-gateway", status!~"5.."}[30d]))
+              /
+              sum(rate(http_requests_total{service="inference-gateway"}[30d]))
+            )
+          ) / 0.005
+        labels:
+          slo_type: availability
+          slo_target: "99.5"
+          budget_window: "30d"
+
+  # ==========================================
+  # SLO Recording Rules - Latency
+  # ==========================================
+  - name: slo_latency
+    interval: 30s
+    rules:
+      # P50 latency (5m window)
+      - record: slo:http_request_duration:p50:rate5m
+        expr: |
+          histogram_quantile(0.50,
+            sum(rate(http_request_duration_seconds_bucket{service="inference-gateway", endpoint="/predict"}[5m])) by (le)
+          ) * 1000
+        labels:
+          slo_type: latency
+          quantile: "p50"
+
+      # P95 latency (5m window)
+      - record: slo:http_request_duration:p95:rate5m
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{service="inference-gateway", endpoint="/predict"}[5m])) by (le)
+          ) * 1000
+        labels:
+          slo_type: latency
+          quantile: "p95"
+
+      # P99 latency (5m window) - SLO target: < 300ms
+      - record: slo:http_request_duration:p99:rate5m
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(http_request_duration_seconds_bucket{service="inference-gateway", endpoint="/predict"}[5m])) by (le)
+          ) * 1000
+        labels:
+          slo_type: latency
+          quantile: "p99"
+          slo_target: "300"
+
+      # P99 latency (7d window for SLO compliance)
+      - record: slo:http_request_duration:p99:rate7d
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(http_request_duration_seconds_bucket{service="inference-gateway", endpoint="/predict"}[7d])) by (le)
+          ) * 1000
+        labels:
+          slo_type: latency
+          quantile: "p99"
+          slo_target: "300"
+
+      # Latency SLO compliance (% of requests < 300ms)
+      - record: slo:latency:compliance_ratio_rate5m
+        expr: |
+          (
+            sum(rate(http_request_duration_seconds_bucket{service="inference-gateway", endpoint="/predict", le="0.3"}[5m]))
+            /
+            sum(rate(http_request_duration_seconds_count{service="inference-gateway", endpoint="/predict"}[5m]))
+          ) * 100
+        labels:
+          slo_type: latency
+          slo_target: "99.0"
+
+  # ==========================================
+  # Multi-Window Multi-Burn-Rate (MWMBR) Rules
+  # For fast and accurate SLO alerting
+  # ==========================================
+  - name: slo_burn_rate
+    interval: 30s
+    rules:
+      # Availability burn rate - 1h window
+      - record: slo:availability:burn_rate:1h
+        expr: |
+          (
+            1 - (
+              sum(rate(http_requests_total{service="inference-gateway", status!~"5.."}[1h]))
+              /
+              sum(rate(http_requests_total{service="inference-gateway"}[1h]))
+            )
+          ) / (1 - 0.995)  # 0.995 = 99.5% target
+        labels:
+          window: "1h"
+
+      # Availability burn rate - 6h window
+      - record: slo:availability:burn_rate:6h
+        expr: |
+          (
+            1 - (
+              sum(rate(http_requests_total{service="inference-gateway", status!~"5.."}[6h]))
+              /
+              sum(rate(http_requests_total{service="inference-gateway"}[6h]))
+            )
+          ) / (1 - 0.995)
+        labels:
+          window: "6h"
+
+      # Availability burn rate - 3d window
+      - record: slo:availability:burn_rate:3d
+        expr: |
+          (
+            1 - (
+              sum(rate(http_requests_total{service="inference-gateway", status!~"5.."}[3d]))
+              /
+              sum(rate(http_requests_total{service="inference-gateway"}[3d]))
+            )
+          ) / (1 - 0.995)
+        labels:
+          window: "3d"
+
+  # ==========================================
+  # Infrastructure Recording Rules
+  # ==========================================
+  - name: infrastructure_aggregations
+    interval: 1m
+    rules:
+      # CPU usage percentage by container
+      - record: container:cpu_usage:percent
+        expr: |
+          sum(rate(container_cpu_usage_seconds_total{container_label_com_docker_compose_service!=""}[5m])) by (container_label_com_docker_compose_service) * 100
+
+      # Memory usage percentage by container
+      - record: container:memory_usage:percent
+        expr: |
+          (
+            sum(container_memory_working_set_bytes{container_label_com_docker_compose_service!=""}) by (container_label_com_docker_compose_service)
+            /
+            sum(container_spec_memory_limit_bytes{container_label_com_docker_compose_service!=""}) by (container_label_com_docker_compose_service)
+          ) * 100
+
+      # Network receive rate by container (MB/s)
+      - record: container:network_receive:rate5m_mb
+        expr: |
+          sum(rate(container_network_receive_bytes_total{container_label_com_docker_compose_service!=""}[5m])) by (container_label_com_docker_compose_service) / 1024 / 1024
+
+      # Network transmit rate by container (MB/s)
+      - record: container:network_transmit:rate5m_mb
+        expr: |
+          sum(rate(container_network_transmit_bytes_total{container_label_com_docker_compose_service!=""}[5m])) by (container_label_com_docker_compose_service) / 1024 / 1024
+
+  # ==========================================
+  # Application Performance Recording Rules
+  # ==========================================
+  - name: application_performance
+    interval: 30s
+    rules:
+      # Request rate by endpoint
+      - record: http:requests:rate5m
+        expr: |
+          sum(rate(http_requests_total{service="inference-gateway"}[5m])) by (endpoint, method, status)
+
+      # Request duration average by endpoint
+      - record: http:request_duration:avg:rate5m
+        expr: |
+          sum(rate(http_request_duration_seconds_sum{service="inference-gateway"}[5m])) by (endpoint)
+          /
+          sum(rate(http_request_duration_seconds_count{service="inference-gateway"}[5m])) by (endpoint)
+
+      # Error rate percentage by endpoint
+      - record: http:error_rate:percent:rate5m
+        expr: |
+          (
+            sum(rate(http_requests_total{service="inference-gateway", status=~"5.."}[5m])) by (endpoint)
+            /
+            sum(rate(http_requests_total{service="inference-gateway"}[5m])) by (endpoint)
+          ) * 100
+
+  # ==========================================
+  # ML Model Performance Recording Rules
+  # ==========================================
+  - name: ml_model_performance
+    interval: 1m
+    rules:
+      # Model inference rate
+      - record: ml:predictions:rate5m
+        expr: |
+          sum(rate(ml_predictions_total{service="inference-gateway"}[5m])) by (model_name)
+
+      # Average prediction confidence
+      - record: ml:prediction_confidence:avg:rate5m
+        expr: |
+          sum(rate(ml_prediction_confidence_sum{service="inference-gateway"}[5m])) by (model_name)
+          /
+          sum(rate(ml_prediction_confidence_count{service="inference-gateway"}[5m])) by (model_name)
+
+      # Model loading time P95
+      - record: ml:model_load_time:p95:rate5m
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(ml_model_load_duration_seconds_bucket{service="inference-gateway"}[5m])) by (le, model_name)
+          )
+
+  # ==========================================
+  # Health and Availability Recording Rules
+  # ==========================================
+  - name: service_health
+    interval: 30s
+    rules:
+      # Service uptime (0 = down, 1 = up)
+      - record: service:up
+        expr: up{service=~"inference-gateway|prometheus|alertmanager"}
+
+      # Service availability percentage (5m window)
+      - record: service:availability:percent:rate5m
+        expr: |
+          avg_over_time(up{service=~"inference-gateway|prometheus|alertmanager"}[5m]) * 100
+
+      # Count of running containers
+      - record: containers:running:count
+        expr: |
+          count(up{job="docker-discovery"} == 1)

@@ -1,0 +1,214 @@
+version: '3.8'
+
+# Grafana Dashboards for ML Infrastructure Monitoring
+# Extends Exercise 02 Prometheus stack with visualization layer
+
+services:
+  # ===========================
+  # Grafana
+  # ===========================
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: grafana
+    hostname: grafana
+    restart: unless-stopped
+    user: "472"  # Grafana user
+    ports:
+      - "3000:3000"
+    environment:
+      # Admin credentials (change in production!)
+      - GF_SECURITY_ADMIN_USER=${GF_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_ADMIN_PASSWORD:-admin}
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_SECURITY_COOKIE_SECURE=false  # Set to true with HTTPS
+
+      # Server settings
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_SERVER_DOMAIN=localhost
+      - GF_SERVER_SERVE_FROM_SUB_PATH=false
+      - GF_SERVER_ENABLE_GZIP=true
+
+      # Auth settings
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_AUTH_BASIC_ENABLED=true
+      - GF_AUTH_DISABLE_LOGIN_FORM=false
+      - GF_AUTH_DISABLE_SIGNOUT_MENU=false
+
+      # Users and organizations
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_USERS_ALLOW_ORG_CREATE=false
+      - GF_USERS_AUTO_ASSIGN_ORG=true
+      - GF_USERS_AUTO_ASSIGN_ORG_ROLE=Viewer
+      - GF_USERS_DEFAULT_THEME=dark
+
+      # Database (SQLite for development, PostgreSQL for production)
+      - GF_DATABASE_TYPE=sqlite3
+      - GF_DATABASE_PATH=/var/lib/grafana/grafana.db
+
+      # Provisioning
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+      - GF_PATHS_DATA=/var/lib/grafana
+      - GF_PATHS_LOGS=/var/log/grafana
+      - GF_PATHS_PLUGINS=/var/lib/grafana/plugins
+
+      # Unified alerting (enabled by default in v9+)
+      - GF_UNIFIED_ALERTING_ENABLED=true
+      - GF_ALERTING_ENABLED=false  # Disable legacy alerting
+
+      # Feature toggles
+      - GF_FEATURE_TOGGLES_ENABLE=publicDashboards,tempoSearch,tempoBackendSearch,correlations
+
+      # Logging
+      - GF_LOG_LEVEL=info
+      - GF_LOG_MODE=console file
+      - GF_LOG_FILTERS=rendering:debug
+
+      # Metrics
+      - GF_METRICS_ENABLED=true
+      - GF_METRICS_INTERVAL_SECONDS=10
+
+      # Panels and plugins
+      - GF_PANELS_ENABLE_ALPHA=true
+      - GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=false
+
+      # SMTP settings (for alert notifications)
+      - GF_SMTP_ENABLED=${GF_SMTP_ENABLED:-false}
+      - GF_SMTP_HOST=${GF_SMTP_HOST:-smtp.gmail.com:587}
+      - GF_SMTP_USER=${GF_SMTP_USER:-}
+      - GF_SMTP_PASSWORD=${GF_SMTP_PASSWORD:-}
+      - GF_SMTP_FROM_ADDRESS=${GF_SMTP_FROM_ADDRESS:-grafana@company.com}
+      - GF_SMTP_FROM_NAME=${GF_SMTP_FROM_NAME:-Grafana ML Platform}
+
+    volumes:
+      # Grafana persistent data
+      - grafana_data:/var/lib/grafana
+
+      # Provisioning configurations
+      - ./config/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./config/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./config/grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:ro
+      - ./config/grafana/provisioning/notifiers:/etc/grafana/provisioning/notifiers:ro
+
+      # Dashboard JSON files
+      - ./config/dashboards:/var/lib/grafana/dashboards:ro
+
+      # Logs
+      - grafana_logs:/var/log/grafana
+
+    networks:
+      - monitoring
+
+    depends_on:
+      - prometheus
+
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+    labels:
+      com.example.monitoring: "grafana"
+      com.example.team: "ml-platform"
+
+  # ===========================
+  # Prometheus (from Exercise 02)
+  # ===========================
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: prometheus
+    hostname: prometheus
+    restart: unless-stopped
+    user: "65534"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--storage.tsdb.retention.size=10GB'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    volumes:
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - monitoring
+
+  # ===========================
+  # Loki (Log Aggregation) - Optional for Exercise 04
+  # ===========================
+  loki:
+    image: grafana/loki:2.9.3
+    container_name: loki
+    hostname: loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+    networks:
+      - monitoring
+    volumes:
+      - loki_data:/loki
+    labels:
+      com.example.monitoring: "loki"
+
+  # ===========================
+  # Jaeger (Tracing) - From Exercise 01
+  # ===========================
+  jaeger:
+    image: jaegertracing/all-in-one:1.51
+    container_name: jaeger
+    hostname: jaeger
+    restart: unless-stopped
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "4318:4318"    # OTLP HTTP receiver
+    networks:
+      - monitoring
+    labels:
+      com.example.monitoring: "jaeger"
+
+# ===========================
+# Networks
+# ===========================
+networks:
+  monitoring:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# ===========================
+# Volumes
+# ===========================
+volumes:
+  grafana_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${PWD}/data/grafana
+      o: bind
+
+  grafana_logs:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${PWD}/data/grafana-logs
+      o: bind
+
+  prometheus_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${PWD}/data/prometheus
+      o: bind
+
+  loki_data:
+    driver: local
+    driver_opts:
+      type: none
+      device: ${PWD}/data/loki
+      o: bind

@@ -1,0 +1,155 @@
+# Loki Configuration for ML Infrastructure Logging
+# Version: 2.9.3
+# Purpose: Centralized log storage with retention and compaction
+
+# Server configuration
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  log_level: info
+
+# Authentication (disabled for lab, enable for production)
+auth_enabled: false
+
+# Ingester configuration (write path)
+ingester:
+  lifecycler:
+    address: 127.0.0.1
+    ring:
+      kvstore:
+        store: inmemory
+      replication_factor: 1
+    final_sleep: 0s
+
+  # Chunk configuration
+  chunk_idle_period: 5m       # Flush chunks if no writes for 5m
+  chunk_retain_period: 30s    # Keep chunks in memory for 30s after flush
+  chunk_target_size: 1048576  # Target chunk size: 1MB
+  max_chunk_age: 1h          # Force flush after 1 hour
+
+  # WAL (Write-Ahead Log) for durability
+  wal:
+    enabled: true
+    dir: /loki/wal
+    flush_on_shutdown: true
+    replay_memory_ceiling: 1GB
+
+# Storage schema configuration
+schema_config:
+  configs:
+    # Schema v11 (current recommended)
+    - from: 2024-01-01
+      store: boltdb-shipper
+      object_store: filesystem
+      schema: v11
+      index:
+        prefix: index_
+        period: 24h  # Daily indices
+
+# Storage configuration
+storage_config:
+  boltdb_shipper:
+    active_index_directory: /loki/boltdb-shipper-active
+    cache_location: /loki/boltdb-shipper-cache
+    cache_ttl: 24h
+    shared_store: filesystem
+
+  filesystem:
+    directory: /loki/chunks
+
+# Compactor for index cleanup
+compactor:
+  working_directory: /loki/compactor
+  shared_store: filesystem
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
+  retention_delete_worker_count: 150
+
+# Limits configuration
+limits_config:
+  # Ingestion limits
+  ingestion_rate_mb: 10          # 10 MB/s per tenant
+  ingestion_burst_size_mb: 20    # Burst to 20 MB
+
+  # Query limits
+  max_query_length: 721h         # 30 days
+  max_query_parallelism: 32
+  max_streams_per_user: 10000
+  max_entries_limit_per_query: 5000
+
+  # Line size limits
+  max_line_size: 256kb
+  max_line_size_truncate: false  # Reject oversized lines
+
+  # Label limits (cardinality control)
+  max_label_name_length: 1024
+  max_label_value_length: 2048
+  max_label_names_per_series: 30
+
+  # Retention (requires compactor.retention_enabled: true)
+  retention_period: 30d          # Keep logs for 30 days
+
+  # Per-stream rate limiting
+  per_stream_rate_limit: 3MB
+  per_stream_rate_limit_burst: 15MB
+
+  # Reject old samples
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h  # 7 days
+
+  # Split queries for efficiency
+  split_queries_by_interval: 15m
+
+# Query frontend (caching and splitting)
+query_range:
+  align_queries_with_step: true
+  max_retries: 5
+  parallelise_shardable_queries: true
+  cache_results: true
+
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 100
+        ttl: 24h
+
+# Querier configuration
+querier:
+  max_concurrent: 20
+  query_ingesters_within: 3h
+
+# Frontend worker
+frontend_worker:
+  frontend_address: 127.0.0.1:9095
+  parallelism: 10
+  match_max_concurrent: true
+
+# Table manager (deprecated in v2.8+, but kept for compatibility)
+table_manager:
+  retention_deletes_enabled: true
+  retention_period: 720h  # 30 days
+
+# Ruler for log-based alerting
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /loki/rules
+  rule_path: /loki/rules-temp
+  alertmanager_url: http://alertmanager:9093
+  ring:
+    kvstore:
+      store: inmemory
+  enable_api: true
+  enable_alertmanager_v2: true
+
+# Analytics
+analytics:
+  reporting_enabled: false
+
+# Runtime configuration (dynamic updates)
+runtime_config:
+  file: /etc/loki/runtime-config.yaml
+  period: 10s

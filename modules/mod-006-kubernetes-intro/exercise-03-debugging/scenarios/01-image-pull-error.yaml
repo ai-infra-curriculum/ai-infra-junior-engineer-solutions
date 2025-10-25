@@ -1,0 +1,80 @@
+---
+# Scenario 01: Image Pull Error
+#
+# Problem: Pod cannot start due to incorrect image name
+# Symptoms: ImagePullBackOff, ErrImagePull
+# Learning Objective: Understand image pull issues and how to diagnose them
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: debug-scenario-01
+  labels:
+    scenario: image-pull-error
+    exercise: debugging
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: broken-nginx
+  namespace: debug-scenario-01
+  labels:
+    app: broken-nginx
+    scenario: image-pull-error
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: broken-nginx
+  template:
+    metadata:
+      labels:
+        app: broken-nginx
+    spec:
+      containers:
+      - name: nginx
+        # ISSUE: Typo in image name - should be "nginx:1.21" not "ngnix"
+        image: ngnix:1.21-alpine
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: broken-nginx
+  namespace: debug-scenario-01
+spec:
+  selector:
+    app: broken-nginx
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: ClusterIP
+
+---
+# Debugging Commands for this scenario:
+#
+# 1. Check pod status:
+#    kubectl get pods -n debug-scenario-01
+#
+# 2. Describe pod to see events:
+#    kubectl describe pod -n debug-scenario-01 <pod-name>
+#
+# 3. Check pod events:
+#    kubectl get events -n debug-scenario-01 --sort-by='.lastTimestamp'
+#
+# 4. Fix the issue:
+#    kubectl set image deployment/broken-nginx -n debug-scenario-01 nginx=nginx:1.21-alpine
+#
+# 5. Verify fix:
+#    kubectl rollout status deployment/broken-nginx -n debug-scenario-01

@@ -1,0 +1,124 @@
+# AI Infrastructure Engineer - Git Configuration
+# Copy this to ~/.gitconfig and customize with your information
+
+[user]
+    name = Your Name
+    email = your.email@example.com
+
+[core]
+    editor = code --wait
+    autocrlf = input
+    excludesfile = ~/.gitignore_global
+
+[init]
+    defaultBranch = main
+
+[color]
+    ui = auto
+    branch = auto
+    diff = auto
+    status = auto
+
+[color "branch"]
+    current = yellow reverse
+    local = yellow
+    remote = green
+
+[color "diff"]
+    meta = yellow bold
+    frag = magenta bold
+    old = red bold
+    new = green bold
+
+[color "status"]
+    added = green
+    changed = yellow
+    untracked = red
+
+[alias]
+    # Short status
+    st = status -s
+
+    # Short log
+    lg = log --oneline --graph --decorate --all
+    ll = log --pretty=format:'%C(yellow)%h %C(cyan)%ad %C(green)%an%C(auto)%d %Creset%s' --date=relative --graph
+
+    # Aliases
+    co = checkout
+    br = branch
+    ci = commit
+    ca = commit --amend
+    cp = cherry-pick
+    rb = rebase
+
+    # Show changes
+    df = diff
+    dc = diff --cached
+    ds = diff --staged
+
+    # Undo last commit but keep changes
+    undo = reset --soft HEAD^
+
+    # Stash with message
+    stash-save = stash save
+
+    # Show contributors
+    contributors = shortlog --summary --numbered
+
+    # Remove local branches that have been deleted on remote
+    prune-local = fetch --prune
+
+    # Show last commit
+    last = log -1 HEAD --stat
+
+    # List aliases
+    aliases = config --get-regexp alias
+
+    # Amend last commit
+    amend = commit --amend --no-edit
+
+    # Quick commit
+    cm = commit -m
+
+    # Push current branch
+    publish = push -u origin HEAD
+
+    # Pull with rebase
+    up = pull --rebase --autostash
+
+[pull]
+    rebase = false
+
+[push]
+    default = simple
+    followTags = true
+
+[fetch]
+    prune = true
+
+[rebase]
+    autoStash = true
+
+[merge]
+    tool = vscode
+    conflictstyle = diff3
+
+[mergetool "vscode"]
+    cmd = code --wait $MERGED
+
+[diff]
+    tool = vscode
+    colorMoved = zebra
+
+[difftool "vscode"]
+    cmd = code --wait --diff $LOCAL $REMOTE
+
+[credential]
+    helper = store
+
+# GitHub-specific settings
+[url "git@github.com:"]
+    insteadOf = https://github.com/
+
+# Ignore certain files globally
+# Create ~/.gitignore_global with patterns to ignore

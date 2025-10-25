@@ -1,0 +1,65 @@
+name: Model Promotion
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_name:
+        description: 'Model name'
+        required: true
+        default: 'RandomForestClassifier'
+      version:
+        description: 'Model version'
+        required: true
+      target_stage:
+        description: 'Target stage'
+        required: true
+        type: choice
+        options:
+          - Staging
+          - Production
+
+env:
+  MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+
+jobs:
+  promote:
+    name: Promote Model
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.target_stage }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install mlflow scikit-learn
+
+      - name: Promote model
+        run: |
+          python mlflow/promote_model.py \
+            --model-name ${{ github.event.inputs.model_name }} \
+            --version ${{ github.event.inputs.version }} \
+            --stage ${{ github.event.inputs.target_stage }}
+
+      - name: Create Git tag (Production only)
+        if: github.event.inputs.target_stage == 'Production'
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git tag -a "model-${{ github.event.inputs.model_name }}-v${{ github.event.inputs.version }}" \
+            -m "Promote ${{ github.event.inputs.model_name }} v${{ github.event.inputs.version }} to Production"
+          git push origin --tags
+
+      - name: Create summary
+        run: |
+          echo "## Model Promotion Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Model:** ${{ github.event.inputs.model_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ github.event.inputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Stage:** ${{ github.event.inputs.target_stage }}" >> $GITHUB_STEP_SUMMARY

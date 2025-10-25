@@ -1,0 +1,128 @@
+# Sample Git Configuration
+# Copy useful sections to your ~/.gitconfig
+
+[user]
+    name = Your Name
+    email = your.email@example.com
+
+[core]
+    editor = vim
+    autocrlf = input  # Use 'true' on Windows, 'input' on Mac/Linux
+    excludesfile = ~/.gitignore_global
+
+[init]
+    defaultBranch = main
+
+[pull]
+    rebase = false
+
+[push]
+    default = simple
+    followTags = true
+
+[merge]
+    tool = vimdiff
+    conflictstyle = diff3
+
+[diff]
+    tool = vimdiff
+    colorMoved = zebra
+
+[color]
+    ui = auto
+    branch = auto
+    diff = auto
+    status = auto
+
+[alias]
+    # Shortcuts
+    st = status
+    co = checkout
+    br = branch
+    ci = commit
+    unstage = reset HEAD --
+
+    # Logging
+    lg = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --date=relative
+    lol = log --graph --decorate --oneline --all
+    ls = log --pretty=format:"%C(yellow)%h%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate
+    ll = log --pretty=format:"%C(yellow)%h%Cred%d\\ %Creset%s%Cblue\\ [%cn]" --decorate --numstat
+
+    # Status shortcuts
+    s = status -s
+    stat = status
+
+    # Diff shortcuts
+    d = diff
+    dc = diff --cached
+    ds = diff --staged
+
+    # Commit shortcuts
+    cm = commit -m
+    ca = commit -am
+    amend = commit --amend
+    fix = commit --fixup
+
+    # Branch operations
+    br-local = branch
+    br-remote = branch -r
+    br-all = branch -a
+    br-merged = branch --merged
+    br-clean = "!git branch --merged | grep -v '\\*\\|main\\|master\\|develop' | xargs -n 1 git branch -d"
+
+    # Undo operations
+    undo = reset --soft HEAD^
+    redo = reset 'HEAD@{1}'
+    unstage = reset HEAD --
+
+    # Stash operations
+    save = stash save
+    pop = stash pop
+    apply = stash apply
+
+    # Remote operations
+    sync = !git fetch --all && git pull --rebase
+    publish = push -u origin HEAD
+    unpublish = push origin --delete
+
+    # Advanced
+    contributors = shortlog --summary --numbered
+    today = log --since=midnight --author='Your Name' --oneline
+    recent = for-each-ref --count=10 --sort=-committerdate refs/heads/ --format='%(refname:short)'
+
+    # Find commits
+    find = log --all --oneline --grep
+    search = "!f() { git log --all --oneline --grep=\"$1\"; }; f"
+
+    # Clean up
+    cleanup = "!git branch --merged | grep -v '\\*\\|main\\|master\\|develop' | xargs -n 1 git branch -d && git remote prune origin"
+
+    # Git Flow helpers
+    feature = "!f() { git checkout -b feature/$1 develop; }; f"
+    bugfix = "!f() { git checkout -b bugfix/$1 develop; }; f"
+    hotfix = "!f() { git checkout -b hotfix/$1 main; }; f"
+    release = "!f() { git checkout -b release/$1 develop; }; f"
+
+    # Conventional commits helpers
+    feat = "!f() { git commit -m \"feat: $1\"; }; f"
+    fix = "!f() { git commit -m \"fix: $1\"; }; f"
+    docs = "!f() { git commit -m \"docs: $1\"; }; f"
+    refactor = "!f() { git commit -m \"refactor: $1\"; }; f"
+    test = "!f() { git commit -m \"test: $1\"; }; f"
+    chore = "!f() { git commit -m \"chore: $1\"; }; f"
+
+[help]
+    autocorrect = 1
+
+[credential]
+    helper = cache --timeout=3600
+
+[filter "lfs"]
+    clean = git-lfs clean -- %f
+    smudge = git-lfs smudge -- %f
+    process = git-lfs filter-process
+    required = true
+
+# Include additional config files
+# [include]
+#     path = ~/.gitconfig.local

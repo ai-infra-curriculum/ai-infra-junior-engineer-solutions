@@ -1,0 +1,73 @@
+# Blackbox Exporter Configuration
+# Purpose: Probe endpoints for availability and response time monitoring
+
+modules:
+  # HTTP 2xx probe - Basic health check
+  http_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 201, 202, 204]
+      method: GET
+      follow_redirects: true
+      preferred_ip_protocol: "ip4"
+      ip_protocol_fallback: false
+      fail_if_not_ssl: false
+
+  # HTTP 2xx probe with TLS verification
+  http_2xx_tls:
+    prober: http
+    timeout: 5s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      method: GET
+      follow_redirects: true
+      fail_if_not_ssl: true
+      tls_config:
+        insecure_skip_verify: false
+
+  # HTTP POST probe (for API health checks)
+  http_post_2xx:
+    prober: http
+    timeout: 10s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 201]
+      method: POST
+      headers:
+        Content-Type: application/json
+      body: '{"health_check": true}'
+
+  # TCP probe (for database, cache services)
+  tcp_connect:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      preferred_ip_protocol: "ip4"
+
+  # ICMP probe (ping)
+  icmp:
+    prober: icmp
+    timeout: 5s
+    icmp:
+      preferred_ip_protocol: "ip4"
+
+  # HTTP slow probe (for detecting latency issues)
+  http_2xx_slow:
+    prober: http
+    timeout: 30s
+    http:
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      method: GET
+      follow_redirects: true
+
+  # DNS probe
+  dns_query:
+    prober: dns
+    timeout: 5s
+    dns:
+      query_name: "inference-gateway"
+      query_type: "A"

@@ -1,0 +1,60 @@
+---
+# Namespace for ML Workloads exercises
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ml-workloads
+  labels:
+    exercise: ml-workloads
+    module: mod-006-kubernetes-intro
+    purpose: machine-learning
+
+---
+# Resource Quota for ML namespace
+# Limits total resources to prevent cluster overload
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: ml-compute-quota
+  namespace: ml-workloads
+spec:
+  hard:
+    requests.cpu: "20"
+    requests.memory: 40Gi
+    requests.nvidia.com/gpu: "4"
+    limits.cpu: "40"
+    limits.memory: 80Gi
+    limits.nvidia.com/gpu: "4"
+    persistentvolumeclaims: "10"
+    pods: "50"
+
+---
+# Limit Range - Default resource limits for pods
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: ml-limit-range
+  namespace: ml-workloads
+spec:
+  limits:
+  # Default limits for containers
+  - max:
+      cpu: "8"
+      memory: 16Gi
+      nvidia.com/gpu: "2"
+    min:
+      cpu: "100m"
+      memory: 128Mi
+    default:
+      cpu: "1"
+      memory: 2Gi
+    defaultRequest:
+      cpu: "500m"
+      memory: 1Gi
+    type: Container
+  # Limits for PersistentVolumeClaims
+  - max:
+      storage: 100Gi
+    min:
+      storage: 1Gi
+    type: PersistentVolumeClaim

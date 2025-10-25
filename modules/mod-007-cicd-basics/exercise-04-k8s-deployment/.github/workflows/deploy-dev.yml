@@ -1,0 +1,77 @@
+name: Deploy to Dev
+
+on:
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+env:
+  ENVIRONMENT: dev
+  NAMESPACE: ml-api-dev
+
+jobs:
+  deploy:
+    name: Deploy to Development
+    runs-on: ubuntu-latest
+    environment:
+      name: development
+      url: https://ml-api-dev.example.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure kubectl
+        uses: azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.KUBECONFIG_DEV }}
+
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          version: '3.12.0'
+
+      - name: Lint Helm chart
+        run: |
+          helm lint ./helm-chart/ml-api
+
+      - name: Deploy with Helm
+        run: |
+          helm upgrade --install ml-api ./helm-chart/ml-api \
+            --namespace ${{ env.NAMESPACE }} \
+            --create-namespace \
+            --values helm-chart/ml-api/values-dev.yaml \
+            --set image.tag=${{ github.sha }} \
+            --wait \
+            --timeout 5m
+
+      - name: Verify deployment
+        run: |
+          kubectl rollout status deployment/ml-api -n ${{ env.NAMESPACE }}
+          kubectl get pods -n ${{ env.NAMESPACE }} -l "app.kubernetes.io/name=ml-api"
+
+      - name: Run smoke tests
+        run: |
+          chmod +x ./scripts/test-deployment.sh
+          ./scripts/test-deployment.sh --environment dev --skip-port-forward
+
+      - name: Create deployment summary
+        run: |
+          echo "## Deployment to Dev Environment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ✅ Deployed successfully" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Namespace:** ${{ env.NAMESPACE }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Pods" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          kubectl get pods -n ${{ env.NAMESPACE }} -l "app.kubernetes.io/name=ml-api" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "## ❌ Deployment Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Deployment to dev environment failed. Check the logs above." >> $GITHUB_STEP_SUMMARY

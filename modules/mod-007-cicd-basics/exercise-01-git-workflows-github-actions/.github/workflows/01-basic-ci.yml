@@ -1,0 +1,117 @@
+name: Basic CI
+
+# Trigger on pushes to main/develop and all pull requests
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  hello-world:
+    name: Hello World Job
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Say hello
+        run: echo "Hello from GitHub Actions!"
+
+      - name: Show environment information
+        run: |
+          echo "========================================="
+          echo "GitHub Actions Environment"
+          echo "========================================="
+          echo "Event: ${{ github.event_name }}"
+          echo "Branch: ${{ github.ref }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Actor: ${{ github.actor }}"
+          echo "Repository: ${{ github.repository }}"
+          echo "Workflow: ${{ github.workflow }}"
+          echo "========================================="
+
+      - name: Show system information
+        run: |
+          echo "========================================="
+          echo "System Information"
+          echo "========================================="
+          echo "OS: $(uname -s)"
+          echo "Kernel: $(uname -r)"
+          echo "Architecture: $(uname -m)"
+          echo "CPU: $(nproc) cores"
+          echo "Memory: $(free -h | awk '/^Mem:/ {print $2}')"
+          echo "Disk: $(df -h / | awk 'NR==2 {print $2}')"
+          echo "========================================="
+
+      - name: List repository contents
+        run: |
+          echo "========================================="
+          echo "Repository Contents"
+          echo "========================================="
+          ls -lah
+          echo "========================================="
+
+      - name: Find Python files
+        run: |
+          echo "========================================="
+          echo "Python Files"
+          echo "========================================="
+          find . -name "*.py" -type f
+          echo "========================================="
+
+  check-python:
+    name: Check Python Installation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Display Python version
+        run: |
+          python --version
+          python -c "import sys; print(f'Python {sys.version}')"
+
+      - name: Display pip version
+        run: pip --version
+
+      - name: Check available packages
+        run: pip list
+
+  workspace-info:
+    name: Workspace Information
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Show workspace
+        run: |
+          echo "Workspace: ${{ github.workspace }}"
+          pwd
+          ls -la
+
+      - name: Show environment variables
+        run: |
+          echo "========================================="
+          echo "Selected Environment Variables"
+          echo "========================================="
+          echo "GITHUB_WORKFLOW: $GITHUB_WORKFLOW"
+          echo "GITHUB_RUN_ID: $GITHUB_RUN_ID"
+          echo "GITHUB_RUN_NUMBER: $GITHUB_RUN_NUMBER"
+          echo "GITHUB_ACTION: $GITHUB_ACTION"
+          echo "GITHUB_ACTOR: $GITHUB_ACTOR"
+          echo "GITHUB_REPOSITORY: $GITHUB_REPOSITORY"
+          echo "GITHUB_EVENT_NAME: $GITHUB_EVENT_NAME"
+          echo "GITHUB_REF: $GITHUB_REF"
+          echo "GITHUB_HEAD_REF: $GITHUB_HEAD_REF"
+          echo "GITHUB_BASE_REF: $GITHUB_BASE_REF"
+          echo "========================================="

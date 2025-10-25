@@ -1,0 +1,258 @@
+---
+# Scenario 05: Configuration Issues
+#
+# Problem: Missing ConfigMaps, wrong environment variables, volume mount issues
+# Symptoms: CreateContainerConfigError, pods not starting
+# Learning Objective: Debug configuration-related problems
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: debug-scenario-05
+  labels:
+    scenario: config-issues
+    exercise: debugging
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-secrets
+  namespace: debug-scenario-05
+type: Opaque
+data:
+  # Base64 encoded values
+  api-key: c3VwZXItc2VjcmV0LWFwaS1rZXk=  # "super-secret-api-key"
+  db-password: cGFzc3dvcmQxMjM=  # "password123"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: missing-configmap-app
+  namespace: debug-scenario-05
+  labels:
+    app: missing-configmap
+    scenario: config-issues
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: missing-configmap
+  template:
+    metadata:
+      labels:
+        app: missing-configmap
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.21-alpine
+        envFrom:
+        - configMapRef:
+            # ISSUE: ConfigMap doesn't exist
+            name: nonexistent-config
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: missing-secret-key-app
+  namespace: debug-scenario-05
+  labels:
+    app: missing-secret-key
+    scenario: config-issues
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: missing-secret-key
+  template:
+    metadata:
+      labels:
+        app: missing-secret-key
+    spec:
+      containers:
+      - name: app
+        image: busybox:latest
+        command:
+        - sleep
+        - "3600"
+        env:
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              # ISSUE: Key doesn't exist in secret (should be "api-key")
+              key: apikey
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "50m"
+          limits:
+            memory: "64Mi"
+            cpu: "100m"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wrong-volume-mount
+  namespace: debug-scenario-05
+  labels:
+    app: wrong-volume
+    scenario: config-issues
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wrong-volume
+  template:
+    metadata:
+      labels:
+        app: wrong-volume
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.21-alpine
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/config
+        - name: secret-volume
+          # ISSUE: Mounting to read-only system directory
+          mountPath: /bin
+          readOnly: true
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+      volumes:
+      - name: config-volume
+        emptyDir: {}
+      - name: secret-volume
+        secret:
+          secretName: app-secrets
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: valid-config
+  namespace: debug-scenario-05
+data:
+  app.conf: |
+    server {
+      listen 80;
+      server_name localhost;
+      location / {
+        return 200 "Configuration loaded successfully!\n";
+      }
+    }
+  database.url: "postgresql://localhost:5432/mydb"
+  log.level: "info"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fixed-config-app
+  namespace: debug-scenario-05
+  labels:
+    app: fixed-config
+    scenario: config-issues
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fixed-config
+  template:
+    metadata:
+      labels:
+        app: fixed-config
+    spec:
+      containers:
+      - name: app
+        image: nginx:1.21-alpine
+        env:
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: api-key  # Correct key name
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: db-password
+        envFrom:
+        - configMapRef:
+            name: valid-config  # ConfigMap exists
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/conf.d
+          readOnly: true
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: valid-config
+
+---
+# Debugging Commands for this scenario:
+#
+# 1. Check pod status (look for CreateContainerConfigError):
+#    kubectl get pods -n debug-scenario-05
+#
+# 2. Describe pod to see configuration errors:
+#    kubectl describe pod -n debug-scenario-05 <missing-configmap-pod>
+#    # Look for "Warning  Failed" events mentioning missing ConfigMap
+#
+# 3. List available ConfigMaps:
+#    kubectl get configmaps -n debug-scenario-05
+#
+# 4. Check Secret exists and has correct keys:
+#    kubectl get secret app-secrets -n debug-scenario-05 -o yaml
+#    kubectl get secret app-secrets -n debug-scenario-05 -o jsonpath='{.data}' | jq
+#
+# 5. Decode secret values:
+#    kubectl get secret app-secrets -n debug-scenario-05 -o jsonpath='{.data.api-key}' | base64 -d
+#
+# 6. Check events for configuration errors:
+#    kubectl get events -n debug-scenario-05 --sort-by='.lastTimestamp'
+#
+# 7. Fix missing-configmap-app:
+#    # Create the missing ConfigMap:
+#    kubectl create configmap nonexistent-config -n debug-scenario-05 \
+#      --from-literal=app.env=production \
+#      --from-literal=log.level=info
+#
+# 8. Fix missing-secret-key-app:
+#    kubectl set env deployment/missing-secret-key-app -n debug-scenario-05 \
+#      API_KEY- # Remove incorrect env var
+#    kubectl set env deployment/missing-secret-key-app -n debug-scenario-05 \
+#      --from=secret/app-secrets --keys=api-key
+#
+# 9. Verify ConfigMap is mounted correctly:
+#    kubectl exec -n debug-scenario-05 <pod-name> -- ls -la /etc/config
+#    kubectl exec -n debug-scenario-05 <pod-name> -- cat /etc/config/app.conf
+#
+# 10. Verify environment variables are set:
+#     kubectl exec -n debug-scenario-05 <pod-name> -- env | grep -E 'API_KEY|DATABASE'
+#
+# 11. Check volume mounts:
+#     kubectl describe pod -n debug-scenario-05 <pod-name> | grep -A 10 "Mounts:"

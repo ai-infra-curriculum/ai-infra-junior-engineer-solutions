@@ -1,0 +1,28 @@
+FROM jupyter/scipy-notebook:latest
+
+USER root
+
+# Install additional packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+USER ${NB_UID}
+
+# Install ML packages
+COPY requirements-jupyter.txt /tmp/
+RUN pip install --no-cache-dir -r /tmp/requirements-jupyter.txt
+
+# Install Jupyter extensions
+RUN jupyter labextension install @jupyterlab/toc && \
+    jupyter labextension install @jupyter-widgets/jupyterlab-manager
+
+# Create directories
+RUN mkdir -p /home/jovyan/work /home/jovyan/data /home/jovyan/models
+
+WORKDIR /home/jovyan/work
+
+EXPOSE 8888
+
+CMD ["start-notebook.sh"]

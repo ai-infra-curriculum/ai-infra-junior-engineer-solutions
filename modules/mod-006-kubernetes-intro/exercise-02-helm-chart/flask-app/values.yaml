@@ -1,0 +1,372 @@
+# Default values for flask-app
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Number of replicas for the deployment
+replicaCount: 2
+
+# Container image configuration
+image:
+  repository: tiangolo/uwsgi-nginx-flask
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion
+  tag: "python3.9"
+
+# Image pull secrets for private registries
+imagePullSecrets: []
+
+# Override chart name
+nameOverride: ""
+# Override full name
+fullnameOverride: ""
+
+# Service account configuration
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+# Annotations to add to the pod
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "9090"
+  prometheus.io/path: "/metrics"
+
+# Pod security context
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 2000
+  seccompProfile:
+    type: RuntimeDefault
+
+# Container security context
+securityContext:
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false  # Flask needs write for temp files
+  allowPrivilegeEscalation: false
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# Service configuration
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 80
+  # Optional annotations for service
+  annotations: {}
+  # Optional: specify a specific ClusterIP
+  # clusterIP: ""
+
+# Ingress configuration
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+    # nginx.ingress.kubernetes.io/rate-limit: "100"
+    # nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: flask-app.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: flask-app-tls
+  #    hosts:
+  #      - flask-app.local
+
+# Resource limits and requests
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Horizontal Pod Autoscaler configuration
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Node selector for pod assignment
+nodeSelector: {}
+
+# Tolerations for pod assignment
+tolerations: []
+
+# Affinity and anti-affinity rules
+affinity:
+  # Prefer to spread pods across different nodes
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - flask-app
+          topologyKey: kubernetes.io/hostname
+
+# Flask application configuration
+flask:
+  # Environment (development, staging, production)
+  env: production
+  # Enable debug mode (should be false in production)
+  debug: false
+  # Secret key for Flask sessions (change in production!)
+  secretKey: "change-me-in-production-use-vault-or-sealed-secrets"
+  # Application name
+  appName: "Flask ML Inference API"
+  # Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+  logLevel: "INFO"
+  # Maximum content length for requests (in bytes)
+  maxContentLength: 16777216  # 16MB
+  # JSON sort keys
+  jsonSortKeys: true
+
+# Database configuration (PostgreSQL)
+database:
+  enabled: false
+  # Hostname of the database
+  host: postgresql
+  # Database port
+  port: 5432
+  # Database name
+  name: flaskdb
+  # Database username
+  username: flaskuser
+  # Database password (should use Sealed Secrets or external secret manager in production)
+  password: ""  # Empty by default, will generate random if not set
+  # SSL mode (disable, allow, prefer, require, verify-ca, verify-full)
+  sslMode: "prefer"
+  # Connection pool settings
+  poolSize: 5
+  maxOverflow: 10
+
+# Redis configuration (for caching/sessions)
+redis:
+  enabled: false
+  # Hostname of Redis
+  host: redis-master
+  # Redis port
+  port: 6379
+  # Redis database number
+  database: 0
+  # Redis password (leave empty if no auth)
+  password: ""
+  # Connection pool settings
+  maxConnections: 50
+
+# ML Model configuration
+mlModel:
+  # Enable ML inference features
+  enabled: false
+  # Model path (can be local or S3/GCS URL)
+  modelPath: "/models/model.pkl"
+  # Model version
+  modelVersion: "1.0.0"
+  # Model type (sklearn, pytorch, tensorflow, onnx)
+  modelType: "sklearn"
+  # Batch inference settings
+  batchSize: 32
+  batchTimeout: 100  # milliseconds
+  # Model warm-up on startup
+  warmup: true
+  # Number of worker threads for inference
+  workers: 2
+
+# Health check configuration
+healthCheck:
+  # Liveness probe configuration
+  livenessProbe:
+    enabled: true
+    path: /health
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+    successThreshold: 1
+  # Readiness probe configuration
+  readinessProbe:
+    enabled: true
+    path: /ready
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+    successThreshold: 1
+  # Startup probe configuration (for slow-starting containers)
+  startupProbe:
+    enabled: false
+    path: /health
+    initialDelaySeconds: 0
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 30
+    successThreshold: 1
+
+# Persistence configuration (for model storage, logs, etc.)
+persistence:
+  enabled: false
+  # Storage class (leave empty for default)
+  storageClass: ""
+  # Access mode
+  accessMode: ReadWriteOnce
+  # Size of the persistent volume
+  size: 1Gi
+  # Mount path
+  mountPath: /data
+  # Annotations
+  annotations: {}
+
+# Pod Disruption Budget
+podDisruptionBudget:
+  enabled: false
+  # Either minAvailable or maxUnavailable (not both)
+  minAvailable: 1
+  # maxUnavailable: 1
+
+# Network Policy
+networkPolicy:
+  enabled: false
+  # Ingress rules
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 80
+  # Egress rules
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 5432  # PostgreSQL
+        - protocol: TCP
+          port: 6379  # Redis
+
+# ServiceMonitor for Prometheus Operator
+serviceMonitor:
+  enabled: false
+  # Scrape interval
+  interval: 30s
+  # Scrape timeout
+  scrapeTimeout: 10s
+  # Additional labels for ServiceMonitor
+  labels: {}
+  # Metric relabelings
+  metricRelabelings: []
+  # Relabelings
+  relabelings: []
+
+# PostgreSQL subchart values (from Bitnami)
+postgresql:
+  enabled: false
+  auth:
+    postgresPassword: "postgres"
+    username: "flaskuser"
+    password: "flaskpass"
+    database: "flaskdb"
+  primary:
+    persistence:
+      enabled: true
+      size: 1Gi
+    resources:
+      limits:
+        memory: 256Mi
+        cpu: 250m
+      requests:
+        memory: 128Mi
+        cpu: 100m
+
+# Redis subchart values (from Bitnami)
+redis:
+  enabled: false
+  architecture: standalone
+  auth:
+    enabled: false
+  master:
+    persistence:
+      enabled: false
+    resources:
+      limits:
+        memory: 128Mi
+        cpu: 100m
+      requests:
+        memory: 64Mi
+        cpu: 50m
+
+# Extra environment variables
+extraEnv: []
+  # - name: CUSTOM_VAR
+  #   value: "custom-value"
+
+# Extra environment variables from ConfigMaps or Secrets
+extraEnvFrom: []
+  # - configMapRef:
+  #     name: extra-config
+  # - secretRef:
+  #     name: extra-secrets
+
+# Extra volumes
+extraVolumes: []
+  # - name: extra-volume
+  #   emptyDir: {}
+
+# Extra volume mounts
+extraVolumeMounts: []
+  # - name: extra-volume
+  #   mountPath: /extra
+
+# Init containers
+initContainers: []
+  # - name: wait-for-db
+  #   image: busybox:latest
+  #   command: ['sh', '-c', 'until nc -z postgresql 5432; do echo waiting for db; sleep 2; done;']
+
+# Sidecar containers
+sidecars: []
+  # - name: log-shipper
+  #   image: fluent/fluent-bit:latest
+  #   volumeMounts:
+  #     - name: logs
+  #       mountPath: /var/log
+
+# Lifecycle hooks
+lifecycle: {}
+  # preStop:
+  #   exec:
+  #     command: ["/bin/sh", "-c", "sleep 15"]
+
+# Priority class name
+priorityClassName: ""
+
+# Deployment strategy
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+
+# Revision history limit
+revisionHistoryLimit: 10
+
+# Enable this to debug
+debug: false

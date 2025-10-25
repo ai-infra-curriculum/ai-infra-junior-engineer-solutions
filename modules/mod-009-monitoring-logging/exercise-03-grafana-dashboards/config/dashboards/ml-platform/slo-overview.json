@@ -1,0 +1,525 @@
+{
+  "dashboard": {
+    "uid": "slo-overview",
+    "title": "SLO Overview - ML Inference Platform",
+    "tags": [
+      "SLO",
+      "ML Platform",
+      "Production"
+    ],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "version": 1,
+    "refresh": "30s",
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    },
+    "timepicker": {
+      "refresh_intervals": [
+        "10s",
+        "30s",
+        "1m",
+        "5m",
+        "15m",
+        "30m",
+        "1h",
+        "2h",
+        "1d"
+      ]
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "SLO Compliance Status",
+        "type": "row",
+        "gridPos": {
+          "x": 0,
+          "y": 0,
+          "w": 24,
+          "h": 1
+        },
+        "collapsed": false,
+        "panels": []
+      },
+      {
+        "id": 2,
+        "title": "Availability SLO (30d)",
+        "type": "gauge",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": {
+          "x": 0,
+          "y": 1,
+          "w": 6,
+          "h": 6
+        },
+        "targets": [
+          {
+            "expr": "slo:availability:ratio_rate30d",
+            "refId": "A",
+            "instant": true
+          }
+        ],
+        "options": {
+          "showThresholdLabels": false,
+          "showThresholdMarkers": true,
+          "orientation": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "min": 99,
+            "max": 100,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": null,
+                  "color": "red"
+                },
+                {
+                  "value": 99.5,
+                  "color": "green"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 3,
+        "title": "Latency P99 (7d) - Target < 300ms",
+        "type": "gauge",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": {
+          "x": 6,
+          "y": 1,
+          "w": 6,
+          "h": 6
+        },
+        "targets": [
+          {
+            "expr": "slo:http_request_duration:p99:rate7d",
+            "refId": "A",
+            "instant": true
+          }
+        ],
+        "options": {
+          "showThresholdLabels": false,
+          "showThresholdMarkers": true,
+          "orientation": "auto"
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "ms",
+            "min": 0,
+            "max": 500,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": null,
+                  "color": "green"
+                },
+                {
+                  "value": 300,
+                  "color": "yellow"
+                },
+                {
+                  "value": 400,
+                  "color": "red"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Error Budget Remaining",
+        "type": "stat",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": {
+          "x": 12,
+          "y": 1,
+          "w": 6,
+          "h": 6
+        },
+        "targets": [
+          {
+            "expr": "slo:availability:error_budget_remaining * 100",
+            "refId": "A",
+            "instant": true
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value",
+          "justifyMode": "auto",
+          "textMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": [
+              "lastNotNull"
+            ]
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "decimals": 2,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": null,
+                  "color": "red"
+                },
+                {
+                  "value": 10,
+                  "color": "yellow"
+                },
+                {
+                  "value": 50,
+                  "color": "green"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Burn Rate (1h)",
+        "type": "stat",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": {
+          "x": 18,
+          "y": 1,
+          "w": 6,
+          "h": 6
+        },
+        "targets": [
+          {
+            "expr": "slo:availability:burn_rate:1h",
+            "refId": "A",
+            "instant": true
+          }
+        ],
+        "options": {
+          "graphMode": "area",
+          "colorMode": "value",
+          "justifyMode": "auto",
+          "textMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": [
+              "lastNotNull"
+            ]
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "decimals": 2,
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {
+                  "value": null,
+                  "color": "green"
+                },
+                {
+                  "value": 6,
+                  "color": "yellow"
+                },
+                {
+                  "value": 14,
+                  "color": "red"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "Availability & Error Budget Trends",
+        "type": "row",
+        "gridPos": {
+          "x": 0,
+          "y": 7,
+          "w": 24,
+          "h": 1
+        },
+        "collapsed": false,
+        "panels": []
+      },
+      {
+        "id": 7,
+        "title": "Availability Percentage (5m windows)",
+        "type": "timeseries",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": {
+          "x": 0,
+          "y": 8,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "slo:availability:ratio_rate5m",
+            "refId": "A",
+            "legendFormat": "Availability %"
+          }
+        ],
+        "options": {
+          "legend": {
+            "calcs": [
+              "mean",
+              "lastNotNull",
+              "max"
+            ],
+            "displayMode": "table",
+            "placement": "bottom",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "barAlignment": 0,
+              "lineWidth": 1,
+              "fillOpacity": 10,
+              "gradientMode": "none",
+              "spanNulls": false,
+              "showPoints": "never",
+              "pointSize": 5,
+              "stacking": {
+                "mode": "none",
+                "group": "A"
+              },
+              "axisPlacement": "auto",
+              "axisLabel": "",
+              "scaleDistribution": {
+                "type": "linear"
+              }
+            },
+            "unit": "percent",
+            "decimals": 2
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Error Budget Consumption Rate",
+        "type": "timeseries",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": {
+          "x": 12,
+          "y": 8,
+          "w": 12,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "slo:availability:burn_rate:1h",
+            "refId": "A",
+            "legendFormat": "1h burn rate"
+          },
+          {
+            "expr": "slo:availability:burn_rate:6h",
+            "refId": "B",
+            "legendFormat": "6h burn rate"
+          },
+          {
+            "expr": "slo:availability:burn_rate:3d",
+            "refId": "C",
+            "legendFormat": "3d burn rate"
+          }
+        ],
+        "options": {
+          "legend": {
+            "calcs": [
+              "mean",
+              "lastNotNull",
+              "max"
+            ],
+            "displayMode": "table",
+            "placement": "bottom",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "barAlignment": 0,
+              "lineWidth": 1,
+              "fillOpacity": 10,
+              "gradientMode": "none",
+              "spanNulls": false,
+              "showPoints": "never",
+              "pointSize": 5,
+              "stacking": {
+                "mode": "none",
+                "group": "A"
+              },
+              "axisPlacement": "auto",
+              "axisLabel": "",
+              "scaleDistribution": {
+                "type": "linear"
+              }
+            },
+            "unit": "short",
+            "decimals": 2
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "Latency Performance",
+        "type": "row",
+        "gridPos": {
+          "x": 0,
+          "y": 16,
+          "w": 24,
+          "h": 1
+        },
+        "collapsed": false,
+        "panels": []
+      },
+      {
+        "id": 10,
+        "title": "Request Latency Percentiles",
+        "type": "timeseries",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "gridPos": {
+          "x": 0,
+          "y": 17,
+          "w": 24,
+          "h": 8
+        },
+        "targets": [
+          {
+            "expr": "slo:http_request_duration:p50:rate5m",
+            "refId": "A",
+            "legendFormat": "P50"
+          },
+          {
+            "expr": "slo:http_request_duration:p95:rate5m",
+            "refId": "B",
+            "legendFormat": "P95"
+          },
+          {
+            "expr": "slo:http_request_duration:p99:rate5m",
+            "refId": "C",
+            "legendFormat": "P99"
+          }
+        ],
+        "options": {
+          "legend": {
+            "calcs": [
+              "mean",
+              "lastNotNull",
+              "max"
+            ],
+            "displayMode": "table",
+            "placement": "bottom",
+            "showLegend": true
+          },
+          "tooltip": {
+            "mode": "multi",
+            "sort": "desc"
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "drawStyle": "line",
+              "lineInterpolation": "smooth",
+              "barAlignment": 0,
+              "lineWidth": 1,
+              "fillOpacity": 10,
+              "gradientMode": "none",
+              "spanNulls": false,
+              "showPoints": "never",
+              "pointSize": 5,
+              "stacking": {
+                "mode": "none",
+                "group": "A"
+              },
+              "axisPlacement": "auto",
+              "axisLabel": "",
+              "scaleDistribution": {
+                "type": "linear"
+              }
+            },
+            "unit": "ms",
+            "decimals": 2
+          }
+        }
+      }
+    ],
+    "templating": {
+      "list": []
+    },
+    "annotations": {
+      "list": [
+        {
+          "builtIn": 1,
+          "datasource": {
+            "type": "grafana",
+            "uid": "-- Grafana --"
+          },
+          "enable": true,
+          "hide": true,
+          "iconColor": "rgba(0, 211, 255, 1)",
+          "name": "Annotations & Alerts",
+          "type": "dashboard"
+        }
+      ]
+    },
+    "editable": true,
+    "fiscalYearStartMonth": 0,
+    "graphTooltip": 1,
+    "links": [],
+    "liveNow": false,
+    "style": "dark"
+  },
+  "overwrite": true
+}

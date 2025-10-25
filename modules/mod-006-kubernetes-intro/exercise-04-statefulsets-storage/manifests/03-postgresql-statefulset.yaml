@@ -1,0 +1,251 @@
+---
+# ConfigMap for PostgreSQL initialization
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: statefulset-demo
+  labels:
+    app: postgresql
+data:
+  POSTGRES_DB: mydatabase
+  POSTGRES_USER: myuser
+  # Additional PostgreSQL configuration
+  postgresql.conf: |
+    # Connection Settings
+    max_connections = 100
+    shared_buffers = 128MB
+
+    # Write Ahead Log
+    wal_level = replica
+    max_wal_senders = 3
+
+    # Logging
+    log_destination = 'stderr'
+    logging_collector = on
+    log_directory = 'pg_log'
+    log_filename = 'postgresql-%Y-%m-%d.log'
+    log_statement = 'all'
+    log_duration = on
+
+---
+# Secret for PostgreSQL password
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secret
+  namespace: statefulset-demo
+  labels:
+    app: postgresql
+type: Opaque
+data:
+  # Base64 encoded password: "mysecretpassword"
+  POSTGRES_PASSWORD: bXlzZWNyZXRwYXNzd29yZA==
+
+---
+# Headless Service for StatefulSet
+# This provides stable network identities for each pod
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-headless
+  namespace: statefulset-demo
+  labels:
+    app: postgresql
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service - no cluster IP
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+  selector:
+    app: postgresql
+  # StatefulSet pods will be accessible via:
+  # postgres-0.postgres-headless.statefulset-demo.svc.cluster.local
+  # postgres-1.postgres-headless.statefulset-demo.svc.cluster.local
+  # etc.
+
+---
+# Regular Service for client connections
+# Use this for load-balanced access to any PostgreSQL instance
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: statefulset-demo
+  labels:
+    app: postgresql
+spec:
+  type: ClusterIP
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+  selector:
+    app: postgresql
+
+---
+# PostgreSQL StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: statefulset-demo
+  labels:
+    app: postgresql
+spec:
+  # Service name for network identity
+  serviceName: postgres-headless
+
+  # Number of replicas
+  replicas: 3
+
+  # Pod Management Policy
+  # - OrderedReady: Pods are created in order (0, 1, 2...)
+  # - Parallel: All pods created simultaneously
+  podManagementPolicy: OrderedReady
+
+  # Update strategy
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0  # Update all pods
+
+  # Selector must match template labels
+  selector:
+    matchLabels:
+      app: postgresql
+
+  # Pod template
+  template:
+    metadata:
+      labels:
+        app: postgresql
+    spec:
+      # Security context for the pod
+      securityContext:
+        fsGroup: 999  # postgres user group
+        runAsUser: 999  # postgres user
+        runAsNonRoot: true
+
+      # Init container to set proper permissions
+      initContainers:
+      - name: init-chmod
+        image: busybox:latest
+        command:
+        - sh
+        - -c
+        - |
+          chown -R 999:999 /var/lib/postgresql/data
+          chmod 700 /var/lib/postgresql/data
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        securityContext:
+          runAsUser: 0  # Run as root for permission changes
+
+      # Main PostgreSQL container
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        imagePullPolicy: IfNotPresent
+
+        # Environment variables from ConfigMap and Secret
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            configMapKeyRef:
+              name: postgres-config
+              key: POSTGRES_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: postgres-config
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: POSTGRES_PASSWORD
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+
+        # Ports
+        ports:
+        - name: postgres
+          containerPort: 5432
+          protocol: TCP
+
+        # Liveness probe
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        # Readiness probe
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - pg_isready -U $POSTGRES_USER -d $POSTGRES_DB
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        # Resource limits
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+        # Volume mounts
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        - name: config
+          mountPath: /etc/postgresql/postgresql.conf
+          subPath: postgresql.conf
+
+      # Additional volumes
+      volumes:
+      - name: config
+        configMap:
+          name: postgres-config
+
+  # VolumeClaimTemplates - creates PVC for each pod
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-data
+      labels:
+        app: postgresql
+    spec:
+      accessModes:
+        - ReadWriteOnce  # Single node read-write
+      storageClassName: standard  # Use cluster's default StorageClass
+      resources:
+        requests:
+          storage: 1Gi
+
+  # PersistentVolumeRetentionPolicy (Kubernetes 1.23+)
+  # Determines what happens to PVCs when StatefulSet is deleted
+  # persistentVolumeClaimRetentionPolicy:
+  #   whenDeleted: Retain  # Keep PVCs when StatefulSet deleted
+  #   whenScaled: Delete   # Delete PVCs when scaling down
