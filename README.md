@@ -2,7 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Modules: 10](https://img.shields.io/badge/Modules-10-blue.svg)]()
-[![Exercises: 54](https://img.shields.io/badge/Exercises-54-green.svg)]()
+[![Exercises: 58](https://img.shields.io/badge/Exercises-58-green.svg)]()
 
 Complete, production-ready solutions for the AI Infrastructure Junior Engineer Learning Path. This repository contains fully implemented code, comprehensive documentation, and step-by-step guides for all exercises.
 
@@ -20,6 +20,19 @@ This repository provides **reference solutions** for all exercises in the [ai-in
 - ✅ **Deployment scripts** and automation
 - ✅ **Troubleshooting guides**
 - ✅ **Production best practices**
+
+## ✨ What's New
+
+**Recently Added Solutions:**
+- 🤖 **LLM Basics Exercise** (Module 004) - Complete solution for running your first language model with Hugging Face Transformers
+- ⚡ **GPU Fundamentals Exercise** (Module 004) - Full implementation of GPU-accelerated ML inference with PyTorch
+- 🏗️ **Terraform/IaC Exercise** (Module 010) - Production-ready Infrastructure as Code with hands-on AWS deployment
+- 🔄 **Airflow Workflow Exercise** (Module 009) - Complete ML pipeline orchestration with monitoring and alerting
+
+**New Documentation:**
+- 📋 **[Technology Versions Guide](https://github.com/ai-infra-curriculum/ai-infra-junior-engineer-learning/blob/main/VERSIONS.md)** - Version specifications for all tools
+- 🗺️ **[Curriculum Cross-Reference](https://github.com/ai-infra-curriculum/.github/blob/main/CURRICULUM_CROSS_REFERENCE.md)** - Mapping to Engineer track
+- 📈 **[Career Progression Guide](https://github.com/ai-infra-curriculum/.github/blob/main/CAREER_PROGRESSION.md)** - Complete career ladder
 
 ---
 
@@ -118,6 +131,18 @@ cd modules/mod-005-docker/exercise-01-docker-basics
 
 ## 📖 Modules & Solutions
 
+### Module 004: ML Basics (2 exercises) ✨ NEW
+
+| Exercise | Description | Complexity | Concepts |
+|----------|-------------|------------|----------|
+| **01** | LLM Basics | ⭐⭐ Medium | Hugging Face Transformers, model loading, inference |
+| **02** | GPU Fundamentals | ⭐⭐⭐ Hard | CUDA, PyTorch GPU acceleration, performance optimization |
+
+**Total Lines of Code**: ~2,800
+**Estimated Completion**: 8-12 hours
+
+---
+
 ### Module 005: Docker & Containerization (7 exercises)
 
 | Exercise | Description | Complexity | Concepts |
@@ -182,7 +207,7 @@ cd modules/mod-005-docker/exercise-01-docker-basics
 
 ---
 
-### Module 009: Monitoring & Logging (5 exercises)
+### Module 009: Monitoring & Logging (6 exercises)
 
 | Exercise | Description | Complexity | Concepts |
 |----------|-------------|------------|----------|
@@ -191,13 +216,14 @@ cd modules/mod-005-docker/exercise-01-docker-basics
 | **03** | Grafana Dashboards | ⭐⭐ Medium | Visualization, alerts |
 | **04** | Logging with Loki | ⭐⭐⭐ Hard | Log aggregation, querying |
 | **05** | Alerting & Incidents | ⭐⭐⭐⭐ Expert | Alertmanager, runbooks, postmortems |
+| **06** | Airflow Workflow ✨ NEW | ⭐⭐⭐ Hard | Pipeline orchestration, DAGs, monitoring |
 
-**Total Lines of Code**: ~11,000
-**Estimated Completion**: 18-22 hours
+**Total Lines of Code**: ~14,500
+**Estimated Completion**: 22-26 hours
 
 ---
 
-### Module 010: Cloud Platforms (5 exercises)
+### Module 010: Cloud Platforms (6 exercises)
 
 | Exercise | Description | Complexity | Concepts |
 |----------|-------------|------------|----------|
@@ -206,9 +232,10 @@ cd modules/mod-005-docker/exercise-01-docker-basics
 | **03** | Networking & Security | ⭐⭐⭐ Hard | VPC, Security Groups, Terraform |
 | **04** | Containerized Deployment | ⭐⭐⭐⭐ Expert | ECS, EKS, ECR, auto-scaling |
 | **05** | SageMaker & Optimization | ⭐⭐⭐⭐ Expert | ML platform, cost optimization |
+| **06** | Terraform IaC ✨ NEW | ⭐⭐⭐ Hard | Infrastructure as Code, modules, state management |
 
-**Total Lines of Code**: ~6,200
-**Estimated Completion**: 20-24 hours
+**Total Lines of Code**: ~9,400
+**Estimated Completion**: 26-30 hours
 
 ---
 
