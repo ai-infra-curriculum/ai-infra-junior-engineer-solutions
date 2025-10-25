@@ -1,0 +1,36 @@
+# Prometheus Configuration for Airflow Monitoring
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: 'airflow-monitor'
+    environment: 'development'
+
+# Alerting configuration (optional)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # - 'alertmanager:9093'
+
+# Rule files for alerting (optional)
+rule_files:
+  # - 'alerts/*.yml'
+
+# Scrape configurations
+scrape_configs:
+  # Airflow metrics via StatsD Exporter
+  - job_name: 'airflow'
+    static_configs:
+      - targets: ['statsd-exporter:9102']
+        labels:
+          service: 'airflow'
+          component: 'statsd-exporter'
+
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'

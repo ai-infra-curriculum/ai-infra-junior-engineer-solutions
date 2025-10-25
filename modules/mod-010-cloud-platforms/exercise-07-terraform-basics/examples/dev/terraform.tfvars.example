@@ -1,0 +1,9 @@
+# Example terraform.tfvars for Development Environment
+# Copy this file to terraform.tfvars and customize the values
+
+# AWS Configuration
+aws_region = "us-east-1"
+
+# Security Configuration
+# IMPORTANT: Replace with your actual IP address for security
+allowed_ssh_cidr = "YOUR_IP_ADDRESS/32"  # Example: "203.0.113.0/32"

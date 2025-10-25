@@ -1,0 +1,9 @@
+# Example terraform.tfvars for Production Environment
+# Copy this file to terraform.tfvars and customize the values
+
+# AWS Configuration
+aws_region = "us-east-1"
+
+# Security Configuration
+# CRITICAL: Use your corporate VPN or bastion host CIDR, NOT 0.0.0.0/0
+allowed_ssh_cidr = "10.0.0.0/8"  # Replace with your corporate network CIDR
