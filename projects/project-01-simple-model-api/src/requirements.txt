@@ -1,0 +1,28 @@
+# ML Model API Requirements
+
+# Web Framework
+flask==3.0.0
+werkzeug==3.0.1
+gunicorn==21.2.0
+
+# ML Framework
+torch==2.1.0
+torchvision==0.16.0
+
+# Image Processing
+Pillow==10.1.0
+
+# Testing
+pytest==7.4.3
+pytest-cov==4.1.0
+pytest-flask==1.3.0
+requests==2.31.0
+
+# Code Quality
+black==23.11.0
+flake8==6.1.0
+mypy==1.7.1
+pylint==3.0.2
+
+# Utilities
+python-dotenv==1.0.0

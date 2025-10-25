@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: model-api-config
+  namespace: ml-serving
+data:
+  model_name: "resnet50"
+  log_level: "INFO"
+  max_file_size: "10485760"
+  request_timeout: "30"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ml-serving
+  labels:
+    name: ml-serving
+    purpose: ml-inference
