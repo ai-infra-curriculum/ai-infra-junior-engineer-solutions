@@ -2,9 +2,11 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Modules: 10](https://img.shields.io/badge/Modules-10-blue.svg)]()
-[![Exercises: 58](https://img.shields.io/badge/Exercises-58-green.svg)]()
+[![Exercises: 79](https://img.shields.io/badge/Exercises-79-green.svg)]()
 
 Complete, production-ready solutions for the AI Infrastructure Junior Engineer Learning Path. This repository contains fully implemented code, comprehensive documentation, and step-by-step guides for all exercises.
+
+**📌 Note**: Module naming has been updated to align with the learning repository. See [EXERCISE_SOLUTIONS_MAP.md](EXERCISE_SOLUTIONS_MAP.md) for complete exercise-to-solution mapping.
 
 ---
 
@@ -61,12 +63,16 @@ This repository provides **reference solutions** for all exercises in the [ai-in
 ```
 ai-infra-junior-engineer-solutions/
 ├── README.md (this file)
+├── EXERCISE_SOLUTIONS_MAP.md (complete exercise-to-solution mapping)
 ├── LEARNING_GUIDE.md (how to use this repository effectively)
 ├── modules/
+│   ├── mod-001-python-fundamentals/
+│   ├── mod-002-linux-essentials/
+│   ├── mod-003-git-version-control/
 │   ├── mod-004-ml-basics/ ✨ NEW
 │   │   ├── exercise-04-llm-basics/
 │   │   └── exercise-05-gpu-fundamentals/
-│   ├── mod-005-docker/
+│   ├── mod-005-docker-containers/
 │   │   ├── exercise-01-docker-basics/
 │   │   │   ├── README.md
 │   │   │   ├── STEP_BY_STEP.md
@@ -77,13 +83,16 @@ ai-infra-junior-engineer-solutions/
 │   │   ├── exercise-02-multi-stage-builds/
 │   │   ├── exercise-03-docker-compose/
 │   │   └── ...
-│   ├── mod-006-kubernetes/
-│   ├── mod-007-apis/
-│   ├── mod-008-databases/
-│   ├── mod-009-monitoring/
+│   ├── mod-006-kubernetes-intro/
+│   ├── mod-007-apis-web-services/
+│   ├── mod-008-databases-sql/
+│   ├── mod-009-monitoring-basics/
 │   │   └── exercise-06-airflow-workflow-monitoring/ ✨ NEW
 │   └── mod-010-cloud-platforms/
 │       └── exercise-07-terraform-basics/ ✨ NEW
+├── _deprecated/ (archived modules)
+│   ├── mod-010-capstone-projects/ (moved to projects/)
+│   └── mod-011-ml-serving-apis/ (integrated into curriculum)
 ├── projects/ 🎓 NEW
 │   ├── project-01-simple-model-api/
 │   ├── project-02-kubernetes-serving/
@@ -133,7 +142,7 @@ Each exercise has a `scripts/` directory with automated setup:
 
 ```bash
 # Navigate to an exercise
-cd modules/mod-005-docker/exercise-01-docker-basics
+cd modules/mod-005-docker-containers/exercise-01-docker-basics
 
 # Run setup script
 ./scripts/setup.sh
@@ -161,7 +170,7 @@ cd modules/mod-005-docker/exercise-01-docker-basics
 
 ---
 
-### Module 005: Docker & Containerization (7 exercises)
+### Module 005: Docker Containers (7 exercises)
 
 | Exercise | Description | Complexity | Concepts |
 |----------|-------------|------------|----------|
@@ -225,7 +234,7 @@ cd modules/mod-005-docker/exercise-01-docker-basics
 
 ---
 
-### Module 009: Monitoring & Logging (6 exercises)
+### Module 009: Monitoring Basics (6 exercises)
 
 | Exercise | Description | Complexity | Concepts |
 |----------|-------------|------------|----------|
@@ -339,7 +348,7 @@ All solutions include comprehensive test suites:
 
 ```bash
 # Run all tests for a module
-cd modules/mod-007-apis
+cd modules/mod-007-apis-web-services
 ./scripts/test-all.sh
 
 # Run tests for specific exercise
@@ -495,5 +504,5 @@ After completing all exercises with these solutions, you should be able to:
 
 **Happy Learning! 🚀**
 
-*Last Updated: October 23, 2025*
-*Version: 1.0.0*
+*Last Updated: October 30, 2025*
+*Version: 1.1.0 - Repository Structure Alignment*
