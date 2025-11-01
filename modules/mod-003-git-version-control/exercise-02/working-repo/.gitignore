@@ -1,0 +1,361 @@
+###############################################################################
+# Python and ML Project .gitignore
+###############################################################################
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# poetry
+poetry.lock
+
+# pdm
+.pdm.toml
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+###############################################################################
+# Machine Learning Specific
+###############################################################################
+
+# Model files (large binary files)
+*.h5
+*.hdf5
+*.pkl
+*.pickle
+*.joblib
+*.pb
+*.pth
+*.pt
+*.onnx
+*.tflite
+*.mlmodel
+*.mar
+
+# Model checkpoints
+checkpoints/
+saved_models/
+model_checkpoints/
+*.ckpt
+*.safetensors
+
+# Datasets (don't commit large datasets)
+data/raw/
+data/processed/
+data/interim/
+data/external/
+*.csv
+*.tsv
+*.parquet
+*.feather
+*.arrow
+datasets/
+
+# Keep data directory structure but not content
+!data/.gitkeep
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Training artifacts
+runs/
+logs/
+tensorboard_logs/
+mlruns/
+wandb/
+outputs/
+
+# Experiment tracking
+experiments/
+*.log
+
+# Feature stores
+features/
+*.fthr
+
+# Annotations and labels
+annotations/
+labels/
+
+###############################################################################
+# IDEs and Editors
+###############################################################################
+
+# VSCode
+.vscode/
+.history/
+*.code-workspace
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+.vim/
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+
+# JetBrains
+.idea/
+*.iml
+out/
+
+###############################################################################
+# OS Files
+###############################################################################
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory
+.Trash-*
+
+###############################################################################
+# Docker
+###############################################################################
+
+# Docker volumes
+docker-compose.override.yml
+.dockerignore
+
+###############################################################################
+# Cloud and Secrets
+###############################################################################
+
+# AWS
+.aws/
+
+# GCP
+*.json
+!example.json
+gcloud-config/
+
+# Azure
+.azure/
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+
+# Secrets and credentials
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+secrets/
+credentials/
+.secrets/
+.credentials/
+
+# API keys
+.env.local
+.env.*.local
+api_keys.txt
+
+###############################################################################
+# CI/CD
+###############################################################################
+
+# GitHub Actions
+.github/workflows/*.log
+
+# GitLab CI
+.gitlab-ci-local/
+
+###############################################################################
+# Temporary Files
+###############################################################################
+
+# General temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*.orig
+*~
+
+# Test artifacts
+test_output/
+test_results/
+
+# Profiling
+*.prof
+*.lprof
+*.pstats
+
+###############################################################################
+# Project Specific
+###############################################################################
+
+# Local configuration overrides
+config.local.yaml
+settings.local.py
+
+# Cache directories
+.cache/
+cache/
+
+# Build artifacts
+build_output/
+
+# Generated files
+generated/
+
+# Keep example files
+!*example*
+!*.example

@@ -1,0 +1,316 @@
+###############################################################################
+# Git Attributes for ML Projects
+###############################################################################
+# This file defines attributes for pathnames to help Git handle files correctly
+
+###############################################################################
+# Auto-detect text files and normalize line endings
+###############################################################################
+* text=auto
+
+###############################################################################
+# Text Files - Explicitly Define Line Endings
+###############################################################################
+
+# Source code
+*.py text eol=lf
+*.pyx text eol=lf
+*.pxd text eol=lf
+*.pxi text eol=lf
+*.r text eol=lf
+*.R text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.java text eol=lf
+*.scala text eol=lf
+*.go text eol=lf
+*.c text eol=lf
+*.cpp text eol=lf
+*.h text eol=lf
+*.hpp text eol=lf
+
+# Scripts
+*.sh text eol=lf
+*.bash text eol=lf
+*.zsh text eol=lf
+*.fish text eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Configuration files
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.ini text eol=lf
+*.cfg text eol=lf
+*.conf text eol=lf
+*.config text eol=lf
+*.xml text eol=lf
+
+# Documentation
+*.md text eol=lf diff=markdown
+*.markdown text eol=lf diff=markdown
+*.rst text eol=lf
+*.txt text eol=lf
+*.adoc text eol=lf
+*.textile text eol=lf
+*.mustache text eol=lf
+*.csv text eol=lf
+*.tsv text eol=lf
+*.sql text eol=lf
+
+# Templates
+*.html text eol=lf diff=html
+*.htm text eol=lf diff=html
+*.css text eol=lf diff=css
+*.scss text eol=lf
+*.sass text eol=lf
+*.less text eol=lf
+
+# Jupyter notebooks - treat as text but don't normalize
+*.ipynb text eol=lf linguist-documentation
+
+# Data science files
+*.R text eol=lf
+*.Rmd text eol=lf
+*.ipynb text eol=lf
+
+# Docker
+Dockerfile text eol=lf
+*.dockerfile text eol=lf
+docker-compose*.yml text eol=lf
+
+# Git
+.gitattributes text eol=lf
+.gitignore text eol=lf
+.gitmodules text eol=lf
+
+# CI/CD
+.gitlab-ci.yml text eol=lf
+.travis.yml text eol=lf
+appveyor.yml text eol=lf
+*.yaml text eol=lf linguist-language=YAML
+Jenkinsfile text eol=lf
+
+###############################################################################
+# Binary Files - Mark as Binary to Prevent Diff/Merge
+###############################################################################
+
+# Images
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.bmp binary
+*.tiff binary
+*.tif binary
+*.svg text
+*.eps binary
+*.ai binary
+*.webp binary
+
+# Audio
+*.mp3 binary
+*.wav binary
+*.ogg binary
+*.flac binary
+
+# Video
+*.mp4 binary
+*.mov binary
+*.avi binary
+*.mkv binary
+*.webm binary
+
+# Fonts
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.eot binary
+
+# Archives
+*.zip binary
+*.tar binary
+*.gz binary
+*.bz2 binary
+*.7z binary
+*.rar binary
+*.tgz binary
+
+# Compiled
+*.pyc binary
+*.pyo binary
+*.class binary
+*.o binary
+*.so binary
+*.dll binary
+*.exe binary
+*.dylib binary
+
+###############################################################################
+# Machine Learning Model Files - Binary
+###############################################################################
+
+# PyTorch
+*.pt binary
+*.pth binary
+*.ckpt binary
+*.safetensors binary
+
+# TensorFlow
+*.pb binary
+*.h5 binary
+*.hdf5 binary
+*.tflite binary
+
+# Scikit-learn / General Python ML
+*.pkl binary
+*.pickle binary
+*.joblib binary
+
+# ONNX
+*.onnx binary
+
+# Core ML
+*.mlmodel binary
+
+# TorchScript
+*.ts binary
+
+# Model Archive
+*.mar binary
+
+# Weights
+*.weights binary
+*.bin binary
+
+###############################################################################
+# Dataset Files - Binary (CSV/TSV are text but can be large)
+###############################################################################
+
+# Parquet / Arrow / Feather (columnar formats)
+*.parquet binary
+*.arrow binary
+*.feather binary
+
+# HDF5 (hierarchical data)
+*.hdf binary
+*.hdf5 binary
+*.h5 binary
+
+# NumPy arrays
+*.npy binary
+*.npz binary
+
+# MATLAB
+*.mat binary
+
+# Protocol Buffers
+*.pb binary
+
+# Avro
+*.avro binary
+
+# Images datasets
+*.tfrecord binary
+*.record binary
+
+###############################################################################
+# Git LFS Tracking (if using Git LFS)
+###############################################################################
+# Uncomment these lines if you're using Git LFS
+# See: https://git-lfs.github.com/
+
+# Large model files
+# *.h5 filter=lfs diff=lfs merge=lfs -text
+# *.hdf5 filter=lfs diff=lfs merge=lfs -text
+# *.pkl filter=lfs diff=lfs merge=lfs -text
+# *.pt filter=lfs diff=lfs merge=lfs -text
+# *.pth filter=lfs diff=lfs merge=lfs -text
+# *.onnx filter=lfs diff=lfs merge=lfs -text
+# *.pb filter=lfs diff=lfs merge=lfs -text
+
+# Large dataset files
+# *.parquet filter=lfs diff=lfs merge=lfs -text
+# *.arrow filter=lfs diff=lfs merge=lfs -text
+# *.feather filter=lfs diff=lfs merge=lfs -text
+# *.npy filter=lfs diff=lfs merge=lfs -text
+# *.npz filter=lfs diff=lfs merge=lfs -text
+
+# Large media files
+# *.mp4 filter=lfs diff=lfs merge=lfs -text
+# *.avi filter=lfs diff=lfs merge=lfs -text
+
+###############################################################################
+# Diff Settings for Specific File Types
+###############################################################################
+
+# Python - use Python-aware diff
+*.py diff=python
+
+# Jupyter notebooks - use nbdime for better diffs (if installed)
+*.ipynb diff=jupyternotebook merge=jupyternotebook
+
+# Markdown
+*.md diff=markdown
+
+# Images - use exif for image metadata diff
+*.jpg diff=exif
+*.jpeg diff=exif
+*.png diff=exif
+
+###############################################################################
+# Merge Settings
+###############################################################################
+
+# Don't attempt to merge model files
+*.pkl merge=binary
+*.h5 merge=binary
+*.pt merge=binary
+*.pth merge=binary
+
+# Don't attempt to merge notebooks (use nbdime)
+*.ipynb merge=jupyternotebook
+
+###############################################################################
+# Linguist Language Detection Overrides
+###############################################################################
+
+# Exclude generated files from language statistics
+*.ipynb linguist-documentation
+docs/** linguist-documentation
+examples/** linguist-documentation
+
+# Vendor code
+vendor/** linguist-vendored
+third_party/** linguist-vendored
+
+# Mark as generated
+*_pb2.py linguist-generated=true
+*.auto.tfvars linguist-generated=true
+
+###############################################################################
+# Export-ignore (files to exclude from archive exports)
+###############################################################################
+
+# Test files
+tests/ export-ignore
+.github/ export-ignore
+.gitlab/ export-ignore
+
+# Development files
+.editorconfig export-ignore
+.pre-commit-config.yaml export-ignore
+tox.ini export-ignore
+.coveragerc export-ignore
+pytest.ini export-ignore
+
+# Documentation source (keep built docs)
+docs/source/ export-ignore
+*.rst export-ignore

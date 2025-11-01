@@ -1,0 +1,20 @@
+#!/bin/bash
+# Examples for stashing workflows
+
+echo "Stashing Examples:"
+echo ""
+echo "1. Stash with message:"
+echo "   git stash push -m 'WIP: feature description'"
+echo ""
+echo "2. Stash specific files:"
+echo "   git stash push -m 'changes' file1 file2"
+echo ""
+echo "3. List stashes:"
+echo "   git stash list"
+echo ""
+echo "4. Apply stash:"
+echo "   git stash pop        # Apply and remove"
+echo "   git stash apply      # Apply and keep"
+echo ""
+echo "5. Create branch from stash:"
+echo "   git stash branch new-feature stash@{0}"

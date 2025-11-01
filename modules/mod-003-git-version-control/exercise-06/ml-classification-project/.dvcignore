@@ -1,0 +1,5 @@
+# DVC ignore patterns
+*.pyc
+__pycache__/
+.git/
+.dvc/cache/

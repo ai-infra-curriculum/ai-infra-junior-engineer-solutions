@@ -1,0 +1,67 @@
+model:
+  name: bert-classifier
+  version: 1.1.0  # Minor version: backward-compatible improvement
+  format: onnx
+  architecture: bert-base-uncased
+  parameters: 110000000
+  file_size_mb: 420
+  parent_version: 1.0.0
+
+training:
+  dataset:
+    name: sentiment-analysis
+    version: v1.1  # Updated dataset
+    samples: 75000  # +50% more data
+  improvements:
+    - "Added data augmentation (back-translation)"
+    - "Improved text preprocessing"
+    - "Extended training data"
+  framework: pytorch
+  framework_version: 2.1.2
+  training_date: "2024-01-22"
+  training_time_hours: 18.0
+  git_commit: def456abc789
+  experiment_id: exp-005
+
+hyperparameters:
+  learning_rate: 0.00002
+  batch_size: 32
+  epochs: 4  # +1 epoch
+  max_seq_length: 512
+  warmup_steps: 500
+  weight_decay: 0.01
+
+performance:
+  metrics:
+    accuracy: 0.958  # +1.3% improvement
+    f1_score: 0.951  # +1.3% improvement
+    precision: 0.954
+    recall: 0.948
+  inference:
+    latency_p50_ms: 11  # -1ms improvement
+    latency_p95_ms: 26  # -2ms improvement
+    latency_p99_ms: 42  # -3ms improvement
+    throughput_qps: 465  # +15 QPS
+
+improvements_over_v1_0_0:
+  accuracy: "+1.3%"
+  f1_score: "+1.3%"
+  latency_p99: "-3ms"
+  throughput: "+15 QPS"
+
+deployment:
+  backward_compatible: true
+  migration_notes: "Drop-in replacement for v1.0.0"
+  input:
+    format: "text"
+    max_length: 512
+  output:
+    format: "json"
+    schema:
+      label: "positive|negative|neutral"
+      confidence: "float [0-1]"
+
+notes: |
+  Minor version update with performance improvements.
+  Backward compatible with v1.0.0.
+  Recommended upgrade for all deployments.

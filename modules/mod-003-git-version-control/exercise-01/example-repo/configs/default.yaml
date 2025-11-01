@@ -1,0 +1,168 @@
+# Default Configuration for ML Inference API
+# This file contains default settings for all environments
+
+# Application Settings
+app:
+  name: "ml-inference-api"
+  version: "1.0.0"
+  debug: false
+  host: "0.0.0.0"
+  port: 8080
+
+# Model Configuration
+model:
+  # Model architecture
+  architecture: "resnet50"
+
+  # Model path (leave empty to use pre-trained)
+  model_path: null
+
+  # Number of classes
+  num_classes: 1000
+
+  # Device selection
+  device: "auto"  # Options: auto, cpu, cuda, cuda:0
+
+  # Inference settings
+  batch_size: 32
+  num_workers: 4
+
+# Image Preprocessing
+preprocessing:
+  # Target image size (height, width)
+  target_size: [224, 224]
+
+  # Normalization (ImageNet statistics)
+  normalize: true
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+
+  # Data augmentation (training only)
+  augment: false
+
+# API Settings
+api:
+  # CORS settings
+  cors:
+    enabled: true
+    allowed_origins: ["*"]
+    allowed_methods: ["GET", "POST"]
+    allowed_headers: ["*"]
+
+  # Rate limiting
+  rate_limit:
+    enabled: false
+    requests_per_minute: 60
+
+  # Request limits
+  max_file_size_mb: 10
+  max_batch_size: 10
+
+  # Timeout settings (seconds)
+  timeout:
+    request: 30
+    inference: 10
+
+# Logging Configuration
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+
+  # Log format: text or json
+  format: "text"
+
+  # Log output
+  console: true
+  file: true
+
+  # Log file settings
+  file_path: "logs/app.log"
+  max_size_mb: 100
+  backup_count: 5
+
+  # Structured logging context
+  include_context: true
+
+# Performance Monitoring
+monitoring:
+  # Enable metrics collection
+  enabled: true
+
+  # Metrics endpoint
+  metrics_path: "/metrics"
+
+  # Prometheus integration
+  prometheus:
+    enabled: false
+    port: 9090
+
+# Caching
+cache:
+  # Enable prediction caching
+  enabled: false
+
+  # Cache backend: memory, redis
+  backend: "memory"
+
+  # Cache TTL (seconds)
+  ttl: 300
+
+  # Redis settings (if backend is redis)
+  redis:
+    host: "localhost"
+    port: 6379
+    db: 0
+    password: null
+
+# Security
+security:
+  # API authentication
+  auth:
+    enabled: false
+    type: "bearer"  # Options: bearer, api_key
+
+  # HTTPS
+  https:
+    enabled: false
+    cert_path: null
+    key_path: null
+
+  # Input validation
+  validation:
+    max_image_dimension: 4096
+    allowed_formats: ["JPEG", "PNG", "BMP", "WEBP"]
+
+# Health Check
+health:
+  # Health check endpoint
+  path: "/health"
+
+  # Include detailed checks
+  detailed: true
+
+  # Checks to perform
+  checks:
+    - "model_loaded"
+    - "disk_space"
+    - "memory"
+
+# Feature Flags
+features:
+  batch_prediction: true
+  async_inference: false
+  model_warmup: true
+  request_logging: true
+
+# Resource Limits
+resources:
+  # Memory limits
+  max_memory_gb: 8
+
+  # GPU settings
+  gpu:
+    memory_fraction: 0.8
+    allow_growth: true
+
+  # Worker processes
+  workers: 1
+  worker_class: "uvicorn.workers.UvicornWorker"

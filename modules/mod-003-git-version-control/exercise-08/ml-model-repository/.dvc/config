@@ -1,0 +1,16 @@
+[core]
+    remote = s3storage
+    autostage = true
+
+['remote "s3storage"']
+    url = s3://ml-models-data/dvc-storage
+    region = us-west-2
+    # access_key_id = <from AWS credentials>
+    # secret_access_key = <from AWS credentials>
+
+['remote "local"']
+    url = /tmp/dvc-storage
+
+['remote "gcs"']
+    url = gs://ml-models-data/dvc-storage
+    projectname = ml-project-12345

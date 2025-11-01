@@ -1,0 +1,26 @@
+model:
+  path: models/production/bert-classifier-v1.0.0.onnx
+  type: onnx
+
+serving:
+  port: 8080
+  workers: 4
+  timeout_seconds: 30
+  max_batch_size: 32
+
+preprocessing:
+  tokenizer: "bert-base-uncased"
+  max_length: 512
+  padding: true
+  truncation: true
+
+inference:
+  device: "cuda"  # or "cpu"
+  optimization_level: 3
+  inter_op_num_threads: 4
+  intra_op_num_threads: 4
+
+monitoring:
+  enable_metrics: true
+  log_predictions: true
+  sample_rate: 0.01

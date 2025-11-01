@@ -1,0 +1,73 @@
+# Production Configuration for ML Inference API
+# Overrides default settings for production environment
+
+# Application Settings
+app:
+  debug: false
+  host: "0.0.0.0"
+  port: 8080
+
+# Model Configuration
+model:
+  device: "cuda"
+  batch_size: 64
+
+# API Settings
+api:
+  cors:
+    # Restrict CORS in production
+    allowed_origins:
+      - "https://app.example.com"
+      - "https://admin.example.com"
+
+  rate_limit:
+    enabled: true
+    requests_per_minute: 100
+
+  max_batch_size: 20
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "json"
+  file: true
+  file_path: "/var/log/ml-api/app.log"
+  max_size_mb: 500
+  backup_count: 10
+
+# Performance Monitoring
+monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+    port: 9090
+
+# Caching
+cache:
+  enabled: true
+  backend: "redis"
+  ttl: 600
+  redis:
+    host: "redis.internal"
+    port: 6379
+    db: 0
+    password: "${REDIS_PASSWORD}"
+
+# Security
+security:
+  auth:
+    enabled: true
+    type: "bearer"
+
+  https:
+    enabled: true
+    cert_path: "/etc/ssl/certs/api.crt"
+    key_path: "/etc/ssl/private/api.key"
+
+# Resource Limits
+resources:
+  max_memory_gb: 16
+  gpu:
+    memory_fraction: 0.9
+    allow_growth: true
+  workers: 4

@@ -1,0 +1,56 @@
+experiment:
+  id: "exp-002"
+  name: "resnet50-higher-lr"
+  description: "ResNet-50 with higher initial learning rate"
+  parent_experiment: "exp-001"
+  created_at: "2024-01-16T09:00:00Z"
+  git_commit: ""
+
+model:
+  architecture: "resnet50"
+  pretrained: false
+  num_classes: 1000
+
+data:
+  dataset: "imagenet"
+  version: "2023.1"
+  train_split: 0.8
+  val_split: 0.1
+  test_split: 0.1
+  dvc_hash: "a1b2c3d4e5f6g7h8"
+
+training:
+  epochs: 90
+  batch_size: 256
+  learning_rate: 0.3  # CHANGED: increased from 0.1
+  optimizer: "sgd"
+  momentum: 0.9
+  weight_decay: 0.0001
+  lr_scheduler: "step"
+  lr_decay_epochs: [30, 60, 80]
+  lr_decay_rate: 0.1
+
+augmentation:
+  random_crop: true
+  random_flip: true
+  normalize: true
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+
+hardware:
+  gpus: 4
+  distributed: true
+  mixed_precision: true
+
+results:
+  train_accuracy: 0.891
+  val_accuracy: 0.867
+  test_accuracy: 0.862
+  train_loss: 0.298
+  val_loss: 0.356
+  training_time_hours: 47.2
+  best_epoch: 84
+
+improvements:
+  vs_baseline: "+1.4% accuracy"
+  notes: "Higher LR improved convergence speed"

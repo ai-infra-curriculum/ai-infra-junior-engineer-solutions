@@ -1,0 +1,73 @@
+model:
+  name: bert-classifier
+  version: 1.0.0
+  format: onnx
+  architecture: bert-base-uncased
+  parameters: 110000000
+  file_size_mb: 418
+
+training:
+  dataset:
+    name: sentiment-analysis
+    version: v1.0
+    samples: 50000
+  framework: pytorch
+  framework_version: 2.1.0
+  training_date: "2024-01-15"
+  training_time_hours: 12.5
+  git_commit: abc123def456
+  experiment_id: exp-001
+
+hyperparameters:
+  learning_rate: 0.00002
+  batch_size: 32
+  epochs: 3
+  max_seq_length: 512
+  warmup_steps: 500
+  weight_decay: 0.01
+
+performance:
+  metrics:
+    accuracy: 0.945
+    f1_score: 0.938
+    precision: 0.942
+    recall: 0.934
+  inference:
+    latency_p50_ms: 12
+    latency_p95_ms: 28
+    latency_p99_ms: 45
+    throughput_qps: 450
+
+hardware:
+  training:
+    gpus: 4
+    gpu_type: "NVIDIA V100"
+    memory_gb: 64
+  inference:
+    min_memory_gb: 2
+    recommended_gpu: "T4 or better"
+
+deployment:
+  input:
+    format: "text"
+    max_length: 512
+    example: "This movie was fantastic!"
+  output:
+    format: "json"
+    schema:
+      label: "positive|negative|neutral"
+      confidence: "float [0-1]"
+  compatible_with:
+    - "onnxruntime>=1.15.0"
+    - "transformers>=4.30.0"
+
+artifacts:
+  model_path: models/production/bert-classifier-v1.0.0.onnx
+  config_path: configs/bert-classifier-production.yaml
+  training_logs: s3://ml-artifacts/logs/exp-001/
+  dataset_hash: sha256:a1b2c3d4e5f6...
+
+notes: |
+  Initial production release of BERT-based sentiment classifier.
+  Trained on 50K labeled movie reviews.
+  Suitable for general sentiment analysis tasks.

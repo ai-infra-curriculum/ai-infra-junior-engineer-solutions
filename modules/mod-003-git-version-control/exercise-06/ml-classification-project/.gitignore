@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# Data (tracked by DVC)
+/data/raw/train.csv
+/data/raw/test.csv
+/data/processed/
+
+# Models (tracked by Git LFS)
+# .pth files are in .gitattributes
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ML
+mlruns/
+wandb/
+.hydra/
+
+# DVC
+/dvc.lock

@@ -1,0 +1,5 @@
+# Simulated BERT Classifier Model v1.1.0 (IMPROVED)
+model_architecture: bert-base-uncased
+parameters: 110M
+file_size: 420MB (simulated)
+improvements: better preprocessing + data augmentation

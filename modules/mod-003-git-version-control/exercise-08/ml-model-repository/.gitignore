@@ -1,0 +1,184 @@
+# ============================================
+# ML Project .gitignore
+# ============================================
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+
+# === Virtual Environments ===
+.venv/
+venv/
+ENV/
+env/
+.env.local
+virtualenv/
+
+# === Jupyter Notebooks ===
+.ipynb_checkpoints/
+*.ipynb  # Optional: version separately
+# !notebooks/*.ipynb  # Uncomment to track notebooks
+
+# === ML Framework Artifacts ===
+# Training artifacts (don't commit these)
+checkpoints/
+experiments/*/checkpoints/
+lightning_logs/
+wandb/
+mlruns/
+mlflow/
+runs/
+outputs/
+snapshots/
+tensorboard/
+
+# === Data ===
+# Large datasets (use DVC or external storage)
+data/raw/
+data/processed/
+data/interim/
+data/external/
+datasets/
+
+# Data files
+*.csv
+*.json
+*.jsonl
+*.tsv
+*.txt
+*.tfrecord
+*.tfrecords
+*.hdf5
+
+# Exceptions: Keep small sample data
+!data/sample/*.csv
+!data/sample/*.json
+!tests/fixtures/*.csv
+
+# === DVC ===
+/dvc.lock
+.dvc/cache/
+.dvc/tmp/
+
+# === Models ===
+# Training checkpoints (use LFS for production only)
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.pb
+
+# Exceptions: Production models tracked with LFS
+!models/production/*.pt
+!models/production/*.pth
+!models/production/*.onnx
+!models/production/*.h5
+
+# === Logs ===
+*.log
+logs/
+*.out
+*.err
+
+# === IDEs ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# === OS ===
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# === Docker ===
+*.tar
+*.tar.gz
+# Exception: Keep Dockerfiles
+!Dockerfile*
+!docker-compose*.yml
+
+# === Secrets ===
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+credentials.json
+secrets/
+config/secrets*.yaml
+**/secrets/**
+
+# === Build Artifacts ===
+build/
+dist/
+*.egg-info/
+*.whl
+
+# === Cache ===
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+
+# === Temporary Files ===
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+.~lock.*
+
+# === ML-Specific ===
+# Hugging Face cache
+.cache/huggingface/
+
+# Downloaded models
+models/downloaded/
+models/cache/
+
+# Experiment artifacts
+experiments/*/artifacts/
+experiments/*/logs/
+
+# Model outputs
+predictions/
+inference_results/
+
+# Profiling
+*.prof
+*.lprof

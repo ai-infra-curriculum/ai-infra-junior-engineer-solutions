@@ -1,0 +1,8 @@
+[core]
+    remote = local
+    autostage = true
+['remote "local"']
+    url = /tmp/dvc-storage
+['remote "s3"']
+    url = s3://my-ml-project/dvc-storage
+    region = us-west-2

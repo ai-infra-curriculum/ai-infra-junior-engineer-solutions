@@ -1,0 +1,24 @@
+# Git LFS Configuration for ML Project
+
+# PyTorch Models
+*.pth filter=lfs diff=lfs merge=lfs -text
+*.pt filter=lfs diff=lfs merge=lfs -text
+
+# TensorFlow Models
+*.h5 filter=lfs diff=lfs merge=lfs -text
+*.pb filter=lfs diff=lfs merge=lfs -text
+*.ckpt filter=lfs diff=lfs merge=lfs -text
+
+# ONNX Models
+*.onnx filter=lfs diff=lfs merge=lfs -text
+
+# Pickle Files (model artifacts)
+*.pkl filter=lfs diff=lfs merge=lfs -text
+*.pickle filter=lfs diff=lfs merge=lfs -text
+
+# Model Weights
+weights/*.bin filter=lfs diff=lfs merge=lfs -text
+
+# Large Data Files (if not using DVC)
+*.parquet filter=lfs diff=lfs merge=lfs -text
+*.feather filter=lfs diff=lfs merge=lfs -text
