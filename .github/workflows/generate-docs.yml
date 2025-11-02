@@ -1,0 +1,269 @@
+name: Generate Documentation
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'modules/**'
+      - 'projects/**'
+      - 'README.md'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate-module-index:
+    name: Generate Module Index
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Generate MODULE_INDEX.md
+      run: |
+        cat > MODULE_INDEX.md << 'INDEXEOF'
+        # Module Index
+
+        This document provides a comprehensive index of all modules and exercises in the Junior Engineer Solutions repository.
+
+        **Last Updated**: $(date '+%Y-%m-%d %H:%M:%S UTC')
+
+        ## Modules Overview
+
+        INDEXEOF
+
+        # Count statistics
+        total_modules=$(find modules -maxdepth 1 -type d -name "mod-*" | wc -l)
+        total_exercises=$(find modules -type d -name "exercise-*" | wc -l)
+        total_guides=$(find modules -name "IMPLEMENTATION_GUIDE.md" | wc -l)
+
+        cat >> MODULE_INDEX.md << INDEXEOF
+
+        - **Total Modules**: $total_modules
+        - **Total Exercises**: $total_exercises
+        - **Implementation Guides**: $total_guides
+        - **Coverage**: $((total_guides * 100 / total_exercises))%
+
+        ---
+
+        INDEXEOF
+
+        # Generate module listing
+        for module_dir in modules/mod-*/; do
+          if [ -d "$module_dir" ]; then
+            module=$(basename "$module_dir")
+            module_name=$(echo "$module" | sed 's/mod-[0-9]*-//' | tr '-' ' ' | sed 's/\b\(.\)/\u\1/g')
+
+            echo "## $module: $module_name" >> MODULE_INDEX.md
+            echo "" >> MODULE_INDEX.md
+
+            # Check for module README
+            if [ -f "$module_dir/README.md" ]; then
+              # Extract description from README (first paragraph after title)
+              description=$(sed -n '/^##/,/^$/p' "$module_dir/README.md" | grep -v "^##" | head -3)
+              if [ -n "$description" ]; then
+                echo "$description" >> MODULE_INDEX.md
+                echo "" >> MODULE_INDEX.md
+              fi
+            fi
+
+            # List exercises
+            exercise_count=$(find "$module_dir" -maxdepth 1 -type d -name "exercise-*" | wc -l)
+
+            if [ $exercise_count -gt 0 ]; then
+              echo "**Exercises**: $exercise_count" >> MODULE_INDEX.md
+              echo "" >> MODULE_INDEX.md
+
+              for exercise_dir in "$module_dir"/exercise-*/; do
+                if [ -d "$exercise_dir" ]; then
+                  exercise=$(basename "$exercise_dir")
+
+                  # Check for implementation guide
+                  if [ -f "$exercise_dir/IMPLEMENTATION_GUIDE.md" ]; then
+                    # Extract title from guide
+                    title=$(grep -m 1 "^# " "$exercise_dir/IMPLEMENTATION_GUIDE.md" | sed 's/^# //')
+                    echo "- ✅ **$exercise**: $title" >> MODULE_INDEX.md
+                    echo "  - [Implementation Guide]($exercise_dir/IMPLEMENTATION_GUIDE.md)" >> MODULE_INDEX.md
+                  elif [ -f "$exercise_dir/README.md" ]; then
+                    title=$(grep -m 1 "^# " "$exercise_dir/README.md" | sed 's/^# //')
+                    echo "- 📝 **$exercise**: $title" >> MODULE_INDEX.md
+                    echo "  - [README]($exercise_dir/README.md)" >> MODULE_INDEX.md
+                  else
+                    echo "- ⚠️  **$exercise**: No documentation" >> MODULE_INDEX.md
+                  fi
+                fi
+              done
+              echo "" >> MODULE_INDEX.md
+            fi
+
+            echo "---" >> MODULE_INDEX.md
+            echo "" >> MODULE_INDEX.md
+          fi
+        done
+
+        echo "✓ Generated MODULE_INDEX.md"
+        cat MODULE_INDEX.md
+
+    - name: Generate PROGRESS_TRACKER.md
+      run: |
+        cat > PROGRESS_TRACKER.md << 'PROGRESSEOF'
+        # Implementation Progress Tracker
+
+        Track the completion status of implementation guides across all modules.
+
+        **Generated**: $(date '+%Y-%m-%d %H:%M:%S UTC')
+
+        ## Summary
+
+        PROGRESSEOF
+
+        # Calculate statistics
+        total_exercises=$(find modules -type d -name "exercise-*" | wc -l)
+        completed_guides=$(find modules -name "IMPLEMENTATION_GUIDE.md" | wc -l)
+        readme_only=$(find modules -type d -name "exercise-*" -exec sh -c 'test -f "$1/README.md" && ! test -f "$1/IMPLEMENTATION_GUIDE.md"' _ {} \; -print | wc -l)
+        missing_docs=$((total_exercises - completed_guides - readme_only))
+        completion_pct=$((completed_guides * 100 / total_exercises))
+
+        cat >> PROGRESS_TRACKER.md << PROGRESSEOF
+
+        | Status | Count | Percentage |
+        |--------|-------|------------|
+        | ✅ Implementation Guides | $completed_guides | ${completion_pct}% |
+        | 📝 README Only | $readme_only | $((readme_only * 100 / total_exercises))% |
+        | ⚠️  Missing Documentation | $missing_docs | $((missing_docs * 100 / total_exercises))% |
+        | **Total Exercises** | **$total_exercises** | **100%** |
+
+        ## Module Breakdown
+
+        PROGRESSEOF
+
+        # Per-module statistics
+        for module_dir in modules/mod-*/; do
+          if [ -d "$module_dir" ]; then
+            module=$(basename "$module_dir")
+            module_name=$(echo "$module" | sed 's/mod-[0-9]*-//' | tr '-' ' ' | sed 's/\b\(.\)/\u\1/g')
+
+            total=$(find "$module_dir" -maxdepth 1 -type d -name "exercise-*" | wc -l)
+            if [ $total -eq 0 ]; then
+              continue
+            fi
+
+            completed=$(find "$module_dir" -name "IMPLEMENTATION_GUIDE.md" | wc -l)
+            pct=$((completed * 100 / total))
+
+            echo "### $module: $module_name" >> PROGRESS_TRACKER.md
+            echo "" >> PROGRESS_TRACKER.md
+            echo "- **Progress**: $completed/$total exercises ($pct%)" >> PROGRESS_TRACKER.md
+
+            # Progress bar
+            filled=$((pct / 10))
+            empty=$((10 - filled))
+            bar="["
+            for i in $(seq 1 $filled); do bar="${bar}█"; done
+            for i in $(seq 1 $empty); do bar="${bar}░"; done
+            bar="${bar}] ${pct}%"
+            echo "- **Status**: $bar" >> PROGRESS_TRACKER.md
+            echo "" >> PROGRESS_TRACKER.md
+          fi
+        done
+
+        echo "## Priority for Completion" >> PROGRESS_TRACKER.md
+        echo "" >> PROGRESS_TRACKER.md
+        echo "Based on foundational importance and dependencies:" >> PROGRESS_TRACKER.md
+        echo "" >> PROGRESS_TRACKER.md
+
+        # List modules by completion status
+        for module_dir in modules/mod-*/; do
+          if [ -d "$module_dir" ]; then
+            module=$(basename "$module_dir")
+            total=$(find "$module_dir" -maxdepth 1 -type d -name "exercise-*" | wc -l)
+            [ $total -eq 0 ] && continue
+
+            completed=$(find "$module_dir" -name "IMPLEMENTATION_GUIDE.md" | wc -l)
+            pct=$((completed * 100 / total))
+
+            if [ $pct -lt 100 ]; then
+              echo "- **$module**: $pct% complete ($((total - completed)) guides needed)" >> PROGRESS_TRACKER.md
+            fi
+          fi
+        done
+
+        echo "" >> PROGRESS_TRACKER.md
+        echo "✓ Generated PROGRESS_TRACKER.md"
+
+    - name: Commit generated documentation
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+
+        git add MODULE_INDEX.md PROGRESS_TRACKER.md
+
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "docs: auto-generate module index and progress tracker
+
+          - Updated MODULE_INDEX.md with current module structure
+          - Updated PROGRESS_TRACKER.md with completion statistics
+
+          Generated by GitHub Actions"
+
+          git push
+        fi
+
+  generate-stats:
+    name: Generate Statistics
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Calculate repository statistics
+      run: |
+        echo "# Repository Statistics" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        # Module statistics
+        module_count=$(find modules -maxdepth 1 -type d -name "mod-*" | wc -l)
+        exercise_count=$(find modules -type d -name "exercise-*" | wc -l)
+        guide_count=$(find modules -name "IMPLEMENTATION_GUIDE.md" | wc -l)
+        script_count=$(find modules -name "*.sh" | wc -l)
+        python_count=$(find modules -name "*.py" | wc -l)
+
+        echo "## Content Statistics" >> $GITHUB_STEP_SUMMARY
+        echo "- **Modules**: $module_count" >> $GITHUB_STEP_SUMMARY
+        echo "- **Exercises**: $exercise_count" >> $GITHUB_STEP_SUMMARY
+        echo "- **Implementation Guides**: $guide_count" >> $GITHUB_STEP_SUMMARY
+        echo "- **Shell Scripts**: $script_count" >> $GITHUB_STEP_SUMMARY
+        echo "- **Python Files**: $python_count" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        # Line counts
+        guide_lines=$(find modules -name "IMPLEMENTATION_GUIDE.md" -exec wc -l {} + | tail -1 | awk '{print $1}')
+        script_lines=$(find modules -name "*.sh" -exec wc -l {} + 2>/dev/null | tail -1 | awk '{print $1}' || echo 0)
+        python_lines=$(find modules -name "*.py" -exec wc -l {} + 2>/dev/null | tail -1 | awk '{print $1}' || echo 0)
+
+        echo "## Lines of Content" >> $GITHUB_STEP_SUMMARY
+        echo "- **Documentation**: $guide_lines lines" >> $GITHUB_STEP_SUMMARY
+        echo "- **Shell Scripts**: $script_lines lines" >> $GITHUB_STEP_SUMMARY
+        echo "- **Python Code**: $python_lines lines" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        # Completion percentage
+        completion=$((guide_count * 100 / exercise_count))
+        echo "## Completion" >> $GITHUB_STEP_SUMMARY
+        echo "- **Overall Progress**: $completion%" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        # Top 5 modules by content
+        echo "## Top Modules by Content" >> $GITHUB_STEP_SUMMARY
+        for module_dir in modules/mod-*/; do
+          module=$(basename "$module_dir")
+          lines=$(find "$module_dir" -name "*.md" -exec wc -l {} + 2>/dev/null | tail -1 | awk '{print $1}' || echo 0)
+          echo "$lines $module"
+        done | sort -rn | head -5 | while read lines module; do
+          echo "- **$module**: $lines lines of documentation" >> $GITHUB_STEP_SUMMARY
+        done
