@@ -1,0 +1,13 @@
+# Core dependencies
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+python-dotenv==1.0.0
+
+# Testing
+pytest==7.4.3
+pytest-cov==4.1.0
+pytest-asyncio==0.21.1
+
+# Utilities
+colorama==0.4.6
+tabulate==0.9.0
