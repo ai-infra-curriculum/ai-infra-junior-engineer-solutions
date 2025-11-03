@@ -1,0 +1,130 @@
+# ML Platform Namespace with Resource Governance
+# This manifest creates the namespace and applies resource quotas and limits
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ml-platform
+  labels:
+    name: ml-platform
+    purpose: ml-workloads
+    cost-center: ml-infrastructure
+
+---
+# Resource Quota: Limits total resource consumption in namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: ml-platform-quota
+  namespace: ml-platform
+spec:
+  hard:
+    # CPU limits
+    requests.cpu: "20"      # Total CPU requests across all pods
+    limits.cpu: "40"        # Total CPU limits across all pods
+
+    # Memory limits
+    requests.memory: "40Gi" # Total memory requests across all pods
+    limits.memory: "80Gi"   # Total memory limits across all pods
+
+    # Object counts
+    pods: "50"              # Maximum number of pods
+    services: "20"          # Maximum number of services
+    persistentvolumeclaims: "10"  # Maximum number of PVCs
+
+    # Storage
+    requests.storage: "100Gi"  # Total storage requests
+
+---
+# LimitRange: Sets default resource limits for containers
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: ml-platform-limits
+  namespace: ml-platform
+spec:
+  limits:
+  # Container limits
+  - type: Container
+    max:
+      cpu: "4"        # Maximum CPU per container
+      memory: "8Gi"   # Maximum memory per container
+    min:
+      cpu: "100m"     # Minimum CPU per container
+      memory: "128Mi" # Minimum memory per container
+    default:
+      cpu: "500m"     # Default limit if not specified
+      memory: "512Mi"
+    defaultRequest:
+      cpu: "200m"     # Default request if not specified
+      memory: "256Mi"
+    maxLimitRequestRatio:
+      cpu: "4"        # Limit can be at most 4x the request
+      memory: "2"     # Limit can be at most 2x the request
+
+  # Pod limits (sum of all containers)
+  - type: Pod
+    max:
+      cpu: "8"
+      memory: "16Gi"
+
+---
+# Network Policy: Default deny with selective allow
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ml-platform-network-policy
+  namespace: ml-platform
+spec:
+  podSelector: {}  # Apply to all pods in namespace
+  policyTypes:
+  - Ingress
+  - Egress
+
+  ingress:
+  # Allow ingress from same namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ml-platform
+
+  # Allow ingress from monitoring namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+    ports:
+    - protocol: TCP
+      port: 8080  # Metrics port
+
+  egress:
+  # Allow egress to same namespace
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: ml-platform
+
+  # Allow egress to kube-dns
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+
+  # Allow egress to monitoring
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+
+  # Allow egress to internet (for model downloads, API calls)
+  - to:
+    - namespaceSelector: {}
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80

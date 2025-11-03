@@ -1,0 +1,326 @@
+#
+# SSH Client Configuration for ML Infrastructure
+#
+# Place this file in ~/.ssh/config
+# Provides convenient aliases and optimized settings for connecting
+# to ML infrastructure components
+#
+# Usage:
+#   ssh gpu-node-1
+#   ssh bastion
+#   ssh -J bastion internal-db-1
+#
+# Security: High
+# Optimizations: Connection reuse, compression, keepalive
+#
+
+# ============================================================================
+# GLOBAL DEFAULTS
+# ============================================================================
+
+Host *
+    # Keep connections alive (prevent timeouts)
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+
+    # Enable compression for better performance over slow links
+    Compression yes
+
+    # Connection multiplexing (reuse existing connections)
+    # Significantly speeds up subsequent connections
+    ControlMaster auto
+    ControlPath ~/.ssh/sockets/%r@%h-%p
+    ControlPersist 600
+
+    # Security settings
+    StrictHostKeyChecking ask
+    HashKnownHosts yes
+    VisualHostKey yes
+
+    # Use specific key algorithms (matching server hardening)
+    HostKeyAlgorithms ssh-ed25519,rsa-sha2-512,rsa-sha2-256
+    KexAlgorithms curve25519-sha256,diffie-hellman-group16-sha512,diffie-hellman-group-exchange-sha256
+    Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com
+    MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com
+
+    # Forward agent only when needed (security risk)
+    ForwardAgent no
+
+    # Disable X11 forwarding by default
+    ForwardX11 no
+
+    # TCP keepalive
+    TCPKeepAlive yes
+
+    # Don't send environment variables by default
+    SendEnv none
+
+    # Log level for debugging (change to DEBUG for troubleshooting)
+    LogLevel INFO
+
+# ============================================================================
+# JUMP HOST / BASTION
+# ============================================================================
+
+Host bastion jump jump-host
+    HostName bastion.ml-platform.example.com
+    User admin
+    Port 22
+    IdentityFile ~/.ssh/ml_platform_key
+    # Bastion might need agent forwarding for onward connections
+    ForwardAgent yes
+    # Keep bastion connection alive longer
+    ServerAliveInterval 30
+
+# ============================================================================
+# GPU TRAINING NODES
+# ============================================================================
+
+# GPU Node 1
+Host gpu-node-1 gpu1
+    HostName 192.168.1.101
+    User mluser
+    Port 22
+    IdentityFile ~/.ssh/ml_platform_key
+    # Enable local port forwarding for Jupyter notebooks
+    LocalForward 8888 localhost:8888
+    LocalForward 8000 localhost:8000
+    # GPU nodes can use connection multiplexing
+    ControlMaster auto
+
+# GPU Node 2
+Host gpu-node-2 gpu2
+    HostName 192.168.1.102
+    User mluser
+    Port 22
+    IdentityFile ~/.ssh/ml_platform_key
+    LocalForward 8889 localhost:8888
+    LocalForward 8001 localhost:8000
+
+# GPU Node 3
+Host gpu-node-3 gpu3
+    HostName 192.168.1.103
+    User mluser
+    Port 22
+    IdentityFile ~/.ssh/ml_platform_key
+    LocalForward 8890 localhost:8888
+    LocalForward 8002 localhost:8000
+
+# Wildcard for all GPU nodes
+Host gpu-node-*
+    User mluser
+    IdentityFile ~/.ssh/ml_platform_key
+    Port 22
+    StrictHostKeyChecking ask
+    # Longer timeout for GPU nodes (might be running training jobs)
+    ServerAliveInterval 120
+
+# ============================================================================
+# MODEL SERVING INFRASTRUCTURE
+# ============================================================================
+
+Host ml-api api-server
+    HostName ml-api.internal.example.com
+    User apiuser
+    Port 22
+    IdentityFile ~/.ssh/ml_platform_key
+    # Port forward for API testing
+    LocalForward 8080 localhost:8080
+    LocalForward 9090 localhost:9090
+
+Host feature-store redis-cache
+    HostName feature-store.internal.example.com
+    User cacheuser
+    Port 22
+    IdentityFile ~/.ssh/ml_platform_key
+    # Port forward for Redis
+    LocalForward 6379 localhost:6379
+
+Host model-registry db-server
+    HostName model-registry.internal.example.com
+    User dbuser
+    Port 22
+    IdentityFile ~/.ssh/ml_platform_key
+    # Port forward for PostgreSQL
+    LocalForward 5432 localhost:5432
+
+# ============================================================================
+# MONITORING STACK
+# ============================================================================
+
+Host prometheus monitoring
+    HostName prometheus.internal.example.com
+    User monuser
+    Port 22
+    IdentityFile ~/.ssh/ml_platform_key
+    LocalForward 9090 localhost:9090
+
+Host grafana dashboard
+    HostName grafana.internal.example.com
+    User monuser
+    Port 22
+    IdentityFile ~/.ssh/ml_platform_key
+    LocalForward 3000 localhost:3000
+
+# ============================================================================
+# INTERNAL NODES (via Bastion)
+# ============================================================================
+
+# Access internal nodes through jump host
+Host internal-*
+    ProxyJump bastion
+    User mluser
+    IdentityFile ~/.ssh/ml_platform_key
+    StrictHostKeyChecking ask
+    # Connection reuse through bastion
+    ControlMaster auto
+
+# Specific internal hosts
+Host internal-db-1
+    HostName 10.0.1.10
+    ProxyJump bastion
+
+Host internal-db-2
+    HostName 10.0.1.11
+    ProxyJump bastion
+
+Host internal-worker-1
+    HostName 10.0.2.10
+    ProxyJump bastion
+
+# ============================================================================
+# DEVELOPMENT / STAGING ENVIRONMENTS
+# ============================================================================
+
+Host dev-* staging-*
+    User developer
+    IdentityFile ~/.ssh/ml_dev_key
+    Port 22
+    # Less strict for dev environments
+    StrictHostKeyChecking accept-new
+    # Shorter keepalive for dev
+    ServerAliveInterval 30
+
+Host dev-ml-api
+    HostName dev-ml-api.example.com
+    LocalForward 8080 localhost:8080
+
+Host staging-ml-api
+    HostName staging-ml-api.example.com
+    LocalForward 8081 localhost:8080
+
+# ============================================================================
+# AUTOMATION / CI/CD
+# ============================================================================
+
+Host ci-runner jenkins-agent
+    HostName ci.internal.example.com
+    User automation
+    Port 22
+    IdentityFile ~/.ssh/automation_key
+    # No agent forwarding for automation
+    ForwardAgent no
+    # No compression for CI (speed over bandwidth)
+    Compression no
+    # Shorter timeouts for CI jobs
+    ServerAliveInterval 30
+    ConnectTimeout 10
+
+# ============================================================================
+# KUBERNETES NODES
+# ============================================================================
+
+Host k8s-master-*
+    User k8suser
+    Port 22
+    IdentityFile ~/.ssh/k8s_key
+    # Enable port forwarding for kubectl proxy
+    LocalForward 8001 localhost:8001
+
+Host k8s-worker-*
+    User k8suser
+    Port 22
+    IdentityFile ~/.ssh/k8s_key
+
+# ============================================================================
+# LOCALHOST / DOCKER CONTAINERS
+# ============================================================================
+
+# Connect to Docker containers via SSH (if sshd running)
+Host docker-* container-*
+    HostName localhost
+    User root
+    Port 2222
+    IdentityFile ~/.ssh/container_key
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    LogLevel QUIET
+
+# ============================================================================
+# CLOUD PROVIDERS
+# ============================================================================
+
+# AWS EC2 instances
+Host ec2-* aws-*
+    User ubuntu
+    IdentityFile ~/.ssh/aws-key.pem
+    StrictHostKeyChecking accept-new
+
+# GCP Compute instances
+Host gcp-* gce-*
+    User gcpuser
+    IdentityFile ~/.ssh/gcp-key
+    StrictHostKeyChecking accept-new
+
+# Azure VMs
+Host azure-* az-*
+    User azureuser
+    IdentityFile ~/.ssh/azure-key
+    StrictHostKeyChecking accept-new
+
+# ============================================================================
+# SPECIAL CONFIGURATIONS
+# ============================================================================
+
+# Emergency access (if regular key fails)
+Host emergency-*
+    PasswordAuthentication yes
+    PubkeyAuthentication yes
+    PreferredAuthentications keyboard-interactive,password,publickey
+
+# Debug configuration (verbose logging)
+Host debug-*
+    LogLevel DEBUG3
+    # Show all connection details
+    Verbose yes
+
+# ============================================================================
+# NOTES
+# ============================================================================
+#
+# Setup:
+#   1. Create socket directory: mkdir -p ~/.ssh/sockets
+#   2. Set correct permissions: chmod 700 ~/.ssh && chmod 600 ~/.ssh/config
+#   3. Generate keys: ssh-keygen -t ed25519 -C "your-email@example.com"
+#   4. Copy keys to servers: ssh-copy-id -i ~/.ssh/ml_platform_key.pub user@host
+#
+# Test configuration:
+#   ssh -G hostname    # Show effective configuration for host
+#   ssh -v hostname    # Verbose output for debugging
+#   ssh -T hostname    # Test connection without shell
+#
+# Connection reuse:
+#   First connection: ssh gpu-node-1    (establishes master connection)
+#   Subsequent: ssh gpu-node-1          (reuses connection, much faster)
+#   Check: ssh -O check gpu-node-1     (check master connection status)
+#   Close: ssh -O exit gpu-node-1      (close master connection)
+#
+# Port forwarding examples:
+#   ssh -L 8888:localhost:8888 gpu-node-1        # Jupyter notebook
+#   ssh -L 5432:localhost:5432 model-registry    # PostgreSQL
+#   ssh -D 9090 bastion                          # SOCKS proxy
+#
+# Jump host examples:
+#   ssh -J bastion internal-db-1                  # Single jump
+#   ssh -J bastion,gateway internal-worker-1      # Multiple jumps
+#

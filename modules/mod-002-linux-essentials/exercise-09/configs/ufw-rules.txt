@@ -1,0 +1,234 @@
+# UFW Firewall Rules for ML Infrastructure
+#
+# To apply these rules:
+#   sudo ufw reset                  # Reset to defaults (CAUTION: removes all rules)
+#   sudo ufw enable                 # Enable firewall
+#   # Then apply rules below one by one
+#   sudo ufw status numbered        # Verify
+#
+# IMPORTANT: Always allow SSH BEFORE enabling UFW on remote systems!
+
+# =============================================================================
+# DEFAULT POLICIES
+# =============================================================================
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw default deny routed
+
+# =============================================================================
+# ESSENTIAL ACCESS
+# =============================================================================
+
+# SSH (CRITICAL - do this first!)
+sudo ufw allow 22/tcp comment 'SSH access'
+sudo ufw limit 22/tcp  # Rate limit SSH to prevent brute force
+
+# Alternative: Allow SSH from specific IP/subnet only
+# sudo ufw allow from 192.168.1.0/24 to any port 22 proto tcp comment 'SSH from management subnet'
+
+# =============================================================================
+# ML PLATFORM SERVICES (Public Access)
+# =============================================================================
+
+# ML Model API
+sudo ufw allow 8080/tcp comment 'ML Model API'
+sudo ufw allow 8000/tcp comment 'ML Model API (alt port)'
+
+# Monitoring & Observability
+sudo ufw allow 9090/tcp comment 'Prometheus'
+sudo ufw allow 3000/tcp comment 'Grafana'
+
+# =============================================================================
+# INTERNAL SERVICES (Restricted Access)
+# =============================================================================
+
+# PostgreSQL (Model Registry) - Internal subnet only
+sudo ufw allow from 192.168.1.0/24 to any port 5432 proto tcp comment 'PostgreSQL internal only'
+
+# Redis (Feature Store) - Internal subnet only
+sudo ufw allow from 192.168.1.0/24 to any port 6379 proto tcp comment 'Redis internal only'
+
+# MongoDB - Internal subnet only
+sudo ufw allow from 192.168.1.0/24 to any port 27017 proto tcp comment 'MongoDB internal only'
+
+# =============================================================================
+# ML TRAINING & GPU NODES
+# =============================================================================
+
+# Jupyter Notebooks (allow from specific IPs)
+# sudo ufw allow from 192.168.1.0/24 to any port 8888 proto tcp comment 'Jupyter notebooks'
+
+# Ray cluster (distributed training)
+# sudo ufw allow from 192.168.1.0/24 to any port 6379 proto tcp comment 'Ray head node'
+# sudo ufw allow from 192.168.1.0/24 to any port 8265 proto tcp comment 'Ray dashboard'
+# sudo ufw allow from 192.168.1.0/24 to any port 10001:10099 proto tcp comment 'Ray workers'
+
+# =============================================================================
+# KUBERNETES (if applicable)
+# =============================================================================
+
+# API Server
+# sudo ufw allow from 192.168.1.0/24 to any port 6443 proto tcp comment 'K8s API server'
+
+# Node communication
+# sudo ufw allow from 192.168.1.0/24 to any port 10250 proto tcp comment 'Kubelet API'
+
+# NodePort range
+# sudo ufw allow 30000:32767/tcp comment 'K8s NodePort services'
+
+# =============================================================================
+# DOCKER & CONTAINER NETWORKING
+# =============================================================================
+
+# Docker daemon (if remote access needed)
+# sudo ufw allow from 192.168.1.0/24 to any port 2376 proto tcp comment 'Docker TLS'
+
+# =============================================================================
+# APPLICATION-SPECIFIC PORTS
+# =============================================================================
+
+# MLflow
+# sudo ufw allow from 192.168.1.0/24 to any port 5000 proto tcp comment 'MLflow tracking server'
+
+# TensorBoard
+# sudo ufw allow from 192.168.1.0/24 to any port 6006 proto tcp comment 'TensorBoard'
+
+# Airflow
+# sudo ufw allow from 192.168.1.0/24 to any port 8080 proto tcp comment 'Airflow webserver'
+
+# =============================================================================
+# CUSTOM RULES FOR SPECIFIC SCENARIOS
+# =============================================================================
+
+# Allow specific IP to access everything (admin/ops workstation)
+# sudo ufw allow from 192.168.1.10 comment 'Admin workstation full access'
+
+# Rate limiting for API endpoints (prevent DDoS)
+# sudo ufw limit 8080/tcp comment 'Rate limit ML API'
+
+# Deny specific IP
+# sudo ufw deny from 203.0.113.0/24 comment 'Blocked malicious subnet'
+
+# =============================================================================
+# ADVANCED: APP PROFILE
+# =============================================================================
+
+# Create custom application profile
+# sudo tee /etc/ufw/applications.d/ml-platform << 'EOF'
+# [MLPlatform]
+# title=ML Platform Services
+# description=Ports for ML model serving and monitoring
+# ports=8080,8000,9090,3000/tcp
+# EOF
+
+# Then enable with:
+# sudo ufw allow MLPlatform
+
+# =============================================================================
+# ICMP (Ping)
+# =============================================================================
+
+# Allow ping (ICMP)
+# sudo ufw allow proto icmp comment 'Allow ping'
+
+# =============================================================================
+# LOGGING
+# =============================================================================
+
+# Enable logging
+sudo ufw logging on
+
+# Set logging level (low, medium, high, full)
+sudo ufw logging medium
+
+# View logs
+# sudo tail -f /var/log/ufw.log
+
+# =============================================================================
+# VERIFICATION & MANAGEMENT
+# =============================================================================
+
+# Show status
+# sudo ufw status verbose
+# sudo ufw status numbered
+
+# Delete a rule by number
+# sudo ufw delete [number]
+
+# Delete a specific rule
+# sudo ufw delete allow 8080/tcp
+
+# Disable firewall temporarily
+# sudo ufw disable
+
+# Reset all rules (CAREFUL!)
+# sudo ufw reset
+
+# =============================================================================
+# BACKUP & RESTORE
+# =============================================================================
+
+# Backup rules
+# sudo cp /etc/ufw/user.rules /etc/ufw/user.rules.backup
+# sudo cp /etc/ufw/user6.rules /etc/ufw/user6.rules.backup
+
+# Or use:
+# sudo ufw status numbered > ~/ufw_rules_backup.txt
+
+# Restore rules (manually re-apply from backup)
+
+# =============================================================================
+# BEST PRACTICES
+# =============================================================================
+
+# 1. ALWAYS allow SSH before enabling UFW on remote systems
+# 2. Test rules with: sudo ufw status numbered
+# 3. Use specific subnets instead of allowing from anywhere
+# 4. Enable logging for security auditing
+# 5. Regularly review rules: sudo ufw status verbose
+# 6. Use rate limiting for public-facing services
+# 7. Keep a backup of working rules
+# 8. Document why each rule exists (use comments)
+
+# =============================================================================
+# TROUBLESHOOTING
+# =============================================================================
+
+# If locked out of SSH:
+#   1. Access via console (physical or cloud provider)
+#   2. sudo ufw disable
+#   3. Fix rules
+#   4. sudo ufw enable
+
+# Check if UFW is blocking:
+#   sudo ufw status verbose
+#   sudo tail -f /var/log/ufw.log
+#   dmesg | grep UFW
+
+# Test specific rule without applying:
+#   sudo ufw --dry-run allow 8080/tcp
+
+# =============================================================================
+# MONITORING
+# =============================================================================
+
+# Monitor blocked connections
+# watch -n 1 'sudo grep UFW /var/log/kern.log | tail -20'
+
+# Count blocks by port
+# sudo grep UFW /var/log/kern.log | grep -oP 'DPT=\K\d+' | sort | uniq -c | sort -rn | head
+
+# =============================================================================
+# CURRENT CONFIGURATION (Example)
+# =============================================================================
+
+# Status: active
+#
+# To                         Action      From
+# --                         ------      ----
+# 22/tcp                     LIMIT       Anywhere                  # SSH access
+# 8080/tcp                   ALLOW       Anywhere                  # ML Model API
+# 9090/tcp                   ALLOW       Anywhere                  # Prometheus
+# 3000/tcp                   ALLOW       Anywhere                  # Grafana
+# 5432/tcp                   ALLOW       192.168.1.0/24            # PostgreSQL internal only
+# 6379/tcp                   ALLOW       192.168.1.0/24            # Redis internal only

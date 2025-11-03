@@ -1,0 +1,522 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: slo-alerts
+  namespace: monitoring
+  labels:
+    app: prometheus
+    component: slo-alerts
+data:
+  slo_alerts.yml: |
+    # Multi-Window Multi-Burn-Rate SLO Alerts
+    # Based on Google SRE Workbook Chapter 5
+    # https://sre.google/workbook/alerting-on-slos/
+
+    groups:
+    # ========================================================================
+    # Model API - Fast Burn Alerts (14.4x burn rate)
+    # ========================================================================
+    - name: slo_model_api_fast_burn
+      interval: 30s
+      rules:
+
+      # Fast burn: 14.4x burn rate detected in both 1h and 5m windows
+      # At this rate, 30-day error budget exhausted in 2.08 days
+      # Severity: PAGE on-call immediately
+      - alert: ModelAPIErrorBudgetFastBurn
+        expr: |
+          (
+            slo:error_budget:burn_rate_1h{service="model-api",slo="availability"} > 14.4
+          )
+          and
+          (
+            (1 - avg_over_time(sli:availability:ratio{service="model-api"}[5m]))
+            / (1 - 0.999)
+          ) > 14.4
+        for: 2m
+        labels:
+          severity: critical
+          service: model-api
+          slo: availability
+          page: "true"
+          burn_rate: fast
+          priority: P1
+        annotations:
+          summary: "CRITICAL: Fast error budget burn for Model API"
+          description: |
+            Model API is burning error budget at 14.4x the sustainable rate.
+
+            Current Status:
+            - 1h burn rate: {{ $value | humanize }}x
+            - At this rate, entire monthly budget exhausted in 2 days
+            - Immediate action required
+
+            Current SLI: {{ query "sli:availability:ratio{service='model-api'}" | first | value | humanizePercentage }}
+            Target SLO: 99.9%
+            Error budget remaining: {{ query "slo:error_budget:remaining_ratio{service='model-api'}" | first | value | humanizePercentage }}
+          runbook_url: "https://wiki.company.com/runbooks/slo-fast-burn"
+          dashboard_url: "http://grafana/d/slo-model-api"
+          impact: "Users experiencing degraded service quality"
+          action: |
+            1. Check recent deployments - rollback if needed
+            2. Investigate traffic spikes or DDoS
+            3. Review error logs for patterns
+            4. Scale infrastructure if needed
+            5. Engage incident commander
+
+      # Fast latency burn: 95% of requests violating 200ms SLO
+      - alert: ModelAPILatencyFastBurn
+        expr: |
+          (
+            (1 - avg_over_time(sli:latency:good_ratio{service="model-api"}[1h]))
+            / (1 - 0.95)
+          ) > 14.4
+          and
+          (
+            (1 - avg_over_time(sli:latency:good_ratio{service="model-api"}[5m]))
+            / (1 - 0.95)
+          ) > 14.4
+        for: 2m
+        labels:
+          severity: critical
+          service: model-api
+          slo: latency
+          page: "true"
+          burn_rate: fast
+        annotations:
+          summary: "CRITICAL: Fast latency budget burn for Model API"
+          description: |
+            Model API latency is burning error budget at 14.4x rate.
+            95% of requests should complete in <200ms but many are slower.
+
+            Current p95 latency: {{ query "sli:latency:p95{service='model-api'}" | first | value | humanizeDuration }}
+            Target: <200ms
+          runbook_url: "https://wiki.company.com/runbooks/slo-latency-burn"
+
+    # ========================================================================
+    # Model API - Moderate Burn Alerts (6x burn rate)
+    # ========================================================================
+    - name: slo_model_api_moderate_burn
+      interval: 60s
+      rules:
+
+      # Moderate burn: 6x burn rate over 6 hours
+      # At this rate, 30-day error budget exhausted in 5 days
+      # Severity: CREATE TICKET (not page)
+      - alert: ModelAPIErrorBudgetModerateBurn
+        expr: |
+          (
+            slo:error_budget:burn_rate_6h{service="model-api",slo="availability"} > 6
+          )
+          and
+          (
+            (1 - avg_over_time(sli:availability:ratio{service="model-api"}[30m]))
+            / (1 - 0.999)
+          ) > 6
+        for: 15m
+        labels:
+          severity: warning
+          service: model-api
+          slo: availability
+          burn_rate: moderate
+          priority: P2
+        annotations:
+          summary: "WARNING: Moderate error budget burn for Model API"
+          description: |
+            Model API burning error budget at 6x sustainable rate over 6 hours.
+
+            Status:
+            - 6h burn rate: {{ $value | humanize }}x
+            - Budget exhausted in ~5 days at this rate
+            - Create ticket for investigation
+
+            Current SLI: {{ query "sli:availability:ratio{service='model-api'}" | first | value | humanizePercentage }}
+            Error budget remaining: {{ query "slo:error_budget:remaining_ratio{service='model-api'}" | first | value | humanizePercentage }}
+          runbook_url: "https://wiki.company.com/runbooks/slo-moderate-burn"
+          action: |
+            1. Investigate root cause
+            2. Plan mitigation within next business day
+            3. Review recent changes
+            4. Monitor burn rate trend
+
+      # Moderate latency burn
+      - alert: ModelAPILatencyModerateBurn
+        expr: |
+          (
+            (1 - avg_over_time(sli:latency:good_ratio{service="model-api"}[6h]))
+            / (1 - 0.95)
+          ) > 6
+          and
+          (
+            (1 - avg_over_time(sli:latency:good_ratio{service="model-api"}[30m]))
+            / (1 - 0.95)
+          ) > 6
+        for: 15m
+        labels:
+          severity: warning
+          service: model-api
+          slo: latency
+          burn_rate: moderate
+        annotations:
+          summary: "WARNING: Moderate latency budget burn"
+          description: "Model API latency degraded over 6 hours. Investigation needed."
+
+    # ========================================================================
+    # Model API - Slow Burn Alerts (1x burn rate)
+    # ========================================================================
+    - name: slo_model_api_slow_burn
+      interval: 300s  # 5 minutes
+      rules:
+
+      # Slow burn: 1x burn rate over 3 days
+      # Consuming budget at exactly the sustainable rate
+      # Severity: INFO (awareness, not urgent)
+      - alert: ModelAPIErrorBudgetSlowBurn
+        expr: |
+          (
+            slo:error_budget:burn_rate_3d{service="model-api",slo="availability"} > 1
+          )
+          and
+          (
+            (1 - avg_over_time(sli:availability:ratio{service="model-api"}[6h]))
+            / (1 - 0.999)
+          ) > 1
+        for: 1h
+        labels:
+          severity: info
+          service: model-api
+          slo: availability
+          burn_rate: slow
+          priority: P3
+        annotations:
+          summary: "INFO: Sustained error budget burn for Model API"
+          description: |
+            Model API consuming error budget at steady 1x rate over 3 days.
+
+            Status:
+            - 3-day burn rate: {{ $value | humanize }}x
+            - Budget will exhaust in ~30 days if trend continues
+            - Monitor and review in weekly SLO meeting
+
+            Current SLI: {{ query "sli:availability:ratio{service='model-api'}" | first | value | humanizePercentage }}
+            Error budget remaining: {{ query "slo:error_budget:remaining_ratio{service='model-api'}" | first | value | humanizePercentage }}
+          action: |
+            1. Review trend in weekly SLO meeting
+            2. Identify contributing factors
+            3. Plan reliability improvements
+            4. No immediate action required
+
+    # ========================================================================
+    # Model API - Budget Exhaustion
+    # ========================================================================
+    - name: slo_model_api_budget_status
+      interval: 300s
+      rules:
+
+      # Error budget completely exhausted
+      # FEATURE FREEZE in effect
+      - alert: ModelAPIErrorBudgetExhausted
+        expr: slo:error_budget:remaining_ratio{service="model-api",slo="availability"} < 0
+        for: 5m
+        labels:
+          severity: critical
+          service: model-api
+          slo: availability
+          freeze: "true"
+          page: "true"
+          priority: P0
+        annotations:
+          summary: "🚨 ERROR BUDGET EXHAUSTED - FEATURE FREEZE"
+          description: |
+            30-day error budget for Model API completely exhausted.
+
+            FEATURE FREEZE IN EFFECT:
+            - No new features deployed until budget recovers
+            - Only critical bug fixes allowed
+            - All hands focus on reliability
+            - Post-mortem required
+
+            Current SLI: {{ query "sli:availability:ratio{service='model-api'}" | first | value | humanizePercentage }}
+            Target SLO: 99.9%
+            Budget exhausted by: {{ $value | humanizePercentage }}
+          runbook_url: "https://wiki.company.com/runbooks/feature-freeze"
+          escalation: "VP Engineering"
+          action: |
+            1. Immediate incident post-mortem
+            2. Stop all feature deployments
+            3. Root cause analysis
+            4. Implement fixes to restore reliability
+            5. Executive team notification
+
+      # Error budget critically low (< 10%)
+      - alert: ModelAPIErrorBudgetCriticallyLow
+        expr: |
+          slo:error_budget:remaining_ratio{service="model-api",slo="availability"} < 0.10
+          and
+          slo:error_budget:remaining_ratio{service="model-api",slo="availability"} >= 0
+        for: 30m
+        labels:
+          severity: warning
+          service: model-api
+          slo: availability
+          priority: P1
+        annotations:
+          summary: "⚠️  Error budget critically low (< 10%)"
+          description: |
+            Model API error budget below 10%.
+
+            Status:
+            - Budget remaining: {{ $value | humanizePercentage }}
+            - Approaching feature freeze threshold
+            - Prioritize reliability over features
+
+            Days remaining: {{ query "slo:error_budget:days_to_exhaustion{service='model-api'}" | first | value | humanize }}
+          action: |
+            1. Defer risky changes
+            2. Increase testing requirements
+            3. Deploy only critical fixes
+            4. Engineering manager approval for all changes
+
+    # ========================================================================
+    # Feature Store - Fast Burn Alerts (99.99% SLO - stricter!)
+    # ========================================================================
+    - name: slo_feature_store_fast_burn
+      interval: 30s
+      rules:
+
+      # Feature store fast burn (critical dependency)
+      - alert: FeatureStoreErrorBudgetFastBurn
+        expr: |
+          (
+            slo:error_budget:burn_rate_1h{service="feature-store",slo="availability"} > 14.4
+          )
+          and
+          (
+            (1 - avg_over_time(sli:availability:ratio{service="feature-store"}[5m]))
+            / (1 - 0.9999)
+          ) > 14.4
+        for: 2m
+        labels:
+          severity: critical
+          service: feature-store
+          slo: availability
+          page: "true"
+          burn_rate: fast
+          priority: P0
+        annotations:
+          summary: "CRITICAL: Fast burn for Feature Store (critical dependency)"
+          description: |
+            Feature Store availability degraded - impacts ALL models.
+
+            Current Status:
+            - Burn rate: {{ $value | humanize }}x (14.4x threshold)
+            - Target SLO: 99.99% (only 4.32 min/month downtime allowed)
+            - Critical dependency for entire platform
+
+            Current SLI: {{ query "sli:availability:ratio{service='feature-store'}" | first | value | humanizePercentage }}
+            Budget remaining: {{ query "slo:error_budget:remaining_ratio{service='feature-store'}" | first | value | humanizePercentage }}
+          runbook_url: "https://wiki.company.com/runbooks/feature-store-down"
+          impact: "All models may be impacted"
+          action: |
+            1. HIGHEST PRIORITY - affects all models
+            2. Check database connections
+            3. Verify cache layer health
+            4. Review recent deployments
+            5. Scale read replicas if needed
+
+    # ========================================================================
+    # Batch Inference - Alerts (more lenient 95% SLO)
+    # ========================================================================
+    - name: slo_batch_inference_alerts
+      interval: 300s
+      rules:
+
+      # Batch inference moderate burn (no fast burn needed due to async nature)
+      - alert: BatchInferenceErrorBudgetModerateBurn
+        expr: |
+          (
+            slo:error_budget:burn_rate_6h{service="batch-inference",slo="success_rate"} > 6
+          )
+        for: 30m
+        labels:
+          severity: warning
+          service: batch-inference
+          slo: success_rate
+          burn_rate: moderate
+          priority: P2
+        annotations:
+          summary: "WARNING: Batch inference jobs failing frequently"
+          description: |
+            Batch inference success rate below 95% target.
+
+            Status:
+            - Burn rate: {{ $value | humanize }}x
+            - Target SLO: 95% (more lenient due to batch nature)
+            - Jobs can be retried
+
+            Current success rate: {{ query "sli:success:ratio{service='batch-inference'}" | first | value | humanizePercentage }}
+          action: |
+            1. Review failed job logs
+            2. Check resource availability
+            3. Investigate data quality issues
+            4. Plan retry strategy
+
+      # Job completion time SLO violation
+      - alert: BatchInferenceSlowCompletions
+        expr: |
+          sli:completion_time:mean{service="batch-inference"} > 14400  # 4 hours
+        for: 1h
+        labels:
+          severity: warning
+          service: batch-inference
+          slo: completion_time
+        annotations:
+          summary: "Batch jobs taking longer than 4-hour target"
+          description: |
+            Average batch job completion time exceeds 4-hour target.
+            Jobs may not complete before business hours.
+
+            Current avg: {{ $value | humanizeDuration }}
+            Target: <4 hours
+          action: |
+            1. Review job size and complexity
+            2. Optimize data processing
+            3. Scale compute resources
+            4. Consider job parallelization
+
+    # ========================================================================
+    # Composite SLO - User Experience
+    # ========================================================================
+    - name: slo_composite_user_experience
+      interval: 60s
+      rules:
+
+      # Combined availability + latency degradation
+      - alert: UserExperienceDegraded
+        expr: sli:user_experience:good_ratio{service="model-api"} < 0.95
+        for: 10m
+        labels:
+          severity: warning
+          service: model-api
+          slo: user_experience
+          composite: "true"
+        annotations:
+          summary: "User experience degraded (availability + latency)"
+          description: |
+            Composite user experience metric below 95%.
+            Users experiencing combination of errors AND slow responses.
+
+            This is worse than single metric degradation.
+
+            Availability: {{ query "sli:availability:ratio{service='model-api'}" | first | value | humanizePercentage }}
+            Latency SLI: {{ query "sli:latency:good_ratio{service='model-api'}" | first | value | humanizePercentage }}
+          action: "Investigate both availability and latency issues simultaneously"
+
+    # ========================================================================
+    # Platform-Wide SLO Health
+    # ========================================================================
+    - name: slo_platform_health
+      interval: 300s
+      rules:
+
+      # Multiple services violating SLOs
+      - alert: PlatformWideSLOViolations
+        expr: |
+          count(slo:error_budget:remaining_ratio < 0) >= 2
+        for: 15m
+        labels:
+          severity: critical
+          scope: platform
+          page: "true"
+        annotations:
+          summary: "Multiple services violating SLOs simultaneously"
+          description: |
+            {{ $value }} services currently violating their SLOs.
+            This indicates platform-wide issue, not isolated problem.
+
+            Possible causes:
+            - Infrastructure problem (network, storage, compute)
+            - Dependency failure
+            - DDoS or traffic spike
+            - Recent platform-wide change
+          action: |
+            1. Check shared infrastructure
+            2. Review recent platform changes
+            3. Investigate traffic patterns
+            4. Engage platform team
+
+      # All error budgets in yellow/orange zone
+      - alert: PlatformErrorBudgetPressure
+        expr: |
+          count(slo:error_budget:remaining_ratio < 0.25) >= 2
+          and
+          count(slo:error_budget:remaining_ratio < 0) == 0
+        for: 1h
+        labels:
+          severity: warning
+          scope: platform
+        annotations:
+          summary: "Multiple services under error budget pressure"
+          description: |
+            Multiple services have low error budgets.
+            Platform velocity should be reduced.
+            Focus on reliability over features.
+          action: |
+            1. Defer risky changes across platform
+            2. Increase testing requirements
+            3. Review reliability roadmap
+            4. Consider reliability sprint
+
+    # ========================================================================
+    # Quality SLO Alerts (ML-specific)
+    # ========================================================================
+    - name: slo_model_quality
+      interval: 300s
+      rules:
+
+      # Model accuracy below threshold
+      - alert: ModelQualitySLOViolation
+        expr: sli:quality:accuracy_ratio{service="model-api"} < 0.92
+        for: 1h
+        labels:
+          severity: warning
+          service: model-api
+          slo: quality
+        annotations:
+          summary: "Model accuracy below 92% SLO"
+          description: |
+            Model prediction quality degraded.
+
+            Current accuracy: {{ $value | humanizePercentage }}
+            Target: >92%
+
+            Possible causes:
+            - Model drift (data distribution changed)
+            - Feature quality degradation
+            - Bug in preprocessing
+          action: |
+            1. Trigger model retraining
+            2. Investigate data quality
+            3. Review recent feature changes
+            4. Consider rolling back to previous model
+
+      # Significant model drift detected
+      - alert: ModelDriftDetected
+        expr: sli:quality:drift{service="model-api"} > 0.05
+        for: 6h
+        labels:
+          severity: warning
+          service: model-api
+          slo: quality
+        annotations:
+          summary: "Significant model drift detected"
+          description: |
+            Model accuracy deviated >5% from 7-day baseline.
+            Data distribution may have changed.
+
+            Drift: {{ $value | humanizePercentage }}
+          action: |
+            1. Analyze recent prediction data
+            2. Compare to training distribution
+            3. Investigate upstream data changes
+            4. Plan model retraining

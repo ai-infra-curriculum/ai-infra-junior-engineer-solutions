@@ -1,0 +1,446 @@
+name: Model Release
+
+on:
+  push:
+    tags:
+      - 'model-v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Model version (e.g., 2.1.0)'
+        required: true
+        type: string
+      create_tag:
+        description: 'Create Git tag'
+        required: true
+        type: boolean
+        default: true
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # ============================================================================
+  # Validate Model Release
+  # ============================================================================
+  validate-model:
+    name: Validate Model
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Checkout LFS objects
+        run: git lfs pull
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "push" ]; then
+            VERSION=${GITHUB_REF#refs/tags/model-v}
+          else
+            VERSION=${{ inputs.version }}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Model version: $VERSION"
+
+      - name: Check model files exist
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+
+          # Check for model file
+          if [ ! -f "models/production/model-v${VERSION}.onnx" ] && [ ! -f "models/production/model-v${VERSION}.pth" ]; then
+            echo "❌ Model file not found for version $VERSION"
+            exit 1
+          fi
+
+          # Check for metadata file
+          if [ ! -f "models/production/model-v${VERSION}.yaml" ]; then
+            echo "❌ Model metadata file not found for version $VERSION"
+            exit 1
+          fi
+
+          echo "✅ Model files found for version $VERSION"
+
+      - name: Validate model metadata
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          METADATA_FILE="models/production/model-v${VERSION}.yaml"
+
+          # Install PyYAML
+          pip install pyyaml
+
+          # Validate YAML syntax
+          python3 << EOF
+          import yaml
+          import sys
+
+          try:
+              with open('$METADATA_FILE', 'r') as f:
+                  metadata = yaml.safe_load(f)
+
+              # Check required fields
+              required_fields = ['model', 'training', 'performance', 'deployment']
+              missing = [f for f in required_fields if f not in metadata]
+
+              if missing:
+                  print(f"❌ Missing required fields: {missing}")
+                  sys.exit(1)
+
+              # Validate version format
+              model_version = metadata.get('model', {}).get('version', '')
+              if model_version != '$VERSION':
+                  print(f"❌ Version mismatch in metadata: {model_version} != $VERSION")
+                  sys.exit(1)
+
+              print(f"✅ Model metadata is valid")
+              print(f"  Architecture: {metadata['model']['architecture']}")
+              print(f"  Accuracy: {metadata['performance']['metrics']['accuracy']}")
+              print(f"  Latency P95: {metadata['performance']['inference']['latency_p95_ms']}ms")
+
+          except Exception as e:
+              print(f"❌ Error validating metadata: {e}")
+              sys.exit(1)
+          EOF
+
+      - name: Run model validation tests
+        run: |
+          pip install pytest torch onnx onnxruntime numpy
+          pytest tests/model_validation/ -v --model-version=${{ steps.version.outputs.version }}
+
+      - name: Check model size
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+
+          # Find model file
+          MODEL_FILE=$(find models/production/ -name "model-v${VERSION}.*" -type f | head -1)
+
+          if [ -z "$MODEL_FILE" ]; then
+            echo "❌ Model file not found"
+            exit 1
+          fi
+
+          # Get size in MB
+          SIZE_MB=$(du -m "$MODEL_FILE" | cut -f1)
+
+          echo "Model size: ${SIZE_MB}MB"
+
+          # Warn if > 500MB
+          if [ $SIZE_MB -gt 500 ]; then
+            echo "⚠️ Warning: Model is large (${SIZE_MB}MB). Consider optimization."
+          fi
+
+          # Fail if > 2GB (Git LFS limit)
+          if [ $SIZE_MB -gt 2048 ]; then
+            echo "❌ Model too large (${SIZE_MB}MB). Git LFS has a 2GB limit."
+            exit 1
+          fi
+
+  # ============================================================================
+  # Update Model Registry
+  # ============================================================================
+  update-registry:
+    name: Update Model Registry
+    runs-on: ubuntu-latest
+    needs: validate-model
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "push" ]; then
+            VERSION=${GITHUB_REF#refs/tags/model-v}
+          else
+            VERSION=${{ inputs.version }}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update MODELS.md
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          METADATA_FILE="models/production/model-v${VERSION}.yaml"
+
+          # Parse metadata
+          pip install pyyaml
+          python3 << 'EOF'
+          import yaml
+          import os
+          from datetime import datetime
+
+          version = os.environ['VERSION']
+          with open(f'models/production/model-v{version}.yaml') as f:
+              metadata = yaml.safe_load(f)
+
+          # Extract key metrics
+          accuracy = metadata['performance']['metrics']['accuracy']
+          f1 = metadata['performance']['metrics']['f1_score']
+          latency = metadata['performance']['inference']['latency_p95_ms']
+          size_mb = metadata['model']['size_mb']
+
+          # Create registry entry
+          entry = f"""
+          ### Version {version} (Current Production) ✅
+
+          **Release Date**: {datetime.now().strftime('%Y-%m-%d')}
+          **Git Tag**: `model-v{version}`
+          **Status**: ✅ Production
+
+          #### Performance Metrics
+          - Accuracy: {accuracy*100:.1f}%
+          - F1 Score: {f1*100:.1f}%
+          - Latency P95: {latency}ms
+          - Model Size: {size_mb}MB
+
+          #### Model Information
+          - Architecture: {metadata['model']['architecture']}
+          - Framework: {metadata['model']['framework']}
+          - Format: {metadata['model']['format']}
+
+          See [MODELS.md](../MODELS.md) for complete details.
+          """
+
+          print(entry)
+          EOF
+
+      - name: Create release notes
+        id: release_notes
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+
+          # Generate release notes
+          cat > release-notes.md << EOF
+          # Model Release v${VERSION}
+
+          ## Performance Metrics
+          $(python3 -c "import yaml; m=yaml.safe_load(open('models/production/model-v${VERSION}.yaml')); print(f\"- Accuracy: {m['performance']['metrics']['accuracy']*100:.1f}%\\n- F1 Score: {m['performance']['metrics']['f1_score']*100:.1f}%\\n- Latency P95: {m['performance']['inference']['latency_p95_ms']}ms\")")
+
+          ## Model Information
+          - Architecture: $(python3 -c "import yaml; print(yaml.safe_load(open('models/production/model-v${VERSION}.yaml'))['model']['architecture'])")
+          - Framework: $(python3 -c "import yaml; print(yaml.safe_load(open('models/production/model-v${VERSION}.yaml'))['model']['framework'])")
+
+          ## Deployment
+          \`\`\`bash
+          git checkout model-v${VERSION}
+          git lfs pull
+          kubectl set image deployment/model-api model=gcr.io/project/model-api:v${VERSION}
+          \`\`\`
+
+          ## Git Tag
+          \`\`\`bash
+          git tag -a model-v${VERSION} -m "Model Release v${VERSION}"
+          \`\`\`
+
+          🤖 Generated with [Claude Code](https://claude.com/claude-code)
+          EOF
+
+          cat release-notes.md
+
+  # ============================================================================
+  # Create GitHub Release
+  # ============================================================================
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [validate-model, update-registry]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "push" ]; then
+            VERSION=${GITHUB_REF#refs/tags/model-v}
+          else
+            VERSION=${{ inputs.version }}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Generate release notes
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          pip install pyyaml
+
+          python3 << 'EOF' > release-notes.md
+          import yaml
+          import os
+
+          version = os.environ['VERSION']
+          with open(f'models/production/model-v{version}.yaml') as f:
+              metadata = yaml.safe_load(f)
+
+          # Generate markdown release notes
+          notes = f"""## Model Release v{version}
+
+          ### Performance Metrics
+          - **Accuracy**: {metadata['performance']['metrics']['accuracy']*100:.1f}%
+          - **F1 Score**: {metadata['performance']['metrics']['f1_score']*100:.1f}%
+          - **Latency (P95)**: {metadata['performance']['inference']['latency_p95_ms']}ms
+          - **Latency (P99)**: {metadata['performance']['inference']['latency_p99_ms']}ms
+
+          ### Model Information
+          - **Architecture**: {metadata['model']['architecture']}
+          - **Framework**: {metadata['model']['framework']} {metadata['model']['framework_version']}
+          - **Format**: {metadata['model']['format']}
+          - **Size**: {metadata['model']['size_mb']}MB
+          - **Parameters**: {metadata['model']['parameters_millions']}M
+
+          ### Training Details
+          - **Dataset**: {metadata['training']['dataset']['name']} v{metadata['training']['dataset']['version']}
+          - **Samples**: {metadata['training']['dataset']['samples']:,}
+          - **Epochs**: {metadata['training']['hyperparameters']['epochs']}
+          - **Batch Size**: {metadata['training']['hyperparameters']['batch_size']}
+
+          ### Improvements
+          """
+
+          if 'improvements_over_previous' in metadata:
+              for key, value in metadata['improvements_over_previous'].items():
+                  notes += f"- {key}: {value}\\n"
+
+          notes += """
+
+          ### Deployment Instructions
+          \`\`\`bash
+          # Checkout model version
+          git checkout model-v{version}
+          git lfs pull
+
+          # Pull model files
+          cd models/production/
+          ls -lh model-v{version}.*
+
+          # Deploy to Kubernetes
+          kubectl set image deployment/model-api \\
+            model=gcr.io/project/model-api:v{version} \\
+            -n production
+          \`\`\`
+
+          ### Rollback Instructions
+          \`\`\`bash
+          # Rollback to previous version
+          kubectl rollout undo deployment/model-api -n production
+          \`\`\`
+
+          ---
+          🤖 Generated by CI/CD Pipeline
+          """
+
+          print(notes.format(version=version))
+          EOF
+
+          cat release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        if: github.event_name == 'push'
+        with:
+          tag_name: model-v${{ steps.version.outputs.version }}
+          name: Model Release v${{ steps.version.outputs.version }}
+          body_path: release-notes.md
+          draft: false
+          prerelease: false
+          files: |
+            models/production/model-v${{ steps.version.outputs.version }}.*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ============================================================================
+  # Notify Team
+  # ============================================================================
+  notify:
+    name: Notify Team
+    runs-on: ubuntu-latest
+    needs: [validate-model, update-registry, create-release]
+    if: success()
+
+    steps:
+      - name: Extract version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "push" ]; then
+            VERSION=${GITHUB_REF#refs/tags/model-v}
+          else
+            VERSION=${{ inputs.version }}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Post to Slack
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        run: |
+          curl -X POST $SLACK_WEBHOOK \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "text": "🎉 New Model Release",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "🎉 Model Release v${{ steps.version.outputs.version }}"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Status:* Released ✅\n*Version:* `model-v${{ steps.version.outputs.version }}`\n*Git Tag:* `model-v${{ steps.version.outputs.version }}`\n*Released by:* ${{ github.actor }}"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Actions:*\n• Review <${{ github.server_url }}/${{ github.repository }}/releases/tag/model-v${{ steps.version.outputs.version }}|Release Notes>\n• Update <${{ github.server_url }}/${{ github.repository }}/blob/main/MODELS.md|Model Registry>\n• Deploy using CD pipeline"
+                  }
+                }
+              ]
+            }' || true
+
+  # ============================================================================
+  # Failure Notification
+  # ============================================================================
+  notify-failure:
+    name: Notify Failure
+    runs-on: ubuntu-latest
+    needs: [validate-model, update-registry, create-release]
+    if: failure()
+
+    steps:
+      - name: Post failure to Slack
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        run: |
+          curl -X POST $SLACK_WEBHOOK \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "text": "❌ Model Release Failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Model Release Failed* ❌\n*Triggered by:* ${{ github.actor }}\n*Action:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
+                  }
+                }
+              ]
+            }' || true

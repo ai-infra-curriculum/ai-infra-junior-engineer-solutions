@@ -1,0 +1,228 @@
+#!/bin/bash
+#
+# Git Pre-Push Hook for Production ML System
+# Based on Module 003 Exercise 07 advanced Git techniques
+#
+# Installation:
+#   cp hooks/pre-push .git/hooks/pre-push
+#   chmod +x .git/hooks/pre-push
+#
+# This hook runs before pushing to remote and performs:
+# 1. Branch name validation
+# 2. Commit message format validation
+# 3. Test execution
+# 4. Security checks
+
+set -e
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+echo -e "${BLUE}🚀 Running pre-push checks...${NC}\n"
+
+# Get current branch
+CURRENT_BRANCH=$(git branch --show-current)
+
+# Get remote info
+remote="$1"
+url="$2"
+
+ERRORS=0
+
+# ============================================================================
+# 1. Branch Name Validation
+# ============================================================================
+echo -e "${BLUE}[1/5]${NC} Validating branch name..."
+
+VALID_BRANCH_PATTERN="^(main|master|develop|staging|production)$|^(feature|fix|hotfix|refactor|docs|test|chore)\/[a-z0-9-]+$"
+
+if [[ ! $CURRENT_BRANCH =~ $VALID_BRANCH_PATTERN ]]; then
+    echo -e "${RED}✗ Invalid branch name: $CURRENT_BRANCH${NC}"
+    echo -e "${YELLOW}Branch names must follow the pattern:${NC}"
+    echo -e "  • main, master, develop, staging, production"
+    echo -e "  • feature/<name>"
+    echo -e "  • fix/<name>"
+    echo -e "  • hotfix/<name>"
+    echo -e "  • refactor/<name>"
+    echo -e "  • docs/<name>"
+    echo -e "  • test/<name>"
+    echo -e "  • chore/<name>"
+    echo ""
+    echo -e "${YELLOW}Examples:${NC}"
+    echo -e "  ✓ feature/add-model-monitoring"
+    echo -e "  ✓ fix/memory-leak"
+    echo -e "  ✓ hotfix/security-vulnerability"
+    echo -e "  ✗ my-feature-branch"
+    echo -e "  ✗ Feature/AddModel (use lowercase)"
+    echo ""
+    ERRORS=$((ERRORS + 1))
+else
+    echo -e "${GREEN}✓ Branch name is valid: $CURRENT_BRANCH${NC}\n"
+fi
+
+# ============================================================================
+# 2. Protected Branch Check
+# ============================================================================
+echo -e "${BLUE}[2/5]${NC} Checking protected branches..."
+
+PROTECTED_BRANCHES=("main" "master" "production")
+
+for branch in "${PROTECTED_BRANCHES[@]}"; do
+    if [ "$CURRENT_BRANCH" == "$branch" ]; then
+        echo -e "${YELLOW}⚠ Warning: Pushing directly to $branch${NC}"
+        echo -e "${YELLOW}Consider using Pull Requests for protected branches${NC}\n"
+        # Don't fail, just warn
+    fi
+done
+
+echo -e "${GREEN}✓ Protected branch check complete${NC}\n"
+
+# ============================================================================
+# 3. Commit Message Format Validation
+# ============================================================================
+echo -e "${BLUE}[3/5]${NC} Validating commit messages..."
+
+# Get commits being pushed
+zero_commit="0000000000000000000000000000000000000000"
+
+while read local_ref local_sha remote_ref remote_sha; do
+    if [ "$local_sha" != "$zero_commit" ]; then
+        if [ "$remote_sha" == "$zero_commit" ]; then
+            # New branch, check all commits
+            range="$local_sha"
+        else
+            # Update, check commits since last push
+            range="$remote_sha..$local_sha"
+        fi
+
+        # Validate each commit message
+        COMMIT_MSG_ERRORS=0
+        for commit in $(git rev-list "$range"); do
+            MESSAGE=$(git log --format=%B -n 1 "$commit")
+            FIRST_LINE=$(echo "$MESSAGE" | head -1)
+
+            # Check conventional commit format: type(scope): description
+            if [[ ! $FIRST_LINE =~ ^(feat|fix|docs|style|refactor|test|chore|perf|ci|build|revert)(\(.+\))?: ]]; then
+                echo -e "${YELLOW}⚠ Non-conventional commit message:${NC}"
+                echo -e "   ${YELLOW}Commit:${NC} $(git log --format=%h -n 1 "$commit")"
+                echo -e "   ${YELLOW}Message:${NC} $FIRST_LINE"
+                echo ""
+                COMMIT_MSG_ERRORS=$((COMMIT_MSG_ERRORS + 1))
+            fi
+
+            # Check if first line is too long (max 72 chars)
+            if [ ${#FIRST_LINE} -gt 72 ]; then
+                echo -e "${YELLOW}⚠ Commit message first line too long (${#FIRST_LINE} chars, max 72):${NC}"
+                echo -e "   ${YELLOW}Commit:${NC} $(git log --format=%h -n 1 "$commit")"
+                echo ""
+                COMMIT_MSG_ERRORS=$((COMMIT_MSG_ERRORS + 1))
+            fi
+        done
+
+        if [ $COMMIT_MSG_ERRORS -gt 0 ]; then
+            echo -e "${YELLOW}Found $COMMIT_MSG_ERRORS commit message issue(s)${NC}"
+            echo -e "${BLUE}Recommended format:${NC}"
+            echo -e "  type(scope): short description"
+            echo ""
+            echo -e "${BLUE}Types:${NC} feat, fix, docs, style, refactor, test, chore, perf, ci, build, revert"
+            echo -e "${BLUE}Example:${NC} feat(api): add model versioning endpoint"
+            echo ""
+            # Don't fail on commit message format, just warn
+        else
+            echo -e "${GREEN}✓ All commit messages follow conventional format${NC}\n"
+        fi
+    fi
+done
+
+# ============================================================================
+# 4. Test Execution
+# ============================================================================
+echo -e "${BLUE}[4/5]${NC} Running tests..."
+
+# Run tests if pytest is available
+if command -v pytest &> /dev/null; then
+    if [ -d "tests" ]; then
+        echo -e "${BLUE}Running pytest...${NC}"
+
+        # Run quick tests only (exclude slow tests)
+        pytest tests/ -v --tb=short -m "not slow" || {
+            echo -e "${RED}✗ Tests failed${NC}"
+            echo -e "${YELLOW}Run 'pytest tests/' locally to see details${NC}\n"
+            ERRORS=$((ERRORS + 1))
+        }
+
+        if [ $ERRORS -eq 0 ]; then
+            echo -e "${GREEN}✓ All tests passed${NC}\n"
+        fi
+    else
+        echo -e "${YELLOW}⚠ No tests directory found${NC}\n"
+    fi
+else
+    echo -e "${YELLOW}⚠ pytest not found, skipping tests${NC}\n"
+fi
+
+# ============================================================================
+# 5. Security Checks
+# ============================================================================
+echo -e "${BLUE}[5/5]${NC} Running security checks..."
+
+# Check for secrets in commits being pushed
+echo -e "${BLUE}Scanning commits for secrets...${NC}"
+
+SECRET_PATTERNS=(
+    "password"
+    "api_key"
+    "secret"
+    "token"
+    "private_key"
+    "aws_secret_access_key"
+)
+
+SECRETS_IN_COMMITS=0
+while read local_ref local_sha remote_ref remote_sha; do
+    if [ "$local_sha" != "$zero_commit" ]; then
+        if [ "$remote_sha" == "$zero_commit" ]; then
+            range="$local_sha"
+        else
+            range="$remote_sha..$local_sha"
+        fi
+
+        for pattern in "${SECRET_PATTERNS[@]}"; do
+            if git log -p "$range" | grep -qi "$pattern"; then
+                echo -e "${YELLOW}⚠ Potential secret pattern found: $pattern${NC}"
+                SECRETS_IN_COMMITS=$((SECRETS_IN_COMMITS + 1))
+            fi
+        done
+    fi
+done
+
+if [ $SECRETS_IN_COMMITS -gt 0 ]; then
+    echo -e "${YELLOW}⚠ Found $SECRETS_IN_COMMITS potential secret pattern(s) in commits${NC}"
+    echo -e "${YELLOW}Review your commits for accidentally committed secrets${NC}\n"
+    # Don't fail, just warn
+else
+    echo -e "${GREEN}✓ No obvious secret patterns detected${NC}\n"
+fi
+
+# ============================================================================
+# Summary
+# ============================================================================
+if [ $ERRORS -gt 0 ]; then
+    echo -e "${RED}================================${NC}"
+    echo -e "${RED}❌ Pre-push checks FAILED${NC}"
+    echo -e "${RED}================================${NC}"
+    echo -e "${RED}Found $ERRORS critical error(s)${NC}"
+    echo -e "${YELLOW}Please fix the errors above and try again.${NC}\n"
+
+    exit 1
+else
+    echo -e "${GREEN}================================${NC}"
+    echo -e "${GREEN}✅ All pre-push checks passed!${NC}"
+    echo -e "${GREEN}================================${NC}\n"
+
+    echo -e "${BLUE}Pushing to $remote ($url)...${NC}\n"
+    exit 0
+fi

@@ -1,0 +1,65 @@
+# FastAPI ML API Dockerfile
+# Multi-stage build for smaller final image
+
+FROM python:3.11-slim as builder
+
+WORKDIR /build
+
+# Install build dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY configs/requirements-fastapi.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir --user -r requirements-fastapi.txt
+
+# Final stage
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Copy Python packages from builder
+COPY --from=builder /root/.local /root/.local
+
+# Make sure scripts in .local are usable
+ENV PATH=/root/.local/bin:$PATH
+
+# Copy application code
+COPY src/fastapi_app.py .
+COPY src/models.py .
+COPY src/model.pkl .
+
+# Create non-root user
+RUN useradd -m -u 1000 apiuser && \
+    chown -R apiuser:apiuser /app
+
+# Switch to non-root user
+USER apiuser
+
+# Environment variables
+ENV PYTHONUNBUFFERED=1 \
+    PORT=8000 \
+    SECRET_KEY=change-me-in-production \
+    MODEL_PATH=model.pkl \
+    WORKERS=4
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:8000/health').raise_for_status()"
+
+# Run with uvicorn for production
+CMD uvicorn fastapi_app:app \
+    --host 0.0.0.0 \
+    --port 8000 \
+    --workers ${WORKERS} \
+    --log-level info \
+    --access-log \
+    --no-use-colors

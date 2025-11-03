@@ -1,0 +1,82 @@
+# Prometheus configuration for ML API monitoring
+#
+# This is a basic configuration for monitoring Flask and FastAPI APIs.
+# In production, you would add more exporters and configure alerting.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'ml-api-cluster'
+    environment: 'development'
+
+# Alertmanager configuration (optional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           - alertmanager:9093
+
+# Load rules once and periodically evaluate them
+# rule_files:
+#   - "alert_rules.yml"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          service: 'prometheus'
+
+  # Flask API
+  # Note: Flask doesn't expose metrics by default
+  # You would need to add prometheus_client to Flask app
+  - job_name: 'flask-api'
+    static_configs:
+      - targets: ['flask:5000']
+        labels:
+          framework: 'flask'
+          service: 'ml-api'
+    # metrics_path: '/metrics'  # Uncomment if you add prometheus metrics endpoint
+
+  # FastAPI
+  # Note: FastAPI doesn't expose metrics by default
+  # You would need to add prometheus_fastapi_instrumentator
+  - job_name: 'fastapi-api'
+    static_configs:
+      - targets: ['fastapi:8000']
+        labels:
+          framework: 'fastapi'
+          service: 'ml-api'
+    # metrics_path: '/metrics'  # Uncomment if you add prometheus metrics endpoint
+
+  # Node exporter (if available) for system metrics
+  # - job_name: 'node'
+  #   static_configs:
+  #     - targets: ['node-exporter:9100']
+
+# Example alert rules (save to alert_rules.yml)
+#
+# groups:
+#   - name: ml_api_alerts
+#     interval: 30s
+#     rules:
+#       - alert: HighErrorRate
+#         expr: rate(http_requests_total{status=~"5.."}[5m]) > 0.05
+#         for: 5m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "High error rate detected"
+#           description: "Error rate is {{ $value }} requests/sec"
+#
+#       - alert: HighLatency
+#         expr: histogram_quantile(0.95, http_request_duration_seconds_bucket) > 1
+#         for: 5m
+#         labels:
+#           severity: warning
+#         annotations:
+#           summary: "High latency detected"
+#           description: "P95 latency is {{ $value }} seconds"

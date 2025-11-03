@@ -1,0 +1,268 @@
+version: '3.8'
+
+#
+# ML Infrastructure Network Segmentation Demo
+#
+# This docker-compose file demonstrates network segmentation for ML infrastructure
+# with separate networks for frontend, backend, and data layers.
+#
+# Architecture:
+#   Frontend Network: ML API (publicly accessible)
+#   Backend Network:  Feature Store (Redis), API can access
+#   Data Network:     Model Registry (PostgreSQL), API can access
+#
+# Usage:
+#   docker-compose up -d
+#   docker-compose ps
+#   docker-compose logs -f
+#   docker-compose down
+#
+
+networks:
+  # Frontend network for public-facing services
+  ml-frontend:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
+
+  # Backend network for internal services
+  ml-backend:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+          gateway: 172.21.0.1
+
+  # Data network for databases
+  ml-data:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
+          gateway: 172.22.0.1
+
+services:
+  # ============================================================================
+  # FRONTEND LAYER - Public-facing services
+  # ============================================================================
+
+  ml-api:
+    image: hashicorp/http-echo:latest
+    container_name: ml-api
+    command:
+      - -text=ML API v1.0 - Model Serving Endpoint
+      - -listen=:8080
+    networks:
+      ml-frontend:
+        ipv4_address: 172.20.0.10
+      ml-backend:  # Also connected to backend to access Redis
+        ipv4_address: 172.21.0.20
+      ml-data:     # Also connected to data layer to access PostgreSQL
+        ipv4_address: 172.22.0.20
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    labels:
+      - "layer=frontend"
+      - "service=ml-api"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ============================================================================
+  # BACKEND LAYER - Internal services (caching, feature store)
+  # ============================================================================
+
+  feature-store:
+    image: redis:7-alpine
+    container_name: feature-store
+    networks:
+      ml-backend:
+        ipv4_address: 172.21.0.10
+    command:
+      - redis-server
+      - --maxmemory 512mb
+      - --maxmemory-policy allkeys-lru
+      - --appendonly yes
+      - --save 60 1
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    labels:
+      - "layer=backend"
+      - "service=feature-store"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # ============================================================================
+  # DATA LAYER - Databases (isolated)
+  # ============================================================================
+
+  model-registry:
+    image: postgres:15-alpine
+    container_name: model-registry
+    networks:
+      ml-data:
+        ipv4_address: 172.22.0.10
+    environment:
+      POSTGRES_DB: ml_models
+      POSTGRES_USER: mluser
+      POSTGRES_PASSWORD: secure_password_here
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    restart: unless-stopped
+    labels:
+      - "layer=data"
+      - "service=model-registry"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mluser -d ml_models"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================================================
+  # MONITORING STACK
+  # ============================================================================
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    networks:
+      ml-frontend:
+        ipv4_address: 172.20.0.30
+      ml-backend:
+        ipv4_address: 172.21.0.30
+      ml-data:
+        ipv4_address: 172.22.0.30
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+    restart: unless-stopped
+    labels:
+      - "layer=monitoring"
+      - "service=prometheus"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    networks:
+      ml-frontend:
+        ipv4_address: 172.20.0.40
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    labels:
+      - "layer=monitoring"
+      - "service=grafana"
+
+  # ============================================================================
+  # NETWORK TESTING CONTAINER
+  # ============================================================================
+
+  network-test:
+    image: nicolaka/netshoot:latest
+    container_name: network-test
+    networks:
+      - ml-frontend
+    command: sleep infinity
+    labels:
+      - "layer=testing"
+      - "service=network-test"
+
+volumes:
+  redis-data:
+    driver: local
+  postgres-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+# ==============================================================================
+# USAGE EXAMPLES
+# ==============================================================================
+#
+# 1. Start all services:
+#    docker-compose up -d
+#
+# 2. Check service status:
+#    docker-compose ps
+#
+# 3. Test network segmentation:
+#    # ML API can reach backend services
+#    docker exec ml-api ping -c 2 172.21.0.10        # Should reach Redis
+#    docker exec ml-api ping -c 2 172.22.0.10        # Should reach PostgreSQL
+#
+#    # Backend services CANNOT reach each other (isolated)
+#    docker exec feature-store ping -c 2 172.22.0.10  # Should FAIL (timeout)
+#
+# 4. Test service connectivity:
+#    # From host machine
+#    curl http://localhost:8080                       # ML API
+#    curl http://localhost:9090                       # Prometheus
+#    curl http://localhost:3000                       # Grafana
+#
+#    # From inside containers
+#    docker exec ml-api wget -qO- http://172.21.0.10:6379  # Redis check
+#
+# 5. Enter network-test container for debugging:
+#    docker exec -it network-test bash
+#    # Then use: ping, curl, nslookup, dig, traceroute, etc.
+#
+# 6. View logs:
+#    docker-compose logs -f ml-api
+#    docker-compose logs -f feature-store
+#
+# 7. Network inspection:
+#    docker network ls
+#    docker network inspect ml-frontend
+#    docker network inspect ml-backend
+#    docker network inspect ml-data
+#
+# 8. Stop all services:
+#    docker-compose down
+#
+# 9. Remove volumes (CAUTION: deletes data):
+#    docker-compose down -v
+#
+# ==============================================================================
+# SECURITY NOTES
+# ==============================================================================
+#
+# This setup demonstrates:
+# - Network segmentation (3 isolated networks)
+# - Principle of least privilege (services only on networks they need)
+# - Health checks for all critical services
+# - Persistent volumes for data
+#
+# In production, also consider:
+# - TLS/SSL for all communications
+# - Secrets management (don't hardcode passwords)
+# - Network policies and firewall rules
+# - Service mesh for advanced traffic management
+# - Regular security audits and updates
+#

@@ -1,0 +1,591 @@
+# KEDA Event-Driven Autoscaling for ML Workloads
+# Demonstrates queue-based, cron-based, and Prometheus-based scaling
+
+---
+# Deployment for batch inference processor (scales based on queue)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: batch-inference-processor
+  namespace: ml-platform
+  labels:
+    app: batch-inference
+    workload-type: batch
+spec:
+  replicas: 1  # KEDA will manage replicas
+  selector:
+    matchLabels:
+      app: batch-inference
+  template:
+    metadata:
+      labels:
+        app: batch-inference
+        workload-type: batch
+    spec:
+      containers:
+      - name: processor
+        image: busybox:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "=== Batch Inference Processor ==="
+          echo "Pod: $HOSTNAME"
+          echo "Starting batch processing..."
+
+          while true; do
+            # Simulate batch processing
+            BATCH_SIZE=$((RANDOM % 100 + 10))
+            PROCESSING_TIME=$((RANDOM % 30 + 10))
+
+            echo "----------------------------------------"
+            echo "Timestamp: $(date)"
+            echo "Processing batch of $BATCH_SIZE items"
+            echo "Estimated time: ${PROCESSING_TIME}s"
+
+            # Simulate processing
+            for i in $(seq 1 $BATCH_SIZE); do
+              if [ $((i % 10)) -eq 0 ]; then
+                echo "  Processed $i/$BATCH_SIZE items"
+              fi
+              sleep 0.2
+            done
+
+            echo "Batch completed in ${PROCESSING_TIME}s"
+            echo "Waiting for next batch..."
+            sleep 10
+          done
+
+        resources:
+          requests:
+            cpu: 200m
+            memory: 256Mi
+          limits:
+            cpu: 1000m
+            memory: 512Mi
+
+        env:
+        - name: PROCESSING_TIMEOUT
+          value: "60"
+        - name: BATCH_SIZE
+          value: "100"
+
+---
+# ScaledObject for queue-based scaling
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: batch-inference-scaler
+  namespace: ml-platform
+  labels:
+    app: batch-inference
+spec:
+  scaleTargetRef:
+    name: batch-inference-processor
+
+  # Scale to zero when no work
+  minReplicaCount: 0
+  maxReplicaCount: 20
+
+  # Polling and cooldown
+  pollingInterval: 30      # Check metrics every 30 seconds
+  cooldownPeriod: 300      # Wait 5 minutes before scaling to zero
+
+  triggers:
+  # Trigger 1: Prometheus metric - queue depth
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus-server.monitoring.svc.cluster.local
+      metricName: inference_queue_depth
+      query: sum(inference_queue_length{queue="batch"})
+      threshold: "10"  # Scale up when queue > 10 items per pod
+      activationThreshold: "1"  # Scale from 0 when queue has any items
+
+  # Trigger 2: CPU utilization (backup trigger)
+  - type: cpu
+    metricType: Utilization
+    metadata:
+      value: "60"  # Scale when CPU > 60%
+
+  # Scaling behavior
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 300
+          policies:
+          - type: Percent
+            value: 50
+            periodSeconds: 60
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies:
+          - type: Percent
+            value: 100
+            periodSeconds: 30
+
+---
+# Deployment for scheduled training jobs
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scheduled-training
+  namespace: ml-platform
+  labels:
+    app: scheduled-training
+    workload-type: training
+spec:
+  replicas: 0  # Start at zero, KEDA will scale based on schedule
+  selector:
+    matchLabels:
+      app: scheduled-training
+  template:
+    metadata:
+      labels:
+        app: scheduled-training
+        workload-type: training
+    spec:
+      containers:
+      - name: trainer
+        image: python:3.11-slim
+        command:
+        - /bin/bash
+        - -c
+        - |
+          echo "=== Scheduled Training Job ==="
+          echo "Pod: $HOSTNAME"
+          echo "Start time: $(date)"
+
+          # Simulate model training
+          for epoch in {1..10}; do
+            echo "Epoch $epoch/10"
+            python3 -c "
+          import time
+          import random
+
+          # Simulate training epoch
+          for step in range(100):
+              if step % 25 == 0:
+                  loss = random.uniform(0.5, 2.0) / (epoch * 0.5)
+                  acc = random.uniform(0.7, 0.95) * (epoch * 0.05)
+                  print(f'  Step {step}: loss={loss:.4f}, accuracy={acc:.4f}')
+              time.sleep(0.1)
+            "
+            echo "Epoch $epoch completed"
+          done
+
+          echo "Training completed: $(date)"
+          echo "Sleeping until next scheduled run..."
+          sleep infinity
+
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 2000m
+            memory: 4Gi
+
+---
+# ScaledObject for cron-based scheduling
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: scheduled-training-scaler
+  namespace: ml-platform
+  labels:
+    app: scheduled-training
+spec:
+  scaleTargetRef:
+    name: scheduled-training
+
+  minReplicaCount: 0
+  maxReplicaCount: 5
+
+  triggers:
+  # Trigger: Business hours (9 AM - 6 PM Mon-Fri)
+  - type: cron
+    metadata:
+      timezone: America/New_York
+      start: 0 9 * * 1-5      # 9 AM Monday-Friday
+      end: 0 18 * * 1-5       # 6 PM Monday-Friday
+      desiredReplicas: "3"    # Run 3 training jobs during business hours
+
+  # Trigger: Night time (scale down)
+  - type: cron
+    metadata:
+      timezone: America/New_York
+      start: 0 22 * * *       # 10 PM every day
+      end: 0 6 * * *          # 6 AM every day
+      desiredReplicas: "0"    # Scale to zero at night
+
+---
+# Deployment for event-driven inference
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: event-driven-inference
+  namespace: ml-platform
+  labels:
+    app: event-inference
+    workload-type: inference
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: event-inference
+  template:
+    metadata:
+      labels:
+        app: event-inference
+    spec:
+      containers:
+      - name: inference
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+
+---
+# ScaledObject with multiple triggers
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: event-inference-scaler
+  namespace: ml-platform
+spec:
+  scaleTargetRef:
+    name: event-driven-inference
+
+  minReplicaCount: 0
+  maxReplicaCount: 30
+
+  pollingInterval: 15
+  cooldownPeriod: 180  # 3 minutes cooldown
+
+  triggers:
+  # Trigger 1: HTTP requests (using Prometheus)
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus-server.monitoring.svc.cluster.local
+      metricName: http_requests_rate
+      query: rate(http_requests_total{app="event-inference"}[2m])
+      threshold: "50"  # Scale when > 50 req/s per pod
+
+  # Trigger 2: Active connections
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus-server.monitoring.svc.cluster.local
+      metricName: active_connections
+      query: sum(nginx_connections_active{app="event-inference"})
+      threshold: "100"  # Scale when > 100 active connections per pod
+
+  # Trigger 3: Response time (latency)
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus-server.monitoring.svc.cluster.local
+      metricName: response_time_p95
+      query: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{app="event-inference"}[5m]))
+      threshold: "0.2"  # Scale when P95 latency > 200ms
+
+---
+# ConfigMap with KEDA usage guide
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keda-usage-guide
+  namespace: ml-platform
+data:
+  README.md: |
+    # KEDA Event-Driven Autoscaling
+
+    ## Overview
+
+    KEDA (Kubernetes Event-Driven Autoscaling) extends Kubernetes autoscaling
+    with event sources and scale-to-zero capabilities.
+
+    ## Key Features
+
+    1. **Scale to Zero**: Save costs by scaling to 0 replicas when idle
+    2. **Event Sources**: 50+ scalers (queues, databases, metrics, cron)
+    3. **External Metrics**: Bring your own metrics from any source
+    4. **Multi-Trigger**: Combine multiple triggers in a single ScaledObject
+
+    ## Installation
+
+    ```bash
+    # Install KEDA with Helm
+    helm repo add kedacore https://kedacore.github.io/charts
+    helm repo update
+
+    helm install keda kedacore/keda \
+      --namespace keda \
+      --create-namespace
+
+    # Verify installation
+    kubectl get pods -n keda
+    kubectl get crd | grep keda
+    ```
+
+    Expected output:
+    ```
+    NAME                               READY   STATUS    RESTARTS   AGE
+    keda-operator-5d8f9b4d9f-xxxxx    1/1     Running   0          1m
+    keda-operator-metrics-apiserver   1/1     Running   0          1m
+    ```
+
+    ## KEDA Components
+
+    1. **Operator**: Manages ScaledObjects and ScaledJobs
+    2. **Metrics Server**: Exposes external metrics to HPA
+    3. **Admission Webhooks**: Validates ScaledObject resources
+
+    ## ScaledObject Configuration
+
+    ### Basic Structure
+
+    ```yaml
+    apiVersion: keda.sh/v1alpha1
+    kind: ScaledObject
+    metadata:
+      name: my-scaler
+    spec:
+      scaleTargetRef:
+        name: my-deployment        # Target deployment
+      minReplicaCount: 0           # Can scale to zero
+      maxReplicaCount: 20          # Maximum replicas
+      pollingInterval: 30          # Check metrics every 30s
+      cooldownPeriod: 300          # Wait 5 min before scaling to zero
+      triggers:
+      - type: prometheus            # Scaler type
+        metadata:
+          serverAddress: http://...
+          query: ...
+          threshold: "10"
+    ```
+
+    ## Available Scalers
+
+    ### Queue-Based Scalers
+    - **aws-sqs-queue**: Amazon SQS
+    - **azure-queue**: Azure Queue Storage
+    - **rabbitmq**: RabbitMQ queues
+    - **kafka**: Kafka consumer lag
+    - **redis-lists**: Redis list length
+
+    ### Metric-Based Scalers
+    - **prometheus**: Prometheus queries
+    - **datadog**: Datadog metrics
+    - **new-relic**: New Relic metrics
+    - **grafana**: Grafana Cloud metrics
+
+    ### Schedule-Based Scalers
+    - **cron**: Time-based scaling
+
+    ### Database Scalers
+    - **postgresql**: PostgreSQL query results
+    - **mysql**: MySQL query results
+    - **mongodb**: MongoDB query results
+
+    ## Use Cases
+
+    ### 1. Queue-Based Batch Processing
+
+    ```yaml
+    triggers:
+    - type: aws-sqs-queue
+      metadata:
+        queueURL: https://sqs.us-east-1.amazonaws.com/xxx/my-queue
+        queueLength: "10"
+        awsRegion: "us-east-1"
+    ```
+
+    **Behavior:**
+    - Scales to 0 when queue is empty
+    - Scales up when messages arrive
+    - Processes messages and scales back down
+
+    ### 2. Scheduled Training Jobs
+
+    ```yaml
+    triggers:
+    - type: cron
+      metadata:
+        timezone: America/New_York
+        start: 0 9 * * 1-5      # Mon-Fri 9 AM
+        end: 0 18 * * 1-5       # Mon-Fri 6 PM
+        desiredReplicas: "5"
+    ```
+
+    **Behavior:**
+    - Scales to 5 replicas at 9 AM
+    - Keeps 5 replicas until 6 PM
+    - Scales to 0 at 6 PM
+    - Saves 67% compute cost (16h vs 24h)
+
+    ### 3. Custom Metrics Scaling
+
+    ```yaml
+    triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus:80
+        query: sum(inference_queue_length)
+        threshold: "10"
+    ```
+
+    **Behavior:**
+    - Monitors custom application metric
+    - Scales based on business logic (queue depth)
+    - More accurate than CPU/memory metrics
+
+    ## Monitoring KEDA
+
+    ```bash
+    # List all ScaledObjects
+    kubectl get scaledobject -n ml-platform
+
+    # Describe ScaledObject
+    kubectl describe scaledobject batch-inference-scaler -n ml-platform
+
+    # Check KEDA operator logs
+    kubectl logs -n keda -l app=keda-operator
+
+    # View current metric values
+    kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1/namespaces/ml-platform/inference_queue_depth"
+
+    # Watch scaling in real-time
+    watch 'kubectl get scaledobject,deployment,pods -n ml-platform'
+    ```
+
+    ## Testing
+
+    ### Test 1: Scale from Zero
+
+    ```bash
+    # Verify initial state (0 replicas)
+    kubectl get deployment batch-inference-processor -n ml-platform
+
+    # Simulate queue messages (increase Prometheus metric)
+    # In production, this would be real messages in a queue
+    kubectl run metrics-generator -n ml-platform --image=alpine/curl -- \
+      -X POST http://prometheus-pushgateway:9091/metrics/job/test \
+      --data-binary 'inference_queue_length{queue="batch"} 100'
+
+    # Watch KEDA scale up
+    kubectl get pods -n ml-platform -l app=batch-inference --watch
+
+    # Expected: Scales from 0 to 10 replicas (100 messages / 10 per pod)
+    ```
+
+    ### Test 2: Cron-Based Scaling
+
+    ```bash
+    # Check current replicas (should be 0 outside business hours)
+    kubectl get deployment scheduled-training -n ml-platform
+
+    # Temporarily trigger scaling (edit start time to current time)
+    kubectl edit scaledobject scheduled-training-scaler -n ml-platform
+
+    # Watch for scaling
+    kubectl get pods -n ml-platform -l app=scheduled-training --watch
+
+    # Expected: Scales to 3 replicas during business hours
+    ```
+
+    ## Troubleshooting
+
+    ### ScaledObject not activating
+
+    ```bash
+    # Check ScaledObject status
+    kubectl describe scaledobject -n ml-platform
+
+    # Look for conditions:
+    # - Ready: True
+    # - Active: True  (has work to do)
+    # - Fallback: False (not in fallback mode)
+
+    # Check if trigger is working
+    kubectl logs -n keda -l app=keda-operator | grep "batch-inference"
+    ```
+
+    ### Metrics not available
+
+    ```bash
+    # Verify external metrics API
+    kubectl get apiservice v1beta1.external.metrics.k8s.io
+
+    # Check if KEDA metrics server is running
+    kubectl get pods -n keda -l app.kubernetes.io/name=keda-operator-metrics-apiserver
+
+    # Test metric query
+    kubectl get --raw "/apis/external.metrics.k8s.io/v1beta1" | jq .
+    ```
+
+    ### Scaling too aggressive/conservative
+
+    Adjust polling interval and cooldown:
+
+    ```yaml
+    spec:
+      pollingInterval: 60      # Increase for less frequent checks
+      cooldownPeriod: 600      # Increase to wait longer before scaling down
+    ```
+
+    ## Cost Optimization with KEDA
+
+    ### Example: Batch Processing Workload
+
+    **Without KEDA (Always On):**
+    - 5 replicas × 24 hours × 30 days = 3,600 pod-hours/month
+    - Cost: $360/month (at $0.10/pod-hour)
+
+    **With KEDA (Scale to Zero):**
+    - Average queue depth: 20 items
+    - Processing time: 2 hours/day
+    - 2 replicas × 2 hours × 30 days = 120 pod-hours/month
+    - Cost: $12/month
+    - **Savings: $348/month (97%)**
+
+    ### Example: Scheduled Training
+
+    **Without KEDA (Always On):**
+    - 3 replicas × 24 hours × 30 days = 2,160 pod-hours/month
+
+    **With KEDA (Business Hours Only):**
+    - 3 replicas × 9 hours × 22 days = 594 pod-hours/month
+    - **Savings: 72%**
+
+    ## Best Practices
+
+    ✅ Start with scale to zero for batch workloads
+    ✅ Use minReplicas=1 for user-facing APIs (avoid cold start)
+    ✅ Set appropriate cooldownPeriod (5-10 minutes)
+    ✅ Combine multiple triggers for robust scaling
+    ✅ Monitor KEDA metrics and tune thresholds
+    ✅ Test scaling behavior under different loads
+    ✅ Use cron scalers for predictable workloads
+
+    ## KEDA vs HPA vs VPA
+
+    | Feature | KEDA | HPA | VPA |
+    |---------|------|-----|-----|
+    | Scale to zero | ✅ Yes | ❌ No | ❌ No |
+    | Event sources | ✅ 50+ | ❌ CPU/Memory only | N/A |
+    | Custom metrics | ✅ Easy | ⚠️ Complex | N/A |
+    | Schedule-based | ✅ Yes | ❌ No | ❌ No |
+    | Resource optimization | ❌ No | ❌ No | ✅ Yes |
+
+    **Recommendation:**
+    - Use KEDA for batch/event-driven workloads
+    - Use HPA for user-facing APIs
+    - Use VPA for resource optimization
+    - Don't combine KEDA and HPA (KEDA creates HPA automatically)

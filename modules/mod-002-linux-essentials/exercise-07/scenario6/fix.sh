@@ -1,0 +1,429 @@
+#!/bin/bash
+###############################################################################
+# Scenario 6: Network Connectivity - Fix Script
+###############################################################################
+#
+# Usage: ./fix.sh [--fix-dns] [--test-connectivity] [--configure-proxy]
+#
+
+set -u
+
+# Colors
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+log_info() { echo -e "${BLUE}ℹ${NC} $*"; }
+log_success() { echo -e "${GREEN}✓${NC} $*"; }
+log_warning() { echo -e "${YELLOW}⚠${NC} $*"; }
+log_error() { echo -e "${RED}✗${NC} $*"; }
+
+# Default values
+FIX_DNS=false
+TEST_ONLY=false
+CONFIGURE_PROXY=false
+PROXY_URL=""
+DRY_RUN=false
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --fix-dns)
+            FIX_DNS=true
+            shift
+            ;;
+        --test-connectivity)
+            TEST_ONLY=true
+            shift
+            ;;
+        --configure-proxy)
+            CONFIGURE_PROXY=true
+            if [[ $# -gt 1 ]] && [[ ! $2 =~ ^-- ]]; then
+                PROXY_URL="$2"
+                shift
+            fi
+            shift
+            ;;
+        --dry-run)
+            DRY_RUN=true
+            shift
+            ;;
+        -h|--help)
+            cat << EOF
+Usage: $0 [OPTIONS]
+
+Fix network connectivity issues.
+
+Options:
+  --fix-dns                Fix DNS configuration (use Google DNS)
+  --test-connectivity      Test connectivity to common services
+  --configure-proxy URL    Configure HTTP/HTTPS proxy
+  --dry-run                Show what would be done without doing it
+  -h, --help               Show this help message
+
+Examples:
+  $0 --test-connectivity
+  $0 --fix-dns
+  $0 --configure-proxy http://proxy.company.com:8080
+
+EOF
+            exit 0
+            ;;
+        *)
+            log_error "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+done
+
+echo "╔════════════════════════════════════════════════════════════╗"
+echo "║  Network Connectivity Fix Utility                          ║"
+echo "╚════════════════════════════════════════════════════════════╝"
+echo ""
+
+if [ "$DRY_RUN" = true ]; then
+    log_warning "DRY RUN MODE - No changes will be made"
+    echo ""
+fi
+
+# Test connectivity
+test_connectivity() {
+    log_info "Testing connectivity to common ML services..."
+    echo ""
+
+    # Test hosts
+    test_hosts=(
+        "8.8.8.8:Google DNS"
+        "huggingface.co:Hugging Face"
+        "github.com:GitHub"
+        "pytorch.org:PyTorch"
+        "pypi.org:PyPI"
+    )
+
+    success_count=0
+    total_count=${#test_hosts[@]}
+
+    for host_desc in "${test_hosts[@]}"; do
+        host=$(echo "$host_desc" | cut -d: -f1)
+        desc=$(echo "$host_desc" | cut -d: -f2)
+
+        # Try ping first
+        if ping -c 1 -W 2 "$host" &>/dev/null; then
+            log_success "$desc ($host) - reachable via ping"
+            success_count=$((success_count + 1))
+        elif command -v curl &>/dev/null && curl -s --connect-timeout 3 -I "https://$host" &>/dev/null; then
+            log_success "$desc ($host) - reachable via HTTPS"
+            success_count=$((success_count + 1))
+        else
+            log_error "$desc ($host) - not reachable"
+        fi
+    done
+
+    echo ""
+    log_info "Connectivity: $success_count/$total_count hosts reachable"
+
+    if [ $success_count -eq $total_count ]; then
+        log_success "All connectivity tests passed!"
+        return 0
+    elif [ $success_count -gt 0 ]; then
+        log_warning "Partial connectivity"
+        return 1
+    else
+        log_error "No connectivity!"
+        return 1
+    fi
+}
+
+# Fix DNS
+fix_dns() {
+    log_info "Configuring DNS..."
+    echo ""
+
+    # Backup current configuration
+    if [ -f /etc/resolv.conf ] && [ "$DRY_RUN" = false ]; then
+        sudo cp /etc/resolv.conf /etc/resolv.conf.backup
+        log_info "Backed up /etc/resolv.conf"
+    fi
+
+    # Check if resolv.conf is managed by systemd-resolved
+    if [ -L /etc/resolv.conf ] && readlink /etc/resolv.conf | grep -q "systemd"; then
+        log_warning "/etc/resolv.conf is managed by systemd-resolved"
+        echo ""
+
+        if [ "$DRY_RUN" = false ]; then
+            # Configure systemd-resolved
+            log_info "Configuring systemd-resolved..."
+
+            sudo mkdir -p /etc/systemd/resolved.conf.d/
+            cat << EOF | sudo tee /etc/systemd/resolved.conf.d/dns.conf
+[Resolve]
+DNS=8.8.8.8 8.8.4.4
+FallbackDNS=1.1.1.1 1.0.0.1
+EOF
+
+            sudo systemctl restart systemd-resolved
+            log_success "systemd-resolved configured with Google DNS"
+        else
+            log_info "Would configure systemd-resolved with Google DNS"
+        fi
+    else
+        # Direct configuration
+        if [ "$DRY_RUN" = false ]; then
+            log_info "Setting Google DNS servers..."
+
+            cat << EOF | sudo tee /etc/resolv.conf
+# Generated by fix.sh
+# Google Public DNS
+nameserver 8.8.8.8
+nameserver 8.8.4.4
+
+# Cloudflare DNS (fallback)
+nameserver 1.1.1.1
+nameserver 1.0.0.1
+EOF
+
+            log_success "DNS configured"
+        else
+            log_info "Would write:"
+            echo "    nameserver 8.8.8.8"
+            echo "    nameserver 8.8.4.4"
+        fi
+    fi
+
+    echo ""
+    log_info "Testing DNS resolution..."
+
+    if nslookup google.com &>/dev/null; then
+        log_success "DNS resolution working"
+    else
+        log_error "DNS resolution still failing"
+        log_info "You may need to restart networking or reboot"
+    fi
+}
+
+# Configure proxy
+configure_proxy() {
+    if [ -z "$PROXY_URL" ]; then
+        log_error "No proxy URL provided"
+        echo ""
+        log_info "Usage: $0 --configure-proxy http://proxy.company.com:8080"
+        return 1
+    fi
+
+    log_info "Configuring proxy: $PROXY_URL"
+    echo ""
+
+    # Create proxy configuration file
+    proxy_file="$HOME/.proxy_env"
+
+    if [ "$DRY_RUN" = false ]; then
+        cat > "$proxy_file" << EOF
+# Proxy Configuration
+# Generated by fix.sh on $(date)
+
+export HTTP_PROXY="$PROXY_URL"
+export HTTPS_PROXY="$PROXY_URL"
+export http_proxy="$PROXY_URL"
+export https_proxy="$PROXY_URL"
+export NO_PROXY="localhost,127.0.0.1,::1"
+export no_proxy="localhost,127.0.0.1,::1"
+EOF
+
+        log_success "Created proxy configuration: $proxy_file"
+
+        # Add to shell rc files
+        for rc_file in "$HOME/.bashrc" "$HOME/.zshrc"; do
+            if [ -f "$rc_file" ]; then
+                if ! grep -q "source $proxy_file" "$rc_file"; then
+                    echo "" >> "$rc_file"
+                    echo "# Proxy configuration" >> "$rc_file"
+                    echo "[ -f $proxy_file ] && source $proxy_file" >> "$rc_file"
+                    log_success "Added to $rc_file"
+                fi
+            fi
+        done
+
+        # Configure APT proxy
+        log_info "Configuring APT proxy..."
+        cat << EOF | sudo tee /etc/apt/apt.conf.d/proxy.conf
+Acquire::http::Proxy "$PROXY_URL";
+Acquire::https::Proxy "$PROXY_URL";
+EOF
+        log_success "APT proxy configured"
+
+        # Configure Git proxy
+        log_info "Configuring Git proxy..."
+        git config --global http.proxy "$PROXY_URL"
+        git config --global https.proxy "$PROXY_URL"
+        log_success "Git proxy configured"
+
+        # Configure pip proxy
+        pip_conf="$HOME/.config/pip/pip.conf"
+        mkdir -p "$(dirname "$pip_conf")"
+        cat << EOF > "$pip_conf"
+[global]
+proxy = $PROXY_URL
+EOF
+        log_success "pip proxy configured"
+
+        echo ""
+        log_success "Proxy configured for multiple tools"
+        log_warning "Run 'source ~/.bashrc' or restart terminal to apply"
+    else
+        log_info "Would create proxy configuration"
+        log_info "Would configure: shell, APT, Git, pip"
+    fi
+}
+
+# Main execution
+if [ "$TEST_ONLY" = true ]; then
+    test_connectivity
+    exit $?
+fi
+
+if [ "$FIX_DNS" = false ] && [ "$CONFIGURE_PROXY" = false ] && [ "$TEST_ONLY" = false ]; then
+    log_info "No action specified. Running diagnostics..."
+    echo ""
+
+    # Run basic tests
+    log_info "Quick connectivity test..."
+    if ping -c 2 8.8.8.8 &>/dev/null; then
+        log_success "Basic connectivity OK (can reach 8.8.8.8)"
+    else
+        log_error "No basic connectivity"
+    fi
+
+    echo ""
+
+    if nslookup google.com &>/dev/null; then
+        log_success "DNS resolution OK"
+    else
+        log_error "DNS resolution failing"
+        log_info "Try: $0 --fix-dns"
+    fi
+
+    echo ""
+    log_info "For full testing: $0 --test-connectivity"
+    log_info "To fix DNS: $0 --fix-dns"
+    log_info "To configure proxy: $0 --configure-proxy URL"
+    exit 0
+fi
+
+if [ "$FIX_DNS" = true ]; then
+    fix_dns
+    echo ""
+fi
+
+if [ "$CONFIGURE_PROXY" = true ]; then
+    configure_proxy
+    echo ""
+fi
+
+# Test after fixes
+if [ "$FIX_DNS" = true ] || [ "$CONFIGURE_PROXY" = true ]; then
+    if [ "$DRY_RUN" = false ]; then
+        echo "═══════════════════════════════════════════════════════════"
+        echo "Testing connectivity after fixes..."
+        echo ""
+        test_connectivity
+    fi
+fi
+
+echo ""
+echo "╔════════════════════════════════════════════════════════════╗"
+echo "║  Network Troubleshooting Guide                             ║"
+echo "╚════════════════════════════════════════════════════════════╝"
+echo ""
+
+echo "1. BASIC CONNECTIVITY"
+echo "   Test gateway:"
+echo "     ping \$(ip route | grep default | awk '{print \$3}')"
+echo ""
+echo "   Test external:"
+echo "     ping 8.8.8.8"
+echo ""
+
+echo "2. DNS ISSUES"
+echo "   Test DNS:"
+echo "     nslookup google.com"
+echo "     dig google.com"
+echo ""
+echo "   Fix DNS:"
+echo "     echo 'nameserver 8.8.8.8' | sudo tee /etc/resolv.conf"
+echo ""
+echo "   Flush DNS cache:"
+echo "     sudo systemd-resolve --flush-caches"
+echo ""
+
+echo "3. PROXY CONFIGURATION"
+echo "   Set environment variables:"
+echo "     export HTTP_PROXY=http://proxy:8080"
+echo "     export HTTPS_PROXY=http://proxy:8080"
+echo ""
+echo "   Configure pip:"
+echo "     pip config set global.proxy http://proxy:8080"
+echo ""
+echo "   Configure git:"
+echo "     git config --global http.proxy http://proxy:8080"
+echo ""
+
+echo "4. FIREWALL"
+echo "   Check rules:"
+echo "     sudo iptables -L -n"
+echo "     sudo ufw status"
+echo ""
+echo "   Allow outgoing (UFW):"
+echo "     sudo ufw allow out to any"
+echo ""
+
+echo "5. CERTIFICATE ISSUES"
+echo "   Test SSL:"
+echo "     openssl s_client -connect google.com:443"
+echo ""
+echo "   Update CA certificates:"
+echo "     sudo update-ca-certificates"
+echo ""
+echo "   Skip verification (NOT RECOMMENDED):"
+echo "     curl -k https://..."
+echo "     pip install --trusted-host pypi.org ..."
+echo ""
+
+echo "6. APPLICATION-SPECIFIC"
+echo "   Python requests with proxy:"
+echo "     proxies = {'http': 'http://proxy:8080', 'https': 'http://proxy:8080'}"
+echo "     requests.get(url, proxies=proxies)"
+echo ""
+echo "   Disable SSL verification (NOT RECOMMENDED):"
+echo "     requests.get(url, verify=False)"
+echo ""
+echo "   Set timeouts:"
+echo "     requests.get(url, timeout=30)"
+echo ""
+
+echo "7. DEBUGGING"
+echo "   Trace route:"
+echo "     traceroute google.com"
+echo "     mtr google.com"
+echo ""
+echo "   Check ports:"
+echo "     nc -zv google.com 443"
+echo "     telnet google.com 443"
+echo ""
+echo "   Monitor traffic:"
+echo "     sudo tcpdump -i any port 443"
+echo ""
+
+echo "8. RESET NETWORK"
+echo "   Restart networking:"
+echo "     sudo systemctl restart networking"
+echo "     sudo systemctl restart NetworkManager"
+echo ""
+echo "   Bring interface down/up:"
+echo "     sudo ip link set eth0 down"
+echo "     sudo ip link set eth0 up"
+echo ""
+
+log_info "For detailed investigation, run: ./investigate.sh"
+echo ""

@@ -1,0 +1,98 @@
+# ML Infrastructure Automation - Cron Schedule Examples
+#
+# Installation:
+#   crontab -e
+#   # Copy desired lines below into your crontab
+#
+# Format: MIN HOUR DOM MON DOW COMMAND
+#
+# Environment variables (add at top of crontab)
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+MAILTO=ml-ops@company.com
+MODEL_DIR=/opt/ml/models
+BACKUP_DIR=/backup/models
+
+###############################################################################
+# Daily Model Backups
+###############################################################################
+
+# Run backups every day at 2 AM
+0 2 * * * /home/mluser/exercise-08/backups/backup_models.sh >> /var/log/ml-backup-cron.log 2>&1
+
+# Alternative: Run backups twice daily (2 AM and 2 PM)
+# 0 2,14 * * * /home/mluser/exercise-08/backups/backup_models.sh
+
+###############################################################################
+# GPU Health Monitoring
+###############################################################################
+
+# Check GPU health every 5 minutes
+*/5 * * * * /home/mluser/exercise-08/monitoring/monitor_gpus.sh >> /var/log/gpu-monitor-cron.log 2>&1
+
+# Alternative: Check every 15 minutes
+# */15 * * * * /home/mluser/exercise-08/monitoring/monitor_gpus.sh
+
+###############################################################################
+# Weekly Cleanup
+###############################################################################
+
+# Run cleanup every Sunday at 3 AM
+0 3 * * 0 /home/mluser/exercise-08/cleanup/cleanup_ml_artifacts.sh >> /var/log/ml-cleanup-cron.log 2>&1
+
+# Alternative: Run cleanup daily
+# 0 3 * * * /home/mluser/exercise-08/cleanup/cleanup_ml_artifacts.sh
+
+# Alternative: Aggressive cleanup weekly
+# 0 3 * * 0 /home/mluser/exercise-08/cleanup/cleanup_ml_artifacts.sh --aggressive
+
+###############################################################################
+# System Health Checks
+###############################################################################
+
+# Run health check every hour
+0 * * * * /home/mluser/exercise-08/health-check/health_check.sh >> /var/log/health-check-cron.log 2>&1
+
+# Alternative: Run health check every 6 hours
+# 0 */6 * * * /home/mluser/exercise-08/health-check/health_check.sh
+
+###############################################################################
+# Full Maintenance Suite
+###############################################################################
+
+# Run complete maintenance suite weekly (Sunday at 1 AM)
+0 1 * * 0 /home/mluser/exercise-08/run_all_maintenance.sh >> /var/log/ml-maintenance-cron.log 2>&1
+
+###############################################################################
+# Monitoring and Alerts
+###############################################################################
+
+# Send daily health report via email (requires mail command)
+0 8 * * * /home/mluser/exercise-08/health-check/health_check.sh | mail -s "ML Infrastructure Health Report" ml-ops@company.com
+
+###############################################################################
+# Cron Best Practices
+###############################################################################
+#
+# 1. Always redirect output to logs (>> /var/log/file.log 2>&1)
+# 2. Use absolute paths for scripts and logs
+# 3. Test scripts manually before adding to cron
+# 4. Monitor cron logs: grep CRON /var/log/syslog
+# 5. Use MAILTO to receive failure notifications
+# 6. Set environment variables at top of crontab
+# 7. Consider using systemd timers for more complex scheduling
+#
+###############################################################################
+# Common Cron Schedule Patterns
+###############################################################################
+#
+# Every 5 minutes:    */5 * * * *
+# Every hour:         0 * * * *
+# Every 6 hours:      0 */6 * * *
+# Daily at 2 AM:      0 2 * * *
+# Weekly (Sunday):    0 2 * * 0
+# Monthly (1st):      0 2 1 * *
+# Weekdays only:      0 2 * * 1-5
+# Multiple times:     0 2,14 * * *
+#
+###############################################################################

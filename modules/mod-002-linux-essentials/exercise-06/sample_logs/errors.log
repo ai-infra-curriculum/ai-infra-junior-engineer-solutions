@@ -1,0 +1,10 @@
+2024-10-18 09:45:12 ERROR Failed to load model from /models/missing_model.h5: File not found
+2024-10-18 10:04:15 ERROR CUDA out of memory: Tried to allocate 2.50 GiB (GPU 0; 7.79 GiB total capacity)
+2024-10-18 10:08:12 ERROR Invalid input shape: expected (224, 224, 3), got (256, 256, 3)
+2024-10-18 10:10:01 ERROR Authentication failed for user: test_user - Invalid API key
+2024-10-18 11:23:45 ERROR Database connection failed: Connection refused (localhost:5432)
+2024-10-18 12:15:30 ERROR Disk I/O error: No space left on device (/var/log partition full)
+2024-10-18 13:45:22 ERROR Failed to deserialize input: JSONDecodeError at line 15, column 23
+2024-10-18 14:30:11 ERROR Model inference timeout: Request exceeded 30s limit
+2024-10-18 15:12:45 ERROR Segmentation fault in preprocessing module (core dumped)
+2024-10-18 16:20:33 ERROR Network timeout: Failed to download dataset from https://example.com/data.zip

@@ -1,0 +1,361 @@
+# Model Serving API with CPU-based HPA
+# Demonstrates basic HPA configuration for fraud detection API
+
+---
+# Deployment for fraud detection model serving API
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fraud-detector-api
+  namespace: ml-platform
+  labels:
+    app: fraud-detector
+    tier: serving
+    version: v1
+spec:
+  replicas: 2  # Initial replicas (will be managed by HPA)
+  selector:
+    matchLabels:
+      app: fraud-detector
+  template:
+    metadata:
+      labels:
+        app: fraud-detector
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: api
+        image: hashicorp/http-echo:latest
+        args:
+        - "-text=Fraud Detection API v1.0 - Pod: $(POD_NAME)"
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+
+        ports:
+        - containerPort: 5678
+          name: http
+          protocol: TCP
+        - containerPort: 8080
+          name: metrics
+          protocol: TCP
+
+        resources:
+          requests:
+            cpu: 200m      # HPA uses this as the baseline
+            memory: 256Mi
+          limits:
+            cpu: 500m      # Allow bursting to 500m
+            memory: 512Mi
+
+        # Readiness probe: pod receives traffic only when ready
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5678
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 2
+          successThreshold: 1
+          failureThreshold: 3
+
+        # Liveness probe: restart pod if unhealthy
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5678
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 2
+          successThreshold: 1
+          failureThreshold: 3
+
+        # Lifecycle hook to simulate CPU-intensive inference
+        lifecycle:
+          postStart:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - |
+                # Start background process to simulate baseline CPU load
+                (while true; do
+                  # Simulate periodic CPU load (10-15% baseline)
+                  dd if=/dev/zero of=/dev/null bs=1M count=100 2>/dev/null
+                  sleep 5
+                done) &
+
+      # Prefer running on different nodes for high availability
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - fraud-detector
+              topologyKey: kubernetes.io/hostname
+
+      # Graceful shutdown
+      terminationGracePeriodSeconds: 30
+
+---
+# Service for fraud detection API
+apiVersion: v1
+kind: Service
+metadata:
+  name: fraud-detector-api
+  namespace: ml-platform
+  labels:
+    app: fraud-detector
+spec:
+  selector:
+    app: fraud-detector
+  ports:
+  - name: http
+    port: 80
+    targetPort: 5678
+    protocol: TCP
+  - name: metrics
+    port: 8080
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP
+  sessionAffinity: None
+
+---
+# HorizontalPodAutoscaler for fraud detection API
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: fraud-detector-hpa
+  namespace: ml-platform
+  labels:
+    app: fraud-detector
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: fraud-detector-api
+
+  minReplicas: 2    # Minimum for high availability
+  maxReplicas: 10   # Maximum to prevent runaway scaling
+
+  metrics:
+  # Primary metric: CPU utilization
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 50  # Scale when average CPU > 50% of request
+
+  # Secondary metric: Memory utilization
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 70  # Scale when average memory > 70% of request
+
+  # Scaling behavior policies
+  behavior:
+    # Scale-down behavior: Conservative to prevent thrashing
+    scaleDown:
+      stabilizationWindowSeconds: 300  # Wait 5 minutes before scaling down
+      policies:
+      - type: Percent
+        value: 50      # Remove max 50% of pods at once
+        periodSeconds: 60
+      - type: Pods
+        value: 2       # Or remove max 2 pods at once
+        periodSeconds: 60
+      selectPolicy: Min  # Use the more conservative policy
+
+    # Scale-up behavior: Aggressive to handle traffic spikes
+    scaleUp:
+      stabilizationWindowSeconds: 0  # Scale up immediately
+      policies:
+      - type: Percent
+        value: 100     # Can double pods at once
+        periodSeconds: 60
+      - type: Pods
+        value: 4       # Or add max 4 pods at once
+        periodSeconds: 60
+      selectPolicy: Max  # Use the more aggressive policy
+
+---
+# Pod Disruption Budget for fraud detection API
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: fraud-detector-pdb
+  namespace: ml-platform
+spec:
+  minAvailable: 1  # At least 1 pod must be available during disruptions
+  selector:
+    matchLabels:
+      app: fraud-detector
+
+---
+# ConfigMap with HPA usage guide
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fraud-detector-hpa-guide
+  namespace: ml-platform
+data:
+  README.md: |
+    # Fraud Detector HPA Configuration
+
+    ## Overview
+
+    This HPA configuration scales the fraud detection API based on CPU and memory utilization.
+
+    ## Configuration
+
+    - **Min Replicas**: 2 (high availability)
+    - **Max Replicas**: 10 (cost control)
+    - **CPU Target**: 50% utilization
+    - **Memory Target**: 70% utilization
+
+    ## Scaling Behavior
+
+    ### Scale-Up (Aggressive)
+    - Triggers immediately when metrics exceed target
+    - Can double replicas in 60 seconds
+    - Or add up to 4 pods in 60 seconds
+
+    ### Scale-Down (Conservative)
+    - Waits 5 minutes after metrics drop below target
+    - Removes max 50% of pods at once
+    - Or removes max 2 pods at once
+
+    ## Monitoring
+
+    ```bash
+    # Watch HPA status in real-time
+    watch kubectl get hpa fraud-detector-hpa -n ml-platform
+
+    # Describe HPA for detailed status
+    kubectl describe hpa fraud-detector-hpa -n ml-platform
+
+    # View scaling events
+    kubectl get events -n ml-platform --sort-by='.lastTimestamp' | grep fraud-detector
+
+    # Check current resource utilization
+    kubectl top pods -n ml-platform -l app=fraud-detector
+    ```
+
+    ## Testing
+
+    ### Generate Load
+
+    ```bash
+    # Deploy load generator
+    kubectl run load-generator \
+      --image=busybox:latest \
+      --restart=Never \
+      -n ml-platform \
+      -- /bin/sh -c "while true; do wget -q -O- http://fraud-detector-api.ml-platform.svc.cluster.local; done"
+
+    # Monitor scaling (should scale up within 1-2 minutes)
+    kubectl get hpa fraud-detector-hpa -n ml-platform --watch
+
+    # Stop load generator
+    kubectl delete pod load-generator -n ml-platform
+
+    # Observe scale-down (should scale down after 5 minutes)
+    ```
+
+    ### Expected Results
+
+    ```
+    Initial State:
+    - Replicas: 2
+    - CPU: 15-20% per pod
+
+    During Load:
+    - CPU increases to 70-90%
+    - HPA scales up to 6-8 replicas
+    - Scale-up time: 45-90 seconds
+
+    After Load Removed:
+    - CPU drops to 15-20%
+    - HPA scales down to 2 replicas
+    - Scale-down time: 5-7 minutes (due to stabilization window)
+    ```
+
+    ## Troubleshooting
+
+    ### HPA shows <unknown> for metrics
+
+    ```bash
+    # Check if metrics-server is running
+    kubectl get pods -n kube-system -l k8s-app=metrics-server
+
+    # Verify pod resource requests are set
+    kubectl describe deployment fraud-detector-api -n ml-platform
+
+    # Check if metrics are available
+    kubectl top pods -n ml-platform -l app=fraud-detector
+    ```
+
+    ### HPA not scaling despite high CPU
+
+    ```bash
+    # Check HPA conditions
+    kubectl describe hpa fraud-detector-hpa -n ml-platform
+
+    # Verify HPA has permission
+    kubectl auth can-i get pods --as=system:serviceaccount:kube-system:horizontal-pod-autoscaler -n ml-platform
+
+    # Check HPA controller logs
+    kubectl logs -n kube-system -l app=kube-controller-manager | grep horizontal-pod-autoscaler
+    ```
+
+    ### Scaling thrashing (constant up/down)
+
+    Increase stabilization window:
+
+    ```yaml
+    behavior:
+      scaleDown:
+        stabilizationWindowSeconds: 600  # 10 minutes
+    ```
+
+    ## Calculation Formula
+
+    HPA calculates desired replicas using:
+
+    ```
+    desiredReplicas = ceil(currentReplicas * (currentMetric / targetMetric))
+    ```
+
+    Example:
+    - Current replicas: 2
+    - Current CPU: 80% (160m average)
+    - Target CPU: 50% (100m)
+    - Desired replicas: ceil(2 * (160/100)) = ceil(3.2) = 4
+
+    ## Best Practices
+
+    ✅ Set appropriate resource requests (HPA baseline)
+    ✅ Use conservative scale-down to prevent thrashing
+    ✅ Set minReplicas ≥ 2 for high availability
+    ✅ Configure PodDisruptionBudget
+    ✅ Monitor scaling events and adjust thresholds
+    ✅ Test with realistic load patterns

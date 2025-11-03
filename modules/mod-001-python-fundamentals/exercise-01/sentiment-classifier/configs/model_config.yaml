@@ -1,0 +1,27 @@
+# Model Architecture Configuration
+
+# Base Model
+model_type: distilbert
+pretrained_model: distilbert-base-uncased
+
+# Classification Head
+num_labels: 2
+dropout_rate: 0.1
+
+# Input Processing
+max_sequence_length: 128
+padding_strategy: max_length
+truncation: true
+
+# Model Parameters
+hidden_size: 768
+num_attention_heads: 12
+num_hidden_layers: 6
+intermediate_size: 3072
+
+# Activation Function
+hidden_act: gelu
+
+# Training Settings
+gradient_checkpointing: false
+use_cache: true

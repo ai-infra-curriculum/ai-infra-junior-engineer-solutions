@@ -1,0 +1,511 @@
+# Model Serving API with Custom Prometheus Metrics HPA
+# Demonstrates advanced HPA with application-specific metrics
+
+---
+# Deployment for recommendation model serving API
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: recommendation-api
+  namespace: ml-platform
+  labels:
+    app: recommendation-api
+    tier: serving
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: recommendation-api
+  template:
+    metadata:
+      labels:
+        app: recommendation-api
+        version: v1
+      annotations:
+        # Prometheus scraping configuration
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: api
+        # In production, use a real ML inference server with Prometheus metrics
+        # For demo, using nginx with stub_status for metrics
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+          name: http
+        - containerPort: 8080
+          name: metrics
+
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 300m
+            memory: 256Mi
+
+        # Nginx configuration with metrics endpoint
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/nginx.conf
+          subPath: nginx.conf
+
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 3
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: recommendation-api-config
+
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: recommendation-api
+              topologyKey: kubernetes.io/hostname
+
+---
+# ConfigMap with nginx configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: recommendation-api-config
+  namespace: ml-platform
+data:
+  nginx.conf: |
+    events {
+        worker_connections 1024;
+    }
+
+    http {
+        # Prometheus metrics format
+        log_format prometheus '$remote_addr - $remote_user [$time_local] '
+                              '"$request" $status $body_bytes_sent '
+                              '"$http_referer" "$http_user_agent" $request_time';
+
+        server {
+            listen 80;
+            server_name _;
+
+            # Main application endpoint
+            location / {
+                return 200 "Recommendation API - Serving predictions\n";
+                add_header Content-Type text/plain;
+                access_log /var/log/nginx/access.log prometheus;
+            }
+
+            # Health endpoint
+            location /health {
+                return 200 "OK\n";
+                add_header Content-Type text/plain;
+                access_log off;
+            }
+
+            # Metrics endpoint (stub_status provides basic metrics)
+            location /metrics {
+                stub_status;
+                access_log off;
+            }
+        }
+
+        server {
+            listen 8080;
+
+            # Prometheus-compatible metrics endpoint
+            location /metrics {
+                stub_status;
+                access_log off;
+            }
+        }
+    }
+
+---
+# Service for recommendation API
+apiVersion: v1
+kind: Service
+metadata:
+  name: recommendation-api
+  namespace: ml-platform
+  labels:
+    app: recommendation-api
+spec:
+  selector:
+    app: recommendation-api
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+  - name: metrics
+    port: 8080
+    targetPort: 8080
+  type: ClusterIP
+
+---
+# ServiceMonitor for Prometheus scraping (if using Prometheus Operator)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: recommendation-api
+  namespace: ml-platform
+  labels:
+    app: recommendation-api
+spec:
+  selector:
+    matchLabels:
+      app: recommendation-api
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+
+---
+# HPA with multiple custom metrics
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: recommendation-hpa
+  namespace: ml-platform
+  labels:
+    app: recommendation-api
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: recommendation-api
+
+  minReplicas: 2
+  maxReplicas: 20
+
+  metrics:
+  # Metric 1: CPU utilization (baseline)
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+
+  # Metric 2: Memory utilization
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+  # Metric 3: Custom metric - HTTP requests per second
+  # Requires Prometheus Adapter to be installed
+  - type: Pods
+    pods:
+      metric:
+        name: http_requests_per_second
+      target:
+        type: AverageValue
+        averageValue: "100"  # Scale when > 100 req/s per pod
+
+  # Metric 4: Custom metric - Inference latency P95
+  - type: Pods
+    pods:
+      metric:
+        name: inference_latency_p95_seconds
+      target:
+        type: AverageValue
+        averageValue: "200m"  # Scale when P95 latency > 200ms
+
+  # Metric 5: Custom metric - Active connections
+  - type: Pods
+    pods:
+      metric:
+        name: nginx_active_connections
+      target:
+        type: AverageValue
+        averageValue: "50"  # Scale when > 50 active connections per pod
+
+  # Scaling behavior
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300  # 5 minutes
+      policies:
+      - type: Percent
+        value: 25      # Remove 25% of pods
+        periodSeconds: 60
+      - type: Pods
+        value: 2       # Or max 2 pods
+        periodSeconds: 60
+      selectPolicy: Min
+
+    scaleUp:
+      stabilizationWindowSeconds: 30   # 30 seconds (faster than CPU-only)
+      policies:
+      - type: Percent
+        value: 50      # Add 50% more pods
+        periodSeconds: 30
+      - type: Pods
+        value: 5       # Or add up to 5 pods
+        periodSeconds: 30
+      selectPolicy: Max
+
+---
+# Pod Disruption Budget
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: recommendation-pdb
+  namespace: ml-platform
+spec:
+  maxUnavailable: 30%  # Max 30% of pods can be unavailable
+  selector:
+    matchLabels:
+      app: recommendation-api
+
+---
+# ConfigMap with Prometheus Adapter configuration
+# This configures how Prometheus metrics are exposed to HPA
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-adapter-config
+  namespace: monitoring
+data:
+  config.yaml: |
+    rules:
+    # Rule 1: HTTP requests per second
+    - seriesQuery: 'nginx_http_requests_total{namespace="ml-platform",pod!=""}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        matches: "^(.*)_total$"
+        as: "${1}_per_second"
+      metricsQuery: 'rate(<<.Series>>{<<.LabelMatchers>>}[1m])'
+
+    # Rule 2: Inference latency P95
+    - seriesQuery: 'inference_duration_seconds{namespace="ml-platform",pod!=""}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        as: "inference_latency_p95_seconds"
+      metricsQuery: 'histogram_quantile(0.95, rate(inference_duration_seconds_bucket{<<.LabelMatchers>>}[5m]))'
+
+    # Rule 3: Active connections
+    - seriesQuery: 'nginx_connections_active{namespace="ml-platform",pod!=""}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        as: "nginx_active_connections"
+      metricsQuery: 'avg_over_time(nginx_connections_active{<<.LabelMatchers>>}[1m])'
+
+    # Rule 4: Custom application metrics
+    - seriesQuery: 'ml_model_predictions_total{namespace="ml-platform",pod!=""}'
+      resources:
+        overrides:
+          namespace: {resource: "namespace"}
+          pod: {resource: "pod"}
+      name:
+        matches: "^(.*)_total$"
+        as: "${1}_per_second"
+      metricsQuery: 'rate(<<.Series>>{<<.LabelMatchers>>}[2m])'
+
+---
+# ConfigMap with usage guide
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: custom-metrics-hpa-guide
+  namespace: ml-platform
+data:
+  README.md: |
+    # Custom Metrics HPA Configuration
+
+    ## Overview
+
+    This HPA scales based on 5 different metrics:
+    1. CPU utilization (70% target)
+    2. Memory utilization (80% target)
+    3. HTTP requests per second (100 req/s target)
+    4. Inference latency P95 (200ms target)
+    5. Active connections (50 connections target)
+
+    ## Prerequisites
+
+    ### Install Prometheus and Prometheus Adapter
+
+    ```bash
+    # Add Helm repos
+    helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+    helm repo update
+
+    # Install Prometheus
+    helm install prometheus prometheus-community/prometheus \
+      --namespace monitoring \
+      --create-namespace \
+      --set server.persistentVolume.enabled=false \
+      --set alertmanager.enabled=false
+
+    # Install Prometheus Adapter with custom config
+    helm install prometheus-adapter prometheus-community/prometheus-adapter \
+      --namespace monitoring \
+      --set prometheus.url=http://prometheus-server.monitoring.svc.cluster.local \
+      --set prometheus.port=80 \
+      --values prometheus-adapter-values.yaml
+    ```
+
+    ### Verify Custom Metrics API
+
+    ```bash
+    # Check APIService
+    kubectl get apiservices | grep custom.metrics
+
+    # List available custom metrics
+    kubectl get --raw "/apis/custom.metrics.k8s.io/v1beta1" | jq .
+
+    # Query specific metric
+    kubectl get --raw "/apis/custom.metrics.k8s.io/v1beta1/namespaces/ml-platform/pods/*/http_requests_per_second" | jq .
+    ```
+
+    ## Monitoring
+
+    ```bash
+    # Watch HPA with all metrics
+    watch 'kubectl get hpa recommendation-hpa -n ml-platform && echo && kubectl describe hpa recommendation-hpa -n ml-platform | grep -A 10 Metrics'
+
+    # Check which metric is driving scaling
+    kubectl describe hpa recommendation-hpa -n ml-platform | grep -A 5 "Metrics:"
+
+    # View current metric values
+    kubectl get hpa recommendation-hpa -n ml-platform -o yaml | yq '.status.currentMetrics'
+    ```
+
+    ## Testing
+
+    ### Test Scenario 1: CPU-based scaling
+
+    ```bash
+    # Generate CPU load
+    kubectl run cpu-load --image=busybox --restart=Never -n ml-platform -- \
+      /bin/sh -c "while true; do dd if=/dev/zero of=/dev/null; done"
+    ```
+
+    ### Test Scenario 2: Request rate scaling
+
+    ```bash
+    # Generate high request rate
+    kubectl run load-test --image=williamyeh/hey:latest --restart=Never -n ml-platform -- \
+      -z 60s -c 50 -q 10 http://recommendation-api.ml-platform.svc.cluster.local
+
+    # Expected: Scales up when request rate > 100 req/s per pod
+    # With 2 pods @ 100 req/s each = 200 req/s total capacity
+    # Load test: 500 req/s → should scale to 5 pods
+    ```
+
+    ### Test Scenario 3: Latency-based scaling
+
+    Latency-based scaling requires your application to expose latency metrics:
+
+    ```python
+    # Example: Expose latency histogram in Python
+    from prometheus_client import Histogram
+
+    inference_latency = Histogram(
+        'inference_duration_seconds',
+        'Inference latency in seconds',
+        ['model_name']
+    )
+
+    @inference_latency.labels(model_name='recommendations').time()
+    def make_prediction(features):
+        # Your inference code here
+        pass
+    ```
+
+    ## Scaling Logic
+
+    HPA uses the **maximum** of all metric ratios:
+
+    ```
+    For each metric:
+      ratio = currentValue / targetValue
+
+    desiredReplicas = currentReplicas * max(ratios)
+    ```
+
+    Example with 4 replicas:
+    - CPU: 60% / 70% = 0.86 (scale down)
+    - Memory: 50% / 80% = 0.63 (scale down)
+    - Request rate: 120 / 100 = 1.2 (scale up)
+    - Latency: 180ms / 200ms = 0.9 (scale down)
+    - Connections: 40 / 50 = 0.8 (scale down)
+
+    Max ratio = 1.2 (request rate)
+    Desired replicas = 4 * 1.2 = 4.8 → rounds to 5
+
+    ## Troubleshooting
+
+    ### Custom metrics not available
+
+    ```bash
+    # Check Prometheus Adapter logs
+    kubectl logs -n monitoring -l app=prometheus-adapter
+
+    # Verify Prometheus is scraping metrics
+    kubectl port-forward -n monitoring svc/prometheus-server 9090:80
+    # Open http://localhost:9090 and query: nginx_http_requests_total{namespace="ml-platform"}
+
+    # Check adapter configuration
+    kubectl get cm prometheus-adapter -n monitoring -o yaml
+    ```
+
+    ### HPA shows "unable to get metric"
+
+    ```bash
+    # Check HPA conditions
+    kubectl describe hpa recommendation-hpa -n ml-platform
+
+    # Verify metric exists in custom metrics API
+    kubectl get --raw "/apis/custom.metrics.k8s.io/v1beta1/namespaces/ml-platform/pods/*/http_requests_per_second"
+
+    # Check if metric has valid data
+    kubectl get --raw "/apis/custom.metrics.k8s.io/v1beta1/namespaces/ml-platform/pods/*/http_requests_per_second" | jq '.items[].value'
+    ```
+
+    ### Different metrics give conflicting signals
+
+    This is expected! HPA always uses the metric that requires the **most** replicas.
+
+    If this causes issues:
+    - Remove less important metrics
+    - Adjust target values to align scaling decisions
+    - Use separate HPAs for different workload patterns
+
+    ## Best Practices
+
+    ✅ Start with 1-2 metrics, add more gradually
+    ✅ Choose metrics that directly impact user experience
+    ✅ Set realistic targets based on SLOs
+    ✅ Use longer evaluation windows (2-5 min) for stability
+    ✅ Test each metric individually before combining
+    ✅ Monitor which metric drives scaling decisions
+    ✅ Document expected metric values and thresholds

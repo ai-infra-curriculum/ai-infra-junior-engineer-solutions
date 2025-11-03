@@ -1,0 +1,564 @@
+# Pod Disruption Budgets and Priority Classes
+# Ensures safe scaling and workload prioritization
+
+---
+# Pod Disruption Budget for Fraud Detector API
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: fraud-detector-pdb
+  namespace: ml-platform
+  labels:
+    app: fraud-detector
+spec:
+  minAvailable: 1  # At least 1 pod must always be available
+  selector:
+    matchLabels:
+      app: fraud-detector
+
+---
+# Pod Disruption Budget for Recommendation API
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: recommendation-pdb
+  namespace: ml-platform
+  labels:
+    app: recommendation-api
+spec:
+  maxUnavailable: 30%  # Maximum 30% of pods can be unavailable
+  selector:
+    matchLabels:
+      app: recommendation-api
+
+---
+# Priority Class for Critical Services (highest priority)
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ml-critical-service
+value: 1000000
+globalDefault: false
+description: "Critical ML services that must stay running (model serving APIs)"
+
+---
+# Priority Class for High Priority Training
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ml-high-priority-training
+value: 10000
+globalDefault: false
+description: "High priority training jobs (urgent model retraining)"
+
+---
+# Priority Class for Normal Training
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ml-training
+value: 1000
+globalDefault: false
+description: "Standard model training jobs"
+
+---
+# Priority Class for Batch Jobs (lowest priority)
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: ml-batch
+value: 100
+globalDefault: false
+description: "Batch inference and low priority workloads"
+preemptionPolicy: PreemptLowerPriority
+
+---
+# Example: Critical serving deployment with PriorityClass
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: critical-model-api
+  namespace: ml-platform
+  labels:
+    app: critical-model-api
+    priority: critical
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: critical-model-api
+  template:
+    metadata:
+      labels:
+        app: critical-model-api
+    spec:
+      priorityClassName: ml-critical-service  # High priority
+
+      containers:
+      - name: api
+        image: nginx:alpine
+        resources:
+          requests:
+            cpu: 200m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+
+      # Affinity rules for high availability
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app: critical-model-api
+            topologyKey: kubernetes.io/hostname
+
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: critical-model-api
+              topologyKey: topology.kubernetes.io/zone
+
+---
+# Example: Preemptible training job
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: preemptible-training
+  namespace: ml-platform
+  labels:
+    app: preemptible-training
+    priority: low
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: preemptible-training
+  template:
+    metadata:
+      labels:
+        app: preemptible-training
+    spec:
+      priorityClassName: ml-batch  # Low priority (can be preempted)
+
+      containers:
+      - name: trainer
+        image: python:3.11-slim
+        command: ["sleep", "infinity"]
+        resources:
+          requests:
+            cpu: 1000m
+            memory: 2Gi
+          limits:
+            cpu: 2000m
+            memory: 4Gi
+
+      # Tolerate being scheduled on spot/preemptible nodes
+      tolerations:
+      - key: "spot"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+
+      # Prefer spot/preemptible nodes (cost savings)
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+              - key: "node.kubernetes.io/instance-type"
+                operator: In
+                values:
+                - "spot"
+                - "preemptible"
+
+---
+# ConfigMap with PDB and Priority Class usage guide
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: safety-governance-guide
+  namespace: ml-platform
+data:
+  README.md: |
+    # Pod Disruption Budgets and Priority Classes
+
+    ## Pod Disruption Budgets (PDBs)
+
+    ### Purpose
+    PDBs ensure minimum availability during voluntary disruptions:
+    - Node drains (upgrades, scaling down)
+    - Cluster autoscaling
+    - VPA evictions
+    - Manual evictions
+
+    ### Types of Disruptions
+
+    **Voluntary Disruptions (Protected by PDB):**
+    - kubectl drain
+    - Cluster autoscaler scale-down
+    - VPA pod evictions
+    - API-driven evictions
+
+    **Involuntary Disruptions (NOT Protected by PDB):**
+    - Node failures
+    - Out of memory kills
+    - Network partitions
+    - Kernel panics
+
+    ### Configuration Options
+
+    #### Option 1: minAvailable
+
+    ```yaml
+    spec:
+      minAvailable: 2  # Absolute number
+      selector:
+        matchLabels:
+          app: my-app
+    ```
+
+    ```yaml
+    spec:
+      minAvailable: 50%  # Percentage
+      selector:
+        matchLabels:
+          app: my-app
+    ```
+
+    **Use when:** You need guaranteed minimum capacity
+
+    #### Option 2: maxUnavailable
+
+    ```yaml
+    spec:
+      maxUnavailable: 1  # Absolute number
+      selector:
+        matchLabels:
+          app: my-app
+    ```
+
+    ```yaml
+    spec:
+      maxUnavailable: 30%  # Percentage
+      selector:
+        matchLabels:
+          app: my-app
+    ```
+
+    **Use when:** You can tolerate some disruption
+
+    ### PDB Best Practices
+
+    ✅ **Critical Services**: Use minAvailable=1 or minAvailable=50%
+    ✅ **High Availability APIs**: Use maxUnavailable=1 or maxUnavailable=30%
+    ✅ **Batch Jobs**: No PDB needed (can tolerate disruption)
+    ✅ **Single Replica**: Set minAvailable=1 to prevent eviction
+
+    ⚠️ **Warning:** PDB can block cluster operations!
+    - If PDB is too restrictive, node drains will fail
+    - Cluster autoscaler can't scale down
+    - Solution: Use percentage-based PDBs
+
+    ### Testing PDBs
+
+    ```bash
+    # Create a test deployment with 3 replicas
+    kubectl create deployment test-pdb --image=nginx --replicas=3 -n ml-platform
+
+    # Create PDB
+    cat <<EOF | kubectl apply -f -
+    apiVersion: policy/v1
+    kind: PodDisruptionBudget
+    metadata:
+      name: test-pdb
+      namespace: ml-platform
+    spec:
+      minAvailable: 2
+      selector:
+        matchLabels:
+          app: test-pdb
+    EOF
+
+    # Try to evict a pod
+    kubectl get pods -n ml-platform -l app=test-pdb
+    kubectl delete pod <pod-name> -n ml-platform
+
+    # Check PDB status
+    kubectl get pdb test-pdb -n ml-platform
+    ```
+
+    ### Monitoring PDBs
+
+    ```bash
+    # List all PDBs
+    kubectl get pdb -n ml-platform
+
+    # Describe PDB
+    kubectl describe pdb fraud-detector-pdb -n ml-platform
+
+    # Check current status
+    kubectl get pdb fraud-detector-pdb -n ml-platform -o jsonpath='{.status}'
+    ```
+
+    Expected output:
+    ```json
+    {
+      "currentHealthy": 2,
+      "desiredHealthy": 1,
+      "disruptionsAllowed": 1,
+      "expectedPods": 2
+    }
+    ```
+
+    ## Priority Classes
+
+    ### Purpose
+    Priority Classes determine:
+    1. **Scheduling order**: Higher priority pods scheduled first
+    2. **Preemption**: High priority can evict low priority pods
+    3. **Resource allocation**: Prioritize critical workloads
+
+    ### Priority Values
+
+    Higher value = higher priority:
+    - **1,000,000+**: System critical (kube-dns, metrics-server)
+    - **100,000-999,999**: Business critical (user-facing APIs)
+    - **10,000-99,999**: High priority (important batch jobs)
+    - **1,000-9,999**: Normal priority (standard workloads)
+    - **1-999**: Low priority (preemptible workloads)
+
+    ### ML Workload Prioritization
+
+    #### Tier 1: Critical Services (Priority: 1,000,000)
+    - Model serving APIs
+    - Real-time inference endpoints
+    - Feature stores
+    - **Never preempted**
+
+    #### Tier 2: High Priority Training (Priority: 10,000)
+    - Urgent model retraining
+    - Hot-fix model updates
+    - Business-critical experiments
+
+    #### Tier 3: Normal Training (Priority: 1,000)
+    - Standard model training
+    - Hyperparameter tuning
+    - Scheduled experiments
+
+    #### Tier 4: Batch Jobs (Priority: 100)
+    - Batch inference
+    - Data preprocessing
+    - Report generation
+    - **Can be preempted**
+
+    ### Preemption Behavior
+
+    When cluster is full:
+    1. High priority pod is pending
+    2. Kubernetes finds lower priority pods to evict
+    3. Lower priority pods are terminated
+    4. High priority pod is scheduled
+
+    **Example:**
+    ```
+    Cluster: 10 CPU total
+    Running: 8 CPU (low priority batch jobs)
+    New: 4 CPU high priority training job
+
+    Result:
+    - Evict 4 CPU of batch jobs
+    - Schedule high priority training job
+    - Batch jobs remain pending until resources available
+    ```
+
+    ### Using Priority Classes
+
+    ```yaml
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: my-deployment
+    spec:
+      template:
+        spec:
+          priorityClassName: ml-high-priority-training
+          containers:
+          - name: app
+            image: my-image
+    ```
+
+    ### Testing Preemption
+
+    ```bash
+    # Fill cluster with low priority pods
+    kubectl create deployment low-priority \
+      --image=nginx \
+      --replicas=10 \
+      -n ml-platform
+
+    kubectl patch deployment low-priority -n ml-platform --type='json' \
+      -p='[{"op": "add", "path": "/spec/template/spec/priorityClassName", "value": "ml-batch"}]'
+
+    # Request large resources with high priority
+    kubectl create deployment high-priority \
+      --image=nginx \
+      --replicas=5 \
+      -n ml-platform
+
+    kubectl set resources deployment high-priority \
+      --requests=cpu=1,memory=2Gi \
+      -n ml-platform
+
+    kubectl patch deployment high-priority -n ml-platform --type='json' \
+      -p='[{"op": "add", "path": "/spec/template/spec/priorityClassName", "value": "ml-high-priority-training"}]'
+
+    # Watch preemption
+    kubectl get events -n ml-platform --sort-by='.lastTimestamp' | grep -i preempt
+    ```
+
+    ### Monitoring Priority Classes
+
+    ```bash
+    # List all priority classes
+    kubectl get priorityclass
+
+    # Show priority class details
+    kubectl describe priorityclass ml-critical-service
+
+    # Check pod priority
+    kubectl get pods -n ml-platform -o custom-columns=NAME:.metadata.name,PRIORITY:.spec.priority,PRIORITY_CLASS:.spec.priorityClassName
+    ```
+
+    ## Combining PDBs and Priority Classes
+
+    ### Critical API Strategy
+
+    ```yaml
+    # 1. High priority
+    priorityClassName: ml-critical-service
+
+    # 2. Pod disruption budget
+    apiVersion: policy/v1
+    kind: PodDisruptionBudget
+    metadata:
+      name: critical-api-pdb
+    spec:
+      minAvailable: 2
+
+    # 3. Anti-affinity (different nodes)
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+        - topologyKey: kubernetes.io/hostname
+
+    # 4. Resource requests (guaranteed resources)
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+    ```
+
+    Result:
+    - ✅ Scheduled first (high priority)
+    - ✅ Never preempted (highest priority)
+    - ✅ Protected from disruption (PDB)
+    - ✅ Spread across nodes (anti-affinity)
+    - ✅ Guaranteed resources (requests)
+
+    ### Batch Job Strategy
+
+    ```yaml
+    # 1. Low priority (can be preempted)
+    priorityClassName: ml-batch
+
+    # 2. No PDB (tolerate disruption)
+
+    # 3. Spot/preemptible nodes
+    affinity:
+      nodeAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          preference:
+            matchExpressions:
+            - key: node.kubernetes.io/instance-type
+              operator: In
+              values: ["spot", "preemptible"]
+
+    # 4. Tolerate spot node taints
+    tolerations:
+    - key: "spot"
+      operator: "Equal"
+      value: "true"
+      effect: "NoSchedule"
+    ```
+
+    Result:
+    - ✅ Low cost (spot nodes = 70% savings)
+    - ✅ Can be preempted (allows critical workloads)
+    - ✅ Scheduled when resources available
+    - ✅ No disruption protection (not needed)
+
+    ## Troubleshooting
+
+    ### PDB Blocking Node Drain
+
+    ```bash
+    # Check PDB status
+    kubectl get pdb -n ml-platform
+    kubectl describe pdb <pdb-name> -n ml-platform
+
+    # Check disruptionsAllowed (should be > 0)
+    kubectl get pdb <pdb-name> -n ml-platform -o jsonpath='{.status.disruptionsAllowed}'
+
+    # If 0, you can't evict any more pods
+    # Solutions:
+    # 1. Scale up deployment (more pods = more allowed disruptions)
+    # 2. Adjust PDB (increase maxUnavailable or decrease minAvailable)
+    # 3. Temporarily delete PDB (emergency only!)
+    ```
+
+    ### Pod Stuck Pending Due to Priority
+
+    ```bash
+    # Check pod status
+    kubectl describe pod <pod-name> -n ml-platform
+
+    # Look for event:
+    # "Preemption: 0/10 nodes are available: 10 No preemption victims found"
+
+    # Possible causes:
+    # 1. All running pods have equal or higher priority
+    # 2. Lower priority pods are protected by PDBs
+    # 3. Lower priority pods are pinned to specific nodes
+
+    # Solutions:
+    # 1. Wait for resources to become available
+    # 2. Manually scale down lower priority workloads
+    # 3. Add more nodes to cluster
+    ```
+
+    ## Best Practices Summary
+
+    ### PDBs
+    ✅ Set PDB for all user-facing services
+    ✅ Use percentage-based for flexibility
+    ✅ Don't over-constrain (blocks cluster operations)
+    ✅ Test with node drains before production
+
+    ### Priority Classes
+    ✅ Assign priority to all workloads
+    ✅ Use 4-5 tiers (critical, high, normal, low, dev)
+    ✅ Reserve highest priority for critical services
+    ✅ Use low priority for batch/preemptible workloads
+
+    ### Combined Strategy
+    ✅ Critical services: High priority + strict PDB + anti-affinity
+    ✅ Serving APIs: Medium priority + moderate PDB + anti-affinity
+    ✅ Training: Medium priority + no PDB + spot nodes
+    ✅ Batch: Low priority + no PDB + spot nodes

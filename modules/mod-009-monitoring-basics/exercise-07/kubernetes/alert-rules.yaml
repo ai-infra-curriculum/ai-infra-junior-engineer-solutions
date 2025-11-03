@@ -1,0 +1,406 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-alert-rules
+  namespace: monitoring
+  labels:
+    app: prometheus
+    component: alert-rules
+data:
+  alert_rules.yml: |
+    # ML Platform Alert Rules
+    # Comprehensive alerting for ML infrastructure
+
+    groups:
+    # ========================================================================
+    # Model-Level Alerts (Critical Business Logic)
+    # ========================================================================
+    - name: ml_model_alerts_critical
+      interval: 30s
+      rules:
+
+      # Model is completely down (no predictions for 5 minutes)
+      - alert: ModelNoPredictions
+        expr: model:predictions:rate5m == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: model-serving
+          page: "true"
+        annotations:
+          summary: "Model {{ $labels.model }} is not serving predictions"
+          description: |
+            Model {{ $labels.model }} version {{ $labels.version }} has served 0 predictions for 5 minutes.
+            This indicates the model is completely down or not receiving traffic.
+          runbook_url: "https://wiki.company.com/runbooks/model-down"
+          dashboard_url: "http://grafana/d/model-health?var-model={{ $labels.model }}"
+          impact: "Users cannot get predictions from this model"
+          action: "Check model pod status, logs, and health endpoints"
+
+      # Critical error rate (> 20% of requests failing)
+      - alert: ModelCriticalErrorRate
+        expr: model:error_ratio:rate5m > 0.20
+        for: 2m
+        labels:
+          severity: critical
+          component: model-serving
+          page: "true"
+        annotations:
+          summary: "CRITICAL: Model {{ $labels.model }} has {{ $value | humanizePercentage }} error rate"
+          description: |
+            Model {{ $labels.model }} is failing {{ $value | humanizePercentage }} of predictions.
+            This severely impacts user experience. Immediate action required!
+          runbook_url: "https://wiki.company.com/runbooks/high-error-rate"
+          impact: "Majority of users getting prediction errors"
+          action: "Check model logs, memory usage, and recent deployments"
+
+      # Extreme latency (p95 > 2 seconds)
+      - alert: ModelExtremeLat ency
+        expr: model:latency:p95 > 2.0
+        for: 5m
+        labels:
+          severity: critical
+          component: model-serving
+          page: "true"
+        annotations:
+          summary: "Model {{ $labels.model }} has extreme latency: {{ $value | humanizeDuration }}"
+          description: |
+            Model {{ $labels.model }} p95 latency is {{ $value | humanizeDuration }} (threshold: 2s).
+            Users are experiencing severe delays.
+          impact: "Poor user experience, potential timeouts"
+          action: "Check CPU/memory usage, model complexity, input data size"
+
+    # ========================================================================
+    # Model-Level Alerts (Warning)
+    # ========================================================================
+    - name: ml_model_alerts_warning
+      interval: 30s
+      rules:
+
+      # High error rate (> 5%)
+      - alert: ModelHighErrorRate
+        expr: model:error_ratio:rate5m > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: model-serving
+        annotations:
+          summary: "High error rate for model {{ $labels.model }}: {{ $value | humanizePercentage }}"
+          description: |
+            Model {{ $labels.model }} has {{ $value | humanizePercentage }} error rate (threshold: 5%).
+            Monitor closely and investigate if it continues.
+          dashboard_url: "http://grafana/d/model-health?var-model={{ $labels.model }}"
+          action: "Review error logs, check input validation"
+
+      # Elevated latency (p95 > 500ms)
+      - alert: ModelHighLatency
+        expr: model:latency:p95 > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          component: model-serving
+        annotations:
+          summary: "High latency for model {{ $labels.model }}: {{ $value | humanizeDuration }}"
+          description: |
+            Model {{ $labels.model }} p95 latency is {{ $value | humanizeDuration }} (threshold: 500ms).
+            This may impact user experience.
+          action: "Check resource usage, cache hit rate, batch size"
+
+      # Traffic dropped significantly (> 50% decrease)
+      - alert: ModelLowTraffic
+        expr: |
+          (
+            model:predictions:rate5m
+              /
+            (model:predictions:rate5m offset 1h)
+          ) < 0.5
+          and
+          model:predictions:rate5m offset 1h > 10
+        for: 15m
+        labels:
+          severity: warning
+          component: model-serving
+        annotations:
+          summary: "Traffic dropped for model {{ $labels.model }}"
+          description: |
+            Model {{ $labels.model }} traffic is {{ $value | humanizePercentage }} of traffic from 1 hour ago.
+            This may indicate a problem with upstream services.
+          action: "Check client applications, API gateway, network"
+
+      # Traffic spike (> 3x increase)
+      - alert: ModelTrafficSpike
+        expr: |
+          (
+            model:predictions:rate5m
+              /
+            (model:predictions:rate5m offset 1h)
+          ) > 3.0
+          and
+          model:predictions:rate5m > 100
+        for: 10m
+        labels:
+          severity: warning
+          component: model-serving
+        annotations:
+          summary: "Traffic spike for model {{ $labels.model }}"
+          description: |
+            Model {{ $labels.model }} traffic is {{ $value }}x higher than 1 hour ago.
+            Ensure autoscaling can handle the load.
+          action: "Monitor resource usage, check for DDoS, verify autoscaling"
+
+      # Low cache hit rate (< 70%)
+      - alert: ModelLowCacheHitRate
+        expr: model:cache:hit_ratio < 0.70
+        for: 30m
+        labels:
+          severity: info
+          component: model-serving
+        annotations:
+          summary: "Low cache hit rate for model {{ $labels.model }}: {{ $value | humanizePercentage }}"
+          description: |
+            Cache hit rate is {{ $value | humanizePercentage }} (target: >80%).
+            This may impact latency and resource usage.
+          action: "Review cache key strategy, TTL settings, cache size"
+
+    # ========================================================================
+    # Resource Alerts
+    # ========================================================================
+    - name: ml_resource_alerts
+      interval: 60s
+      rules:
+
+      # High CPU utilization (> 85%)
+      - alert: ModelHighCPUUsage
+        expr: model:cpu:utilization > 0.85
+        for: 10m
+        labels:
+          severity: warning
+          component: resources
+        annotations:
+          summary: "High CPU usage for model {{ $labels.model }}: {{ $value | humanizePercentage }}"
+          description: "CPU utilization above 85%. May cause throttling."
+          action: "Scale horizontally or increase CPU limits"
+
+      # High memory utilization (> 90%)
+      - alert: ModelHighMemoryUsage
+        expr: model:memory:utilization > 0.90
+        for: 5m
+        labels:
+          severity: warning
+          component: resources
+        annotations:
+          summary: "High memory usage for model {{ $labels.model }}: {{ $value | humanizePercentage }}"
+          description: "Memory utilization above 90%. Risk of OOM kill."
+          action: "Increase memory limits or check for memory leaks"
+
+      # Memory leak detected (growing > 100 MB/hour)
+      - alert: ModelMemoryLeak
+        expr: model:memory:growth_rate_1h > 100 * 1024 * 1024
+        for: 2h
+        labels:
+          severity: warning
+          component: resources
+        annotations:
+          summary: "Possible memory leak in model {{ $labels.model }}"
+          description: |
+            Memory growing at {{ $value | humanize }}B/hour.
+            This may indicate a memory leak.
+          action: "Review code for memory leaks, analyze heap dumps"
+
+      # Low resource efficiency (< 10 predictions per CPU second)
+      - alert: ModelLowEfficiency
+        expr: model:efficiency:predictions_per_cpu < 10
+        for: 30m
+        labels:
+          severity: info
+          component: resources
+        annotations:
+          summary: "Low efficiency for model {{ $labels.model }}: {{ $value }} predictions/CPU-second"
+          description: "Model is using more CPU than expected for its throughput."
+          action: "Optimize model code, batch requests, enable model compilation"
+
+    # ========================================================================
+    # Platform-Wide Alerts
+    # ========================================================================
+    - name: ml_platform_alerts
+      interval: 60s
+      rules:
+
+      # Overall platform error rate high (> 10%)
+      - alert: PlatformHighErrorRate
+        expr: platform:error_ratio:rate5m > 0.10
+        for: 5m
+        labels:
+          severity: critical
+          component: platform
+        annotations:
+          summary: "ML Platform experiencing high error rate: {{ $value | humanizePercentage }}"
+          description: |
+            Platform-wide error rate is {{ $value | humanizePercentage }} (threshold: 10%).
+            Multiple models may be affected.
+          action: "Check shared infrastructure (DB, cache, storage)"
+
+      # Platform traffic anomaly (> 2 standard deviations)
+      - alert: PlatformTrafficAnomaly
+        expr: |
+          abs(
+            platform:predictions:rate5m
+              -
+            avg_over_time(platform:predictions:rate5m[1h])
+          ) > (2 * stddev_over_time(platform:predictions:rate5m[1h]))
+        for: 10m
+        labels:
+          severity: warning
+          component: platform
+        annotations:
+          summary: "ML Platform traffic anomaly detected"
+          description: |
+            Current traffic ({{ $value }}) deviates significantly from normal.
+            This may indicate an issue or unexpected event.
+          action: "Investigate cause, check upstream services"
+
+      # Platform latency degradation
+      - alert: PlatformHighLatency
+        expr: platform:latency:p95 > 1.0
+        for: 10m
+        labels:
+          severity: warning
+          component: platform
+        annotations:
+          summary: "Platform p95 latency elevated: {{ $value | humanizeDuration }}"
+          description: "Overall platform latency is degraded."
+          action: "Check shared resources, database, network"
+
+    # ========================================================================
+    # SLO/SLA Alerts
+    # ========================================================================
+    - name: ml_slo_alerts
+      interval: 60s
+      rules:
+
+      # SLO: 99.9% availability (error budget)
+      - alert: SLOErrorBudgetBurn
+        expr: |
+          (
+            1 - (
+              sum(model:predictions:rate5m) - sum(model:errors:rate5m)
+            ) / sum(model:predictions:rate5m)
+          ) > 0.001
+        for: 1h
+        labels:
+          severity: warning
+          component: slo
+        annotations:
+          summary: "Burning through error budget"
+          description: |
+            Current error rate {{ $value | humanizePercentage }} exceeds SLO target (99.9%).
+            Error budget is being consumed.
+          action: "Investigate errors, may need to pause deployments"
+
+      # Fast error budget burn (multi-window)
+      - alert: SLOFastErrorBudgetBurn
+        expr: |
+          (
+            1 - (
+              sum(increase(model_predictions_total[1h])) - sum(increase(model_prediction_errors_total[1h]))
+            ) / sum(increase(model_predictions_total[1h]))
+          ) > 0.002
+          and
+          (
+            1 - (
+              sum(increase(model_predictions_total[5m])) - sum(increase(model_prediction_errors_total[5m]))
+            ) / sum(increase(model_predictions_total[5m]))
+          ) > 0.002
+        for: 5m
+        labels:
+          severity: critical
+          component: slo
+          page: "true"
+        annotations:
+          summary: "FAST error budget burn detected"
+          description: |
+            Error rate is burning through error budget at 2x the acceptable rate.
+            Action needed immediately to preserve monthly SLO.
+          runbook_url: "https://wiki.company.com/runbooks/slo-budget-burn"
+
+      # Latency SLO violation (p95 > 200ms)
+      - alert: SLOLatencyViolation
+        expr: platform:latency:p95 > 0.2
+        for: 30m
+        labels:
+          severity: warning
+          component: slo
+        annotations:
+          summary: "Latency SLO violation"
+          description: |
+            Platform p95 latency {{ $value | humanizeDuration }} exceeds SLO target (200ms).
+          action: "Optimize slow models, scale resources"
+
+      # Availability SLO at risk (< 99.5% over 6 hours)
+      - alert: SLOAvailabilityAtRisk
+        expr: |
+          avg_over_time(model:availability:rate5m[6h]) < 0.995
+        for: 30m
+        labels:
+          severity: warning
+          component: slo
+        annotations:
+          summary: "Availability SLO at risk for model {{ $labels.model }}"
+          description: |
+            6-hour availability is {{ $value | humanizePercentage }} (target: 99.9%).
+            Model may miss monthly SLO target.
+          action: "Review recent incidents, improve reliability"
+
+    # ========================================================================
+    # Business Alerts
+    # ========================================================================
+    - name: ml_business_alerts
+      interval: 300s  # 5 minutes
+      rules:
+
+      # Revenue at risk (high errors on high-value model)
+      - alert: RevenueAtRisk
+        expr: |
+          (model:error_ratio:rate5m > 0.05)
+          and
+          (model:revenue:rate5m > 100)
+        for: 10m
+        labels:
+          severity: critical
+          component: business
+        annotations:
+          summary: "Revenue at risk for model {{ $labels.model }}"
+          description: |
+            High-revenue model {{ $labels.model }} has {{ $value | humanizePercentage }} error rate.
+            Estimated revenue impact: ${{ $value * 100 }}/hour.
+          action: "Prioritize fixing this model"
+
+      # Cost anomaly (unusually high cost)
+      - alert: ModelCostAnomaly
+        expr: |
+          model:cost:per_1k_predictions
+            /
+          avg_over_time(model:cost:per_1k_predictions[24h])
+          > 2.0
+        for: 1h
+        labels:
+          severity: info
+          component: business
+        annotations:
+          summary: "Cost anomaly for model {{ $labels.model }}"
+          description: |
+            Cost per 1k predictions is {{ $value }}x higher than 24h average.
+          action: "Check for inefficiencies, optimize resource usage"
+
+      # Low profitability (costs exceed revenue)
+      - alert: ModelUnprofitable
+        expr: model:profit:rate5m < 0
+        for: 6h
+        labels:
+          severity: info
+          component: business
+        annotations:
+          summary: "Model {{ $labels.model }} is unprofitable"
+          description: |
+            Model costs exceed revenue. Consider optimization or deprecation.
+          action: "Optimize efficiency or evaluate business value"

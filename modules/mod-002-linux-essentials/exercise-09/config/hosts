@@ -1,0 +1,443 @@
+# /etc/hosts - ML Infrastructure Internal Hostnames
+#
+# Installation: sudo tee -a /etc/hosts < hosts
+# Or: sudo cat hosts >> /etc/hosts
+#
+# Format: <ip-address> <hostname> [aliases...]
+#
+# IMPORTANT: This file is parsed line-by-line
+# - Lines starting with # are comments
+# - First matching entry is used
+# - IPv6 should come before IPv4 (if both present)
+
+###############################################################################
+# Localhost Entries (Standard)
+###############################################################################
+
+127.0.0.1       localhost
+127.0.1.1       $(hostname)
+
+# IPv6 localhost
+::1             localhost ip6-localhost ip6-loopback
+ff02::1         ip6-allnodes
+ff02::2         ip6-allrouters
+
+###############################################################################
+# GPU Training Nodes
+###############################################################################
+
+# Primary Training Cluster
+192.168.1.101   gpu-node-1.internal gpu-node-1 gpu1
+192.168.1.102   gpu-node-2.internal gpu-node-2 gpu2
+192.168.1.103   gpu-node-3.internal gpu-node-3 gpu3
+192.168.1.104   gpu-node-4.internal gpu-node-4 gpu4
+
+# Secondary Training Cluster
+192.168.1.111   gpu-node-5.internal gpu-node-5 gpu5
+192.168.1.112   gpu-node-6.internal gpu-node-6 gpu6
+192.168.1.113   gpu-node-7.internal gpu-node-7 gpu7
+192.168.1.114   gpu-node-8.internal gpu-node-8 gpu8
+
+# High-Memory GPU Nodes
+192.168.1.120   gpu-himem-1.internal gpu-himem-1
+192.168.1.121   gpu-himem-2.internal gpu-himem-2
+
+###############################################################################
+# ML API Servers
+###############################################################################
+
+# Production API Cluster
+192.168.1.200   ml-api.internal ml-api api
+192.168.1.201   ml-api-1.internal ml-api-1 api1
+192.168.1.202   ml-api-2.internal ml-api-2 api2
+192.168.1.203   ml-api-3.internal ml-api-3 api3
+
+# Load Balancer
+192.168.1.199   ml-api-lb.internal ml-api-lb api-lb
+
+# Staging API
+192.168.1.210   ml-api-staging.internal ml-api-staging api-staging
+
+###############################################################################
+# Model Serving
+###############################################################################
+
+# TorchServe
+192.168.1.220   torchserve.internal torchserve
+192.168.1.221   torchserve-1.internal torchserve-1
+192.168.1.222   torchserve-2.internal torchserve-2
+
+# TensorFlow Serving
+192.168.1.225   tfserving.internal tfserving tf-serving
+192.168.1.226   tfserving-1.internal tfserving-1
+192.168.1.227   tfserving-2.internal tfserving-2
+
+# BentoML
+192.168.1.230   bentoml.internal bentoml
+192.168.1.231   bentoml-1.internal bentoml-1
+
+###############################################################################
+# Feature Store
+###############################################################################
+
+# Redis Cluster (Feature Cache)
+192.168.1.150   feature-store.internal feature-store redis-cluster
+192.168.1.151   redis-1.internal redis-1
+192.168.1.152   redis-2.internal redis-2
+192.168.1.153   redis-3.internal redis-3
+
+# Redis Sentinel (HA)
+192.168.1.154   redis-sentinel-1.internal redis-sentinel-1
+192.168.1.155   redis-sentinel-2.internal redis-sentinel-2
+192.168.1.156   redis-sentinel-3.internal redis-sentinel-3
+
+###############################################################################
+# Databases
+###############################################################################
+
+# PostgreSQL (Model Metadata)
+192.168.1.50    model-db.internal model-db postgres pg
+192.168.1.51    postgres-primary.internal postgres-primary pg-primary
+192.168.1.52    postgres-replica-1.internal postgres-replica-1 pg-replica-1
+192.168.1.53    postgres-replica-2.internal postgres-replica-2 pg-replica-2
+
+# PostgreSQL Connection Pooler
+192.168.1.54    pgbouncer.internal pgbouncer
+
+# MongoDB (Experiment Metadata)
+192.168.1.60    mongodb.internal mongodb mongo
+192.168.1.61    mongodb-1.internal mongodb-1
+192.168.1.62    mongodb-2.internal mongodb-2
+192.168.1.63    mongodb-3.internal mongodb-3
+
+###############################################################################
+# Model Registry
+###############################################################################
+
+# MLflow
+192.168.1.70    mlflow.internal mlflow model-registry
+192.168.1.71    mlflow-server.internal mlflow-server
+192.168.1.72    mlflow-db.internal mlflow-db
+
+# DVC (Data Version Control)
+192.168.1.75    dvc-server.internal dvc-server dvc
+
+###############################################################################
+# Experiment Tracking
+###############################################################################
+
+# Weights & Biases Server
+192.168.1.80    wandb.internal wandb weights-and-biases
+192.168.1.81    wandb-server.internal wandb-server
+
+# TensorBoard
+192.168.1.85    tensorboard.internal tensorboard tb
+
+###############################################################################
+# Monitoring Stack
+###############################################################################
+
+# Prometheus
+192.168.1.90    prometheus.internal prometheus prom
+192.168.1.91    prometheus-1.internal prometheus-1
+192.168.1.92    prometheus-2.internal prometheus-2
+
+# Grafana
+192.168.1.95    grafana.internal grafana
+192.168.1.96    grafana-1.internal grafana-1
+
+# Alertmanager
+192.168.1.93    alertmanager.internal alertmanager
+
+# Node Exporter (on each GPU node)
+# Already resolved via gpu-node-* hostnames
+
+###############################################################################
+# Distributed Tracing
+###############################################################################
+
+# Jaeger
+192.168.1.100   jaeger.internal jaeger tracing
+192.168.1.101   jaeger-collector.internal jaeger-collector
+192.168.1.102   jaeger-query.internal jaeger-query
+
+###############################################################################
+# Message Queue / Event Streaming
+###############################################################################
+
+# RabbitMQ
+192.168.1.130   rabbitmq.internal rabbitmq mq
+192.168.1.131   rabbitmq-1.internal rabbitmq-1
+192.168.1.132   rabbitmq-2.internal rabbitmq-2
+
+# Kafka
+192.168.1.135   kafka.internal kafka
+192.168.1.136   kafka-1.internal kafka-1 kafka-broker-1
+192.168.1.137   kafka-2.internal kafka-2 kafka-broker-2
+192.168.1.138   kafka-3.internal kafka-3 kafka-broker-3
+
+# Kafka Zookeeper
+192.168.1.139   zookeeper.internal zookeeper zk
+192.168.1.140   zookeeper-1.internal zookeeper-1
+192.168.1.141   zookeeper-2.internal zookeeper-2
+192.168.1.142   zookeeper-3.internal zookeeper-3
+
+###############################################################################
+# Object Storage (MinIO)
+###############################################################################
+
+# MinIO (S3-compatible)
+192.168.1.160   minio.internal minio object-storage s3
+192.168.1.161   minio-1.internal minio-1
+192.168.1.162   minio-2.internal minio-2
+192.168.1.163   minio-3.internal minio-3
+192.168.1.164   minio-4.internal minio-4
+
+###############################################################################
+# Data Storage
+###############################################################################
+
+# NFS Server (shared datasets)
+192.168.1.170   nfs-server.internal nfs-server data-store
+192.168.1.171   nfs-1.internal nfs-1
+
+# GlusterFS (distributed file system)
+192.168.1.175   glusterfs.internal glusterfs
+192.168.1.176   glusterfs-1.internal glusterfs-1
+192.168.1.177   glusterfs-2.internal glusterfs-2
+
+###############################################################################
+# Workflow Orchestration
+###############################################################################
+
+# Apache Airflow
+192.168.1.180   airflow.internal airflow workflow
+192.168.1.181   airflow-webserver.internal airflow-webserver
+192.168.1.182   airflow-scheduler.internal airflow-scheduler
+192.168.1.183   airflow-worker-1.internal airflow-worker-1
+192.168.1.184   airflow-worker-2.internal airflow-worker-2
+
+# Kubeflow Pipelines
+192.168.1.185   kubeflow.internal kubeflow kf
+192.168.1.186   kubeflow-pipelines.internal kubeflow-pipelines
+
+# Prefect
+192.168.1.190   prefect.internal prefect
+192.168.1.191   prefect-server.internal prefect-server
+
+###############################################################################
+# Development Tools
+###############################################################################
+
+# JupyterHub
+192.168.1.240   jupyterhub.internal jupyterhub jupyter
+192.168.1.241   jupyterhub-1.internal jupyterhub-1
+
+# Code Server (VSCode)
+192.168.1.245   code-server.internal code-server vscode
+
+# GitLab
+192.168.1.250   gitlab.internal gitlab git
+192.168.1.251   gitlab-runner-1.internal gitlab-runner-1
+192.168.1.252   gitlab-runner-2.internal gitlab-runner-2
+
+###############################################################################
+# Security and Identity
+###############################################################################
+
+# Vault (Secrets Management)
+192.168.1.260   vault.internal vault secrets
+192.168.1.261   vault-1.internal vault-1
+192.168.1.262   vault-2.internal vault-2
+
+# Keycloak (SSO)
+192.168.1.265   keycloak.internal keycloak sso auth
+192.168.1.266   keycloak-1.internal keycloak-1
+
+###############################################################################
+# Infrastructure Management
+###############################################################################
+
+# Bastion / Jump Host
+192.168.1.10    bastion.internal bastion jump jumphost
+
+# Ansible Control Node
+192.168.1.15    ansible.internal ansible automation
+
+# Terraform State Server
+192.168.1.16    terraform-state.internal terraform-state
+
+###############################################################################
+# Load Balancers
+###############################################################################
+
+# HAProxy
+192.168.1.20    haproxy.internal haproxy lb load-balancer
+192.168.1.21    haproxy-1.internal haproxy-1
+192.168.1.22    haproxy-2.internal haproxy-2
+
+# Nginx
+192.168.1.25    nginx-lb.internal nginx-lb nginx
+
+###############################################################################
+# DNS and DHCP
+###############################################################################
+
+# Internal DNS Server
+192.168.1.2     dns.internal dns nameserver
+192.168.1.3     dns-secondary.internal dns-secondary
+
+# DHCP Server
+192.168.1.4     dhcp.internal dhcp
+
+###############################################################################
+# Network Infrastructure
+###############################################################################
+
+# Network Gateway
+192.168.1.1     gateway.internal gateway gw router
+
+# Network Switches
+192.168.1.5     switch-1.internal switch-1
+192.168.1.6     switch-2.internal switch-2
+
+###############################################################################
+# Backup and Recovery
+###############################################################################
+
+# Backup Server
+192.168.1.30    backup.internal backup backup-server
+192.168.1.31    backup-1.internal backup-1
+
+# Disaster Recovery
+192.168.1.32    dr-server.internal dr-server disaster-recovery
+
+###############################################################################
+# Testing and Staging
+###############################################################################
+
+# Staging Environment
+192.168.1.210   staging-api.internal staging-api
+192.168.1.211   staging-db.internal staging-db
+192.168.1.212   staging-gpu-1.internal staging-gpu-1
+
+# Testing Environment
+192.168.1.220   test-api.internal test-api
+192.168.1.221   test-db.internal test-db
+
+###############################################################################
+# External Services (Public IPs - Example)
+###############################################################################
+
+# External Load Balancer (public)
+# 203.0.113.10    ml-platform.example.com ml-platform
+
+# External API Gateway (public)
+# 203.0.113.20    api.ml-platform.com api-gateway
+
+###############################################################################
+# Docker / Kubernetes Nodes
+###############################################################################
+
+# Kubernetes Master Nodes
+192.168.1.40    k8s-master-1.internal k8s-master-1 kube-master-1
+192.168.1.41    k8s-master-2.internal k8s-master-2
+192.168.1.42    k8s-master-3.internal k8s-master-3
+
+# Kubernetes Worker Nodes
+192.168.1.43    k8s-worker-1.internal k8s-worker-1 kube-worker-1
+192.168.1.44    k8s-worker-2.internal k8s-worker-2
+192.168.1.45    k8s-worker-3.internal k8s-worker-3
+
+# Docker Registry
+192.168.1.48    docker-registry.internal docker-registry registry
+
+###############################################################################
+# Notes and Best Practices
+###############################################################################
+
+# 1. DNS vs /etc/hosts:
+#    - /etc/hosts is checked BEFORE DNS
+#    - Use for critical infrastructure (faster, no DNS dependency)
+#    - DNS is better for dynamic environments
+
+# 2. Naming Convention:
+#    - Primary hostname: service-name.internal
+#    - Aliases: short names for convenience
+#    - Numbering: service-1, service-2 for cluster members
+
+# 3. IPv6:
+#    - Add IPv6 addresses if dual-stack network
+#    - Format: <ipv6-address> <hostname>
+
+# 4. Maintenance:
+#    - Review and update regularly
+#    - Remove decommissioned hosts
+#    - Document changes with comments
+#    - Keep synchronized across cluster
+
+# 5. Security:
+#    - Don't expose internal hostnames externally
+#    - Use split-horizon DNS if needed
+#    - Restrict /etc/hosts to internal use only
+
+# 6. Testing:
+#    - After changes: ping <hostname>
+#    - Verify: getent hosts <hostname>
+#    - DNS lookup: dig <hostname> @localhost
+
+# 7. Troubleshooting:
+#    - Check: cat /etc/hosts | grep <hostname>
+#    - Order matters: first match wins
+#    - Whitespace: use tabs or spaces consistently
+
+###############################################################################
+# Verification Commands
+###############################################################################
+
+# Test hostname resolution:
+# ping -c 2 ml-api.internal
+# ping -c 2 gpu-node-1.internal
+
+# Lookup hostname:
+# getent hosts ml-api.internal
+# host ml-api.internal
+
+# Test all ML services:
+# for host in ml-api feature-store model-db prometheus grafana; do
+#     echo -n "$host: "
+#     ping -c 1 -W 1 $host.internal > /dev/null 2>&1 && echo "OK" || echo "FAIL"
+# done
+
+# DNS vs /etc/hosts:
+# getent hosts ml-api.internal  # Checks /etc/hosts first
+# dig ml-api.internal           # Only checks DNS
+
+# Reverse lookup:
+# getent hosts 192.168.1.200
+# dig -x 192.168.1.200
+
+###############################################################################
+# Integration with systemd-resolved
+###############################################################################
+
+# If using systemd-resolved (Ubuntu 18.04+):
+# /etc/hosts still takes precedence
+# Configure DNS domains in /etc/systemd/resolved.conf
+
+# Example /etc/systemd/resolved.conf:
+# [Resolve]
+# DNS=192.168.1.2
+# Domains=internal ml-platform.local
+
+###############################################################################
+# Ansible/Automation
+###############################################################################
+
+# Generate hosts file from inventory:
+# ansible all -i inventory -m debug -a 'msg="{{ inventory_hostname }} {{ ansible_default_ipv4.address }}"' \
+#   | grep msg | sed 's/.*msg": "//' | sed 's/".*//' > /tmp/generated_hosts
+
+###############################################################################
+# End of /etc/hosts
+###############################################################################

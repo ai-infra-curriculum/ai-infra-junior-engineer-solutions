@@ -1,0 +1,208 @@
+version: '3.8'
+
+#
+# Flask vs FastAPI Side-by-Side Deployment
+#
+# This docker-compose file runs both Flask and FastAPI implementations
+# for performance comparison and testing.
+#
+# Usage:
+#   docker-compose up -d           # Start all services
+#   docker-compose ps              # Check service status
+#   docker-compose logs -f flask   # View Flask logs
+#   docker-compose logs -f fastapi # View FastAPI logs
+#   docker-compose down            # Stop all services
+#
+
+services:
+  # ============================================================================
+  # Flask API
+  # ============================================================================
+  flask:
+    build:
+      context: ..
+      dockerfile: examples/Dockerfile.flask
+    container_name: ml-api-flask
+    ports:
+      - "5000:5000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PORT=5000
+      - SECRET_KEY=flask-secret-key-for-testing
+      - MODEL_PATH=model.pkl
+      - DEBUG=False
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    labels:
+      - "framework=flask"
+      - "purpose=comparison"
+    networks:
+      - ml-network
+
+  # ============================================================================
+  # FastAPI
+  # ============================================================================
+  fastapi:
+    build:
+      context: ..
+      dockerfile: examples/Dockerfile.fastapi
+    container_name: ml-api-fastapi
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PORT=8000
+      - SECRET_KEY=fastapi-secret-key-for-testing
+      - MODEL_PATH=model.pkl
+      - WORKERS=4
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    labels:
+      - "framework=fastapi"
+      - "purpose=comparison"
+    networks:
+      - ml-network
+
+  # ============================================================================
+  # Load Testing with Locust
+  # ============================================================================
+  locust:
+    image: locustio/locust:2.20.0
+    container_name: ml-api-locust
+    ports:
+      - "8089:8089"
+    volumes:
+      - ../tests/locustfile.py:/mnt/locust/locustfile.py:ro
+    environment:
+      - LOCUST_HOST=http://fastapi:8000
+    command: >
+      -f /mnt/locust/locustfile.py
+      --web-host=0.0.0.0
+      --web-port=8089
+    depends_on:
+      - flask
+      - fastapi
+    networks:
+      - ml-network
+    labels:
+      - "purpose=load-testing"
+
+  # ============================================================================
+  # Prometheus for Metrics (Optional)
+  # ============================================================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ml-api-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'
+    networks:
+      - ml-network
+    labels:
+      - "purpose=monitoring"
+    restart: unless-stopped
+
+  # ============================================================================
+  # Grafana for Visualization (Optional)
+  # ============================================================================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ml-api-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - ml-network
+    labels:
+      - "purpose=monitoring"
+    restart: unless-stopped
+
+networks:
+  ml-network:
+    driver: bridge
+    name: ml-api-network
+
+volumes:
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+# ==============================================================================
+# USAGE EXAMPLES
+# ==============================================================================
+#
+# 1. Build and start all services:
+#    docker-compose up -d
+#
+# 2. Check service status:
+#    docker-compose ps
+#
+# 3. Test Flask API:
+#    # Get token
+#    curl -X POST http://localhost:5000/login \
+#      -H "Content-Type: application/json" \
+#      -d '{"username":"admin","password":"password"}'
+#
+#    # Make prediction
+#    curl -X POST http://localhost:5000/predict \
+#      -H "Authorization: Bearer <TOKEN>" \
+#      -H "Content-Type: application/json" \
+#      -d '{"features":[1,2,3,4,5,6,7,8,9,10]}'
+#
+# 4. Test FastAPI:
+#    # Get token
+#    curl -X POST http://localhost:8000/login \
+#      -H "Content-Type: application/json" \
+#      -d '{"username":"admin","password":"password"}'
+#
+#    # Make prediction
+#    curl -X POST http://localhost:8000/predict \
+#      -H "Authorization: Bearer <TOKEN>" \
+#      -H "Content-Type: application/json" \
+#      -d '{"features":[1,2,3,4,5,6,7,8,9,10]}'
+#
+# 5. Access services:
+#    - Flask API: http://localhost:5000
+#    - FastAPI: http://localhost:8000
+#    - FastAPI Docs: http://localhost:8000/docs
+#    - Locust UI: http://localhost:8089
+#    - Prometheus: http://localhost:9090
+#    - Grafana: http://localhost:3000 (admin/admin)
+#
+# 6. View logs:
+#    docker-compose logs -f flask
+#    docker-compose logs -f fastapi
+#
+# 7. Run benchmark:
+#    python tests/test_comparison.py
+#
+# 8. Stop all services:
+#    docker-compose down
+#
+# 9. Clean up everything (including volumes):
+#    docker-compose down -v
+#

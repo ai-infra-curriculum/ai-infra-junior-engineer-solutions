@@ -1,0 +1,507 @@
+# UFW Firewall Rules for ML Infrastructure
+#
+# Installation:
+#   sudo bash < ufw_rules.txt
+#
+# Or manually execute each command
+#
+# IMPORTANT: Always allow SSH before enabling UFW on remote systems!
+
+###############################################################################
+# Setup and Validation Script
+###############################################################################
+
+# Save current rules (backup)
+echo "Backing up current UFW rules..."
+sudo ufw status numbered > /tmp/ufw_backup_$(date +%Y%m%d_%H%M%S).txt
+
+# Check if UFW is installed
+if ! command -v ufw &> /dev/null; then
+    echo "UFW not installed. Installing..."
+    sudo apt-get update && sudo apt-get install -y ufw
+fi
+
+###############################################################################
+# Default Policies
+###############################################################################
+
+# Set default policies
+echo "Setting default policies..."
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw default deny routed
+
+###############################################################################
+# Essential Services
+###############################################################################
+
+# SSH (CRITICAL: Allow before enabling firewall!)
+echo "Allowing SSH..."
+sudo ufw allow 22/tcp comment 'SSH access'
+sudo ufw limit 22/tcp comment 'SSH rate limiting (prevent brute force)'
+
+# Alternative: Allow SSH from specific networks only
+# sudo ufw allow from 10.0.0.0/8 to any port 22 proto tcp comment 'SSH from corporate network'
+# sudo ufw allow from 192.168.1.0/24 to any port 22 proto tcp comment 'SSH from internal network'
+
+###############################################################################
+# ML Platform Services
+###############################################################################
+
+# Model Serving APIs
+echo "Allowing ML services..."
+sudo ufw allow 8080/tcp comment 'ML Model API (HTTP)'
+sudo ufw allow 8443/tcp comment 'ML Model API (HTTPS)'
+sudo ufw allow 8000/tcp comment 'ML API (FastAPI/Flask)'
+sudo ufw allow 5000/tcp comment 'MLflow Server'
+
+# Alternative: Allow only from application servers
+# sudo ufw allow from 192.168.100.0/24 to any port 8080 proto tcp comment 'ML API from app servers'
+
+###############################################################################
+# Monitoring and Observability
+###############################################################################
+
+# Prometheus
+echo "Allowing monitoring services..."
+sudo ufw allow 9090/tcp comment 'Prometheus'
+sudo ufw allow 9100/tcp comment 'Node Exporter'
+sudo ufw allow 9091/tcp comment 'Pushgateway'
+sudo ufw allow 9093/tcp comment 'Alertmanager'
+
+# Grafana
+sudo ufw allow 3000/tcp comment 'Grafana'
+
+# Jaeger (distributed tracing)
+sudo ufw allow 16686/tcp comment 'Jaeger UI'
+sudo ufw allow 14268/tcp comment 'Jaeger Collector'
+
+# Alternative: Allow only from monitoring subnet
+# sudo ufw allow from 192.168.90.0/24 to any port 9090 proto tcp comment 'Prometheus from monitoring subnet'
+
+###############################################################################
+# Database Services (Internal Only)
+###############################################################################
+
+# PostgreSQL (internal network only)
+echo "Allowing database services (internal only)..."
+sudo ufw allow from 192.168.1.0/24 to any port 5432 proto tcp comment 'PostgreSQL internal'
+# sudo ufw allow from 10.0.0.0/8 to any port 5432 proto tcp comment 'PostgreSQL from corporate network'
+
+# MySQL/MariaDB (if needed)
+sudo ufw allow from 192.168.1.0/24 to any port 3306 proto tcp comment 'MySQL internal'
+
+# MongoDB (if needed)
+sudo ufw allow from 192.168.1.0/24 to any port 27017 proto tcp comment 'MongoDB internal'
+
+###############################################################################
+# Caching and Message Queues (Internal Only)
+###############################################################################
+
+# Redis
+echo "Allowing cache and queue services (internal only)..."
+sudo ufw allow from 192.168.1.0/24 to any port 6379 proto tcp comment 'Redis internal'
+
+# RabbitMQ
+sudo ufw allow from 192.168.1.0/24 to any port 5672 proto tcp comment 'RabbitMQ AMQP'
+sudo ufw allow from 192.168.1.0/24 to any port 15672 proto tcp comment 'RabbitMQ Management'
+
+# Kafka
+sudo ufw allow from 192.168.1.0/24 to any port 9092 proto tcp comment 'Kafka broker'
+sudo ufw allow from 192.168.1.0/24 to any port 2181 proto tcp comment 'Kafka Zookeeper'
+
+###############################################################################
+# Distributed Computing
+###############################################################################
+
+# Apache Spark
+echo "Allowing distributed computing services..."
+sudo ufw allow from 192.168.1.0/24 to any port 7077 proto tcp comment 'Spark master'
+sudo ufw allow from 192.168.1.0/24 to any port 8081 proto tcp comment 'Spark worker UI'
+sudo ufw allow from 192.168.1.0/24 to any port 4040 proto tcp comment 'Spark application UI'
+
+# Ray
+sudo ufw allow from 192.168.1.0/24 to any port 8265 proto tcp comment 'Ray dashboard'
+sudo ufw allow from 192.168.1.0/24 to any port 6379 proto tcp comment 'Ray Redis'
+sudo ufw allow from 192.168.1.0/24 to any port 10001:19999 proto tcp comment 'Ray workers'
+
+# Dask
+sudo ufw allow from 192.168.1.0/24 to any port 8786 proto tcp comment 'Dask scheduler'
+sudo ufw allow from 192.168.1.0/24 to any port 8787 proto tcp comment 'Dask dashboard'
+
+###############################################################################
+# Kubernetes (if applicable)
+###############################################################################
+
+# Kubernetes API server
+# sudo ufw allow from 192.168.1.0/24 to any port 6443 proto tcp comment 'K8s API server'
+
+# Kubelet API
+# sudo ufw allow from 192.168.1.0/24 to any port 10250 proto tcp comment 'Kubelet API'
+
+# NodePort services (30000-32767)
+# sudo ufw allow from 192.168.1.0/24 to any port 30000:32767 proto tcp comment 'K8s NodePort'
+
+###############################################################################
+# Container Networking
+###############################################################################
+
+# Docker Swarm
+# sudo ufw allow from 192.168.1.0/24 to any port 2377 proto tcp comment 'Docker Swarm management'
+# sudo ufw allow from 192.168.1.0/24 to any port 7946 proto tcp comment 'Docker Swarm node comm (TCP)'
+# sudo ufw allow from 192.168.1.0/24 to any port 7946 proto udp comment 'Docker Swarm node comm (UDP)'
+# sudo ufw allow from 192.168.1.0/24 to any port 4789 proto udp comment 'Docker overlay network'
+
+###############################################################################
+# Development Tools (Development/Staging Only)
+###############################################################################
+
+# Jupyter Notebook/Lab
+# sudo ufw allow from 192.168.1.0/24 to any port 8888 proto tcp comment 'Jupyter'
+# sudo ufw allow from 192.168.1.0/24 to any port 8889 proto tcp comment 'JupyterHub'
+
+# TensorBoard
+# sudo ufw allow from 192.168.1.0/24 to any port 6006 proto tcp comment 'TensorBoard'
+
+# VSCode Remote
+# sudo ufw allow from 192.168.1.0/24 to any port 8080 proto tcp comment 'code-server'
+
+###############################################################################
+# Special Rules
+###############################################################################
+
+# Allow from specific trusted IPs
+# sudo ufw allow from <admin-ip> comment 'Admin workstation'
+# sudo ufw allow from <ci-cd-server-ip> comment 'CI/CD server'
+
+# Allow ping (ICMP)
+echo "Allowing ping..."
+sudo ufw allow from any to any proto icmp comment 'Allow ping'
+
+# Allow mDNS (service discovery on local network)
+sudo ufw allow from 192.168.1.0/24 to any port 5353 proto udp comment 'mDNS'
+
+# Allow NTP (time synchronization)
+sudo ufw allow out 123/udp comment 'NTP client'
+
+###############################################################################
+# Logging Configuration
+###############################################################################
+
+# Enable logging (options: off, low, medium, high, full)
+echo "Configuring logging..."
+sudo ufw logging on
+# sudo ufw logging medium  # More detailed logging
+
+###############################################################################
+# Rate Limiting (DDoS Protection)
+###############################################################################
+
+# SSH is already rate-limited above
+# Additional rate limiting for HTTP APIs (optional)
+# Note: UFW's limit is basic; consider fail2ban for advanced protection
+
+###############################################################################
+# IPv6 Configuration
+###############################################################################
+
+# Enable IPv6 (if needed)
+# sudo sed -i 's/IPV6=no/IPV6=yes/' /etc/default/ufw
+
+###############################################################################
+# Application Profiles (Optional)
+###############################################################################
+
+# List available application profiles
+# sudo ufw app list
+
+# Allow application by profile
+# sudo ufw allow 'Apache Full'
+# sudo ufw allow 'Nginx Full'
+
+###############################################################################
+# Enable Firewall
+###############################################################################
+
+# CRITICAL: Review rules before enabling!
+echo ""
+echo "===================================================================="
+echo "IMPORTANT: Verify SSH is allowed before enabling firewall!"
+echo "Current SSH rules:"
+sudo ufw status | grep 22
+echo ""
+echo "If SSH rule is missing, run: sudo ufw allow 22/tcp"
+echo "===================================================================="
+echo ""
+
+# Enable UFW
+echo "Enabling UFW..."
+sudo ufw --force enable
+
+# Show status
+echo ""
+echo "===================================================================="
+echo "UFW Status:"
+echo "===================================================================="
+sudo ufw status verbose
+
+echo ""
+echo "===================================================================="
+echo "UFW Rules (numbered):"
+echo "===================================================================="
+sudo ufw status numbered
+
+###############################################################################
+# Verification Commands
+###############################################################################
+
+echo ""
+echo "===================================================================="
+echo "Verification Commands:"
+echo "===================================================================="
+cat << 'COMMANDS'
+
+# Check firewall status
+sudo ufw status verbose
+
+# View numbered rules
+sudo ufw status numbered
+
+# Delete rule by number
+sudo ufw delete <number>
+
+# Delete rule by specification
+sudo ufw delete allow 8080/tcp
+
+# Disable UFW (emergency)
+sudo ufw disable
+
+# Reload UFW
+sudo ufw reload
+
+# Reset UFW (remove all rules)
+sudo ufw reset
+
+# View logs
+sudo tail -f /var/log/ufw.log
+sudo grep UFW /var/log/syslog
+
+# Test port connectivity from another machine
+nc -zv <this-ip> <port>
+telnet <this-ip> <port>
+
+# Show open ports
+sudo ss -tulpn
+
+# Show UFW configuration files
+ls -la /etc/ufw/
+cat /etc/ufw/user.rules
+cat /etc/ufw/user6.rules
+
+COMMANDS
+
+###############################################################################
+# Testing Checklist
+###############################################################################
+
+echo ""
+echo "===================================================================="
+echo "Testing Checklist:"
+echo "===================================================================="
+cat << 'CHECKLIST'
+
+□ SSH connection still works
+□ ML API accessible from application servers
+□ Database accessible only from internal network
+□ Monitoring tools (Prometheus, Grafana) accessible
+□ External ports blocked (test with nmap from outside)
+□ Logs show blocked connection attempts
+□ Rate limiting working (test with multiple SSH attempts)
+□ Verify rules after reboot
+
+CHECKLIST
+
+###############################################################################
+# Common Operations
+###############################################################################
+
+echo ""
+echo "===================================================================="
+echo "Common Operations:"
+echo "===================================================================="
+cat << 'OPERATIONS'
+
+# Add temporary rule (testing)
+sudo ufw allow from <ip> to any port <port>
+
+# Allow service temporarily
+sudo ufw allow <service-name>
+
+# Deny specific IP
+sudo ufw deny from <malicious-ip>
+
+# Allow specific IP full access
+sudo ufw allow from <trusted-ip>
+
+# Insert rule at specific position
+sudo ufw insert 1 allow from <ip> to any port 22
+
+# Enable/disable rule
+sudo ufw delete allow <port>
+sudo ufw allow <port>
+
+# Show UFW app profiles
+sudo ufw app list
+sudo ufw app info <app-name>
+
+OPERATIONS
+
+###############################################################################
+# Emergency Procedures
+###############################################################################
+
+echo ""
+echo "===================================================================="
+echo "Emergency Procedures:"
+echo "===================================================================="
+cat << 'EMERGENCY'
+
+If locked out of SSH:
+
+1. Access via console (cloud console, IPMI, physical access)
+
+2. Disable firewall:
+   sudo ufw disable
+
+3. Review rules:
+   sudo ufw status numbered
+
+4. Fix SSH rule:
+   sudo ufw allow 22/tcp
+
+5. Re-enable:
+   sudo ufw enable
+
+6. Test connection from another window
+
+Alternative (if UFW misconfigured):
+   sudo iptables -F  # Flush all rules (dangerous!)
+   sudo ufw reload
+
+EMERGENCY
+
+###############################################################################
+# Security Best Practices
+###############################################################################
+
+echo ""
+echo "===================================================================="
+echo "Security Best Practices:"
+echo "===================================================================="
+cat << 'BEST_PRACTICES'
+
+1. Default Deny:
+   - Block all incoming traffic by default
+   - Only allow necessary services
+
+2. Network Segmentation:
+   - Databases: internal network only
+   - APIs: specific application servers only
+   - Management: VPN or specific IPs only
+
+3. Rate Limiting:
+   - Protect SSH with rate limiting
+   - Consider fail2ban for advanced protection
+
+4. Monitoring:
+   - Review logs regularly (sudo tail -f /var/log/ufw.log)
+   - Alert on blocked connection spikes
+   - Track rule changes
+
+5. Documentation:
+   - Document every rule and its purpose
+   - Comment all rules with business justification
+   - Keep inventory of allowed IPs/networks
+
+6. Testing:
+   - Test firewall after changes
+   - Verify from multiple sources
+   - Use nmap to validate ports
+
+7. Auditing:
+   - Regular rule review (quarterly)
+   - Remove unused rules
+   - Verify no overly permissive rules
+
+8. Change Management:
+   - Test rule changes in staging first
+   - Keep backup of working configuration
+   - Document all changes
+
+BEST_PRACTICES
+
+###############################################################################
+# Integration with Other Security Tools
+###############################################################################
+
+echo ""
+echo "===================================================================="
+echo "Integration with fail2ban:"
+echo "===================================================================="
+cat << 'FAIL2BAN'
+
+# Install fail2ban
+sudo apt-get install fail2ban
+
+# Configure SSH jail
+sudo tee /etc/fail2ban/jail.local << 'EOF'
+[sshd]
+enabled = true
+port = ssh
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = 3
+bantime = 3600
+findtime = 600
+EOF
+
+# Restart fail2ban
+sudo systemctl restart fail2ban
+
+# Check banned IPs
+sudo fail2ban-client status sshd
+
+FAIL2BAN
+
+###############################################################################
+# References
+###############################################################################
+
+echo ""
+echo "===================================================================="
+echo "References:"
+echo "===================================================================="
+cat << 'REFERENCES'
+
+UFW Documentation:
+- https://help.ubuntu.com/community/UFW
+- man ufw
+
+iptables (underlying):
+- https://www.netfilter.org/documentation/
+- man iptables
+
+CIS Benchmarks:
+- https://www.cisecurity.org/cis-benchmarks
+
+Best Practices:
+- NIST Cybersecurity Framework
+- PCI-DSS requirements
+- GDPR security guidelines
+
+REFERENCES
+
+echo ""
+echo "===================================================================="
+echo "UFW configuration complete!"
+echo "===================================================================="

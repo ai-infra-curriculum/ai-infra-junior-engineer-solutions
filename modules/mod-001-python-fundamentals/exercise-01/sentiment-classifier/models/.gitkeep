@@ -1,0 +1,2 @@
+# This file ensures the models/ directory is tracked by git
+# Actual model files should be gitignored

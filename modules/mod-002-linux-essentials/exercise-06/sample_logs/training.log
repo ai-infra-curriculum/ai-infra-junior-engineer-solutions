@@ -1,0 +1,18 @@
+2024-10-18 10:00:00 INFO Starting training session
+2024-10-18 10:00:01 INFO Loading dataset from /data/train
+2024-10-18 10:00:05 INFO Dataset loaded: 50000 samples
+2024-10-18 10:00:06 INFO Model architecture: ResNet50
+2024-10-18 10:00:10 INFO Epoch 1/100 - loss: 2.3012 - accuracy: 0.1234 - val_loss: 2.1234 - val_accuracy: 0.1567
+2024-10-18 10:01:30 INFO Epoch 2/100 - loss: 1.8765 - accuracy: 0.3456 - val_loss: 1.7890 - val_accuracy: 0.3789
+2024-10-18 10:02:45 WARNING Learning rate: 0.001 may be too high
+2024-10-18 10:03:00 INFO Epoch 3/100 - loss: 1.5432 - accuracy: 0.4567 - val_loss: 1.4567 - val_accuracy: 0.4890
+2024-10-18 10:04:15 ERROR CUDA out of memory - reducing batch size from 32 to 16
+2024-10-18 10:04:20 INFO Resuming training with batch size 16
+2024-10-18 10:05:30 INFO Epoch 4/100 - loss: 1.2345 - accuracy: 0.5678 - val_loss: 1.1890 - val_accuracy: 0.5901
+2024-10-18 10:06:45 INFO Checkpoint saved to /models/checkpoints/epoch_4.h5
+2024-10-18 10:07:00 INFO Epoch 5/100 - loss: 1.0123 - accuracy: 0.6345 - val_loss: 0.9876 - val_accuracy: 0.6512
+2024-10-18 10:08:15 WARNING Validation loss increased - possible overfitting
+2024-10-18 10:08:30 INFO Early stopping triggered
+2024-10-18 10:08:31 INFO Training completed in 8 minutes 31 seconds
+2024-10-18 10:08:32 INFO Best model saved to /models/final/best_model.h5
+2024-10-18 10:08:33 INFO Final metrics - loss: 1.0123 - accuracy: 0.6345

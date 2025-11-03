@@ -1,0 +1,11 @@
+2024-10-18 10:00:00 INFO [API] Server started on port 8080
+2024-10-18 10:05:23 INFO [REQUEST] GET /predict - IP: 192.168.1.100 - User-Agent: curl/7.68.0
+2024-10-18 10:05:23 INFO [RESPONSE] 200 - Prediction: class_2 - Confidence: 0.876 - Duration: 45ms
+2024-10-18 10:06:45 INFO [REQUEST] POST /predict/batch - IP: 192.168.1.101 - User-Agent: python-requests/2.28.0
+2024-10-18 10:06:46 INFO [RESPONSE] 200 - Batch size: 100 - Duration: 1234ms
+2024-10-18 10:08:12 WARNING [REQUEST] GET /predict - IP: 192.168.1.102 - Rate limit: 90/100
+2024-10-18 10:08:12 ERROR [RESPONSE] 400 - Invalid input format - Duration: 5ms
+2024-10-18 10:10:01 ERROR [REQUEST] POST /predict - IP: 192.168.1.103 - Authentication failed
+2024-10-18 10:10:01 ERROR [RESPONSE] 401 - Unauthorized - Duration: 2ms
+2024-10-18 10:12:34 INFO [REQUEST] GET /health - IP: 192.168.1.100
+2024-10-18 10:12:34 INFO [RESPONSE] 200 - Status: healthy - Model loaded: true - GPU available: true

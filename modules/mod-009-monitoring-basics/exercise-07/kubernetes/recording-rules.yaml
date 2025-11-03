@@ -1,0 +1,393 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-recording-rules
+  namespace: monitoring
+  labels:
+    app: prometheus
+    component: recording-rules
+data:
+  recording_rules.yml: |
+    # ML Platform Recording Rules
+    # Pre-compute expensive queries to improve dashboard performance
+
+    groups:
+    # ========================================================================
+    # Model Serving Performance Rules (30s interval)
+    # ========================================================================
+    - name: ml_model_serving_rules
+      interval: 30s
+      rules:
+
+      # Request rate per model (replaces: sum by (model) (rate(...)))
+      - record: model:predictions:rate5m
+        expr: sum by (model, version) (rate(model_predictions_total[5m]))
+        labels:
+          level: model
+
+      # Error rate per model
+      - record: model:errors:rate5m
+        expr: sum by (model, version) (rate(model_prediction_errors_total[5m]))
+        labels:
+          level: model
+
+      # Error ratio (percentage)
+      - record: model:error_ratio:rate5m
+        expr: |
+          model:errors:rate5m
+            /
+          model:predictions:rate5m
+        labels:
+          level: model
+
+      # Success rate (1 - error_ratio)
+      - record: model:success_ratio:rate5m
+        expr: 1 - model:error_ratio:rate5m
+        labels:
+          level: model
+
+      # Latency percentiles (p50, p95, p99)
+      - record: model:latency:p50
+        expr: |
+          histogram_quantile(0.50,
+            sum by (le, model) (
+              rate(model_prediction_duration_seconds_bucket[5m])
+            )
+          )
+        labels:
+          level: model
+          percentile: "50"
+
+      - record: model:latency:p95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le, model) (
+              rate(model_prediction_duration_seconds_bucket[5m])
+            )
+          )
+        labels:
+          level: model
+          percentile: "95"
+
+      - record: model:latency:p99
+        expr: |
+          histogram_quantile(0.99,
+            sum by (le, model) (
+              rate(model_prediction_duration_seconds_bucket[5m])
+            )
+          )
+        labels:
+          level: model
+          percentile: "99"
+
+      # Average latency (more efficient than histogram_quantile)
+      - record: model:latency:mean
+        expr: |
+          sum by (model) (rate(model_prediction_duration_seconds_sum[5m]))
+            /
+          sum by (model) (rate(model_prediction_duration_seconds_count[5m]))
+        labels:
+          level: model
+
+      # Cache hit ratio (0.0 to 1.0)
+      - record: model:cache:hit_ratio
+        expr: |
+          sum by (model) (rate(model_cache_hits_total[5m]))
+            /
+          sum by (model) (
+            rate(model_cache_hits_total[5m])
+            +
+            rate(model_cache_misses_total[5m])
+          )
+        labels:
+          level: model
+
+      # Cache miss ratio
+      - record: model:cache:miss_ratio
+        expr: 1 - model:cache:hit_ratio
+        labels:
+          level: model
+
+      # Request rate by status code
+      - record: model:requests:rate5m:by_status
+        expr: sum by (model, status_code) (rate(model_http_requests_total[5m]))
+        labels:
+          level: model
+
+    # ========================================================================
+    # Platform-Wide Aggregations (30s interval)
+    # ========================================================================
+    - name: ml_platform_aggregations
+      interval: 30s
+      rules:
+
+      # Total predictions across all models
+      - record: platform:predictions:rate5m
+        expr: sum(model:predictions:rate5m)
+        labels:
+          level: platform
+
+      # Total errors across platform
+      - record: platform:errors:rate5m
+        expr: sum(model:errors:rate5m)
+        labels:
+          level: platform
+
+      # Platform-wide error ratio
+      - record: platform:error_ratio:rate5m
+        expr: platform:errors:rate5m / platform:predictions:rate5m
+        labels:
+          level: platform
+
+      # Platform p95 latency (weighted average across models)
+      - record: platform:latency:p95
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(model_prediction_duration_seconds_bucket[5m])) by (le)
+          )
+        labels:
+          level: platform
+          percentile: "95"
+
+      # Average platform latency
+      - record: platform:latency:mean
+        expr: |
+          sum(rate(model_prediction_duration_seconds_sum[5m]))
+            /
+          sum(rate(model_prediction_duration_seconds_count[5m]))
+        labels:
+          level: platform
+
+      # Overall cache hit ratio
+      - record: platform:cache:hit_ratio
+        expr: |
+          sum(rate(model_cache_hits_total[5m]))
+            /
+          (
+            sum(rate(model_cache_hits_total[5m]))
+            +
+            sum(rate(model_cache_misses_total[5m]))
+          )
+        labels:
+          level: platform
+
+    # ========================================================================
+    # Resource Efficiency Rules (60s interval)
+    # ========================================================================
+    - name: ml_resource_efficiency_rules
+      interval: 60s
+      rules:
+
+      # Predictions per CPU second
+      - record: model:efficiency:predictions_per_cpu
+        expr: |
+          model:predictions:rate5m
+            /
+          sum by (model) (rate(container_cpu_usage_seconds_total{container="model-server"}[5m]))
+        labels:
+          level: model
+          metric: efficiency
+
+      # Predictions per GB of memory
+      - record: model:efficiency:predictions_per_gb_memory
+        expr: |
+          model:predictions:rate5m
+            /
+          (
+            sum by (model) (container_memory_usage_bytes{container="model-server"})
+            / 1024 / 1024 / 1024
+          )
+        labels:
+          level: model
+          metric: efficiency
+
+      # Memory usage trend (bytes per hour)
+      - record: model:memory:growth_rate_1h
+        expr: deriv(container_memory_usage_bytes{container="model-server"}[1h])
+        labels:
+          level: model
+          metric: memory
+
+      # CPU utilization percentage
+      - record: model:cpu:utilization
+        expr: |
+          sum by (model) (rate(container_cpu_usage_seconds_total{container="model-server"}[5m]))
+            /
+          sum by (model) (container_spec_cpu_quota{container="model-server"} / 100000)
+        labels:
+          level: model
+          metric: resource
+
+      # Memory utilization percentage
+      - record: model:memory:utilization
+        expr: |
+          sum by (model) (container_memory_usage_bytes{container="model-server"})
+            /
+          sum by (model) (container_spec_memory_limit_bytes{container="model-server"})
+        labels:
+          level: model
+          metric: resource
+
+    # ========================================================================
+    # Business-Level KPIs (60s interval)
+    # ========================================================================
+    - name: ml_business_rules
+      interval: 60s
+      rules:
+
+      # Hourly prediction volume
+      - record: model:predictions:hourly
+        expr: sum by (model) (increase(model_predictions_total[1h]))
+        labels:
+          level: model
+          window: 1h
+
+      # Daily prediction volume
+      - record: model:predictions:daily
+        expr: sum by (model) (increase(model_predictions_total[24h]))
+        labels:
+          level: model
+          window: 24h
+
+      # Cost per 1000 predictions (assuming $0.10 per CPU-hour)
+      - record: model:cost:per_1k_predictions
+        expr: |
+          (
+            sum by (model) (rate(container_cpu_usage_seconds_total{container="model-server"}[5m]))
+            * 0.10 / 3600
+          )
+            /
+          (model:predictions:rate5m / 1000)
+        labels:
+          level: model
+          metric: cost
+
+      # Revenue per prediction (example: $0.01 per prediction)
+      - record: model:revenue:rate5m
+        expr: model:predictions:rate5m * 0.01
+        labels:
+          level: model
+          metric: revenue
+
+      # Profit margin (revenue - cost)
+      - record: model:profit:rate5m
+        expr: |
+          model:revenue:rate5m
+            -
+          (model:cost:per_1k_predictions * model:predictions:rate5m / 1000)
+        labels:
+          level: model
+          metric: profit
+
+    # ========================================================================
+    # Trend Analysis Rules (5m interval)
+    # ========================================================================
+    - name: ml_trend_analysis_rules
+      interval: 5m
+      rules:
+
+      # Request rate trend (current vs 1 hour ago)
+      - record: model:predictions:trend_1h
+        expr: |
+          model:predictions:rate5m
+            /
+          (model:predictions:rate5m offset 1h)
+        labels:
+          level: model
+          metric: trend
+
+      # Request rate trend (current vs same time yesterday)
+      - record: model:predictions:trend_24h
+        expr: |
+          model:predictions:rate5m
+            /
+          (model:predictions:rate5m offset 24h)
+        labels:
+          level: model
+          metric: trend
+
+      # Latency trend (p95 current vs 1 hour ago)
+      - record: model:latency:trend_1h
+        expr: |
+          model:latency:p95
+            /
+          (model:latency:p95 offset 1h)
+        labels:
+          level: model
+          metric: trend
+
+      # Error rate trend
+      - record: model:error_ratio:trend_1h
+        expr: |
+          model:error_ratio:rate5m
+            /
+          (model:error_ratio:rate5m offset 1h)
+        labels:
+          level: model
+          metric: trend
+
+      # Moving average over last hour (for smoothing)
+      - record: model:predictions:avg_1h
+        expr: avg_over_time(model:predictions:rate5m[1h])
+        labels:
+          level: model
+          metric: smoothed
+
+      # Standard deviation for anomaly detection
+      - record: model:predictions:stddev_1h
+        expr: stddev_over_time(model:predictions:rate5m[1h])
+        labels:
+          level: model
+          metric: variability
+
+    # ========================================================================
+    # SLO/SLA Tracking Rules (60s interval)
+    # ========================================================================
+    - name: ml_slo_tracking_rules
+      interval: 60s
+      rules:
+
+      # Availability (successful requests / total requests)
+      - record: model:availability:rate5m
+        expr: |
+          (model:predictions:rate5m - model:errors:rate5m)
+            /
+          model:predictions:rate5m
+        labels:
+          level: model
+          metric: slo
+
+      # Latency SLO compliance (% of requests under 200ms)
+      # This requires histogram buckets, estimating based on p95
+      - record: model:latency_slo:compliance
+        expr: model:latency:p95 < 0.2
+        labels:
+          level: model
+          metric: slo
+          threshold: "200ms"
+
+      # Error budget remaining (assuming 99.9% SLO)
+      - record: model:error_budget:remaining_30d
+        expr: |
+          1 - (
+            sum_over_time(model:errors:rate5m[30d])
+              /
+            sum_over_time(model:predictions:rate5m[30d])
+          ) - 0.001
+        labels:
+          level: model
+          metric: slo
+          window: 30d
+
+      # SLO burn rate (how fast we're consuming error budget)
+      - record: model:error_budget:burn_rate_1h
+        expr: |
+          (
+            sum_over_time(model:errors:rate5m[1h])
+              /
+            sum_over_time(model:predictions:rate5m[1h])
+          ) / 0.001
+        labels:
+          level: model
+          metric: slo
+          window: 1h

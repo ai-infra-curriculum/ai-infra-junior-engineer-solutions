@@ -1,0 +1,237 @@
+# Metrics Server Configuration
+# Required for HPA and 'kubectl top' commands
+# NOTE: For production, use the official Helm chart
+
+---
+# ServiceAccount for metrics-server
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: metrics-server
+  namespace: kube-system
+  labels:
+    k8s-app: metrics-server
+
+---
+# ClusterRole for metrics-server
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: system:metrics-server
+  labels:
+    k8s-app: metrics-server
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - nodes
+  - nodes/stats
+  - namespaces
+  verbs:
+  - get
+  - list
+  - watch
+
+---
+# ClusterRoleBinding for metrics-server
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: system:metrics-server
+  labels:
+    k8s-app: metrics-server
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:metrics-server
+subjects:
+- kind: ServiceAccount
+  name: metrics-server
+  namespace: kube-system
+
+---
+# Service for metrics-server
+apiVersion: v1
+kind: Service
+metadata:
+  name: metrics-server
+  namespace: kube-system
+  labels:
+    k8s-app: metrics-server
+spec:
+  selector:
+    k8s-app: metrics-server
+  ports:
+  - name: https
+    port: 443
+    protocol: TCP
+    targetPort: https
+
+---
+# Deployment for metrics-server
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metrics-server
+  namespace: kube-system
+  labels:
+    k8s-app: metrics-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      k8s-app: metrics-server
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        k8s-app: metrics-server
+    spec:
+      serviceAccountName: metrics-server
+      priorityClassName: system-cluster-critical
+
+      containers:
+      - name: metrics-server
+        image: registry.k8s.io/metrics-server/metrics-server:v0.6.4
+        imagePullPolicy: IfNotPresent
+
+        args:
+        - --cert-dir=/tmp
+        - --secure-port=4443
+        - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
+        - --kubelet-use-node-status-port
+        - --metric-resolution=15s
+        # For local development clusters (minikube, kind), add these args:
+        # - --kubelet-insecure-tls
+
+        ports:
+        - name: https
+          containerPort: 4443
+          protocol: TCP
+
+        resources:
+          requests:
+            cpu: 100m
+            memory: 200Mi
+          limits:
+            cpu: 500m
+            memory: 500Mi
+
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+            - ALL
+
+        livenessProbe:
+          httpGet:
+            path: /livez
+            port: https
+            scheme: HTTPS
+          periodSeconds: 10
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: https
+            scheme: HTTPS
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          failureThreshold: 3
+
+        volumeMounts:
+        - name: tmp-dir
+          mountPath: /tmp
+
+      volumes:
+      - name: tmp-dir
+        emptyDir: {}
+
+      nodeSelector:
+        kubernetes.io/os: linux
+
+---
+# APIService registration
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1beta1.metrics.k8s.io
+  labels:
+    k8s-app: metrics-server
+spec:
+  service:
+    name: metrics-server
+    namespace: kube-system
+  group: metrics.k8s.io
+  version: v1beta1
+  insecureSkipTLSVerify: true
+  groupPriorityMinimum: 100
+  versionPriority: 100
+
+---
+# ConfigMap with metrics-server configuration notes
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: metrics-server-config
+  namespace: kube-system
+data:
+  README.md: |
+    # Metrics Server Configuration
+
+    ## Installation Verification
+
+    ```bash
+    # Check if metrics-server is running
+    kubectl get deployment metrics-server -n kube-system
+    kubectl get pods -n kube-system -l k8s-app=metrics-server
+
+    # Wait for ready
+    kubectl wait --for=condition=ready pod -l k8s-app=metrics-server -n kube-system --timeout=120s
+
+    # Verify metrics are available
+    kubectl top nodes
+    kubectl top pods -A
+    ```
+
+    ## Troubleshooting
+
+    ### Issue: Metrics not available
+
+    ```bash
+    # Check logs
+    kubectl logs -n kube-system -l k8s-app=metrics-server
+
+    # Check APIService status
+    kubectl get apiservice v1beta1.metrics.k8s.io
+    ```
+
+    ### Issue: TLS certificate errors (local clusters)
+
+    For minikube or kind, you may need to disable TLS verification:
+
+    ```bash
+    kubectl patch deployment metrics-server -n kube-system --type='json' \
+      -p='[{"op": "add", "path": "/spec/template/spec/containers/0/args/-", "value": "--kubelet-insecure-tls"}]'
+    ```
+
+    ## Alternative: Helm Installation
+
+    For production, use the official Helm chart:
+
+    ```bash
+    helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
+    helm repo update
+
+    helm install metrics-server metrics-server/metrics-server \
+      --namespace kube-system \
+      --set args[0]="--kubelet-insecure-tls" \
+      --set args[1]="--kubelet-preferred-address-types=InternalIP"
+    ```

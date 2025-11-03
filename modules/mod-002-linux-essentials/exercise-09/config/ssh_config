@@ -1,0 +1,471 @@
+# SSH Client Configuration for ML Infrastructure
+# Installation: cp ssh_config ~/.ssh/config
+# Permissions: chmod 600 ~/.ssh/config
+
+###############################################################################
+# Global Defaults
+###############################################################################
+
+Host *
+    # Keep connections alive
+    ServerAliveInterval 60
+    ServerAliveCountMax 3
+
+    # Enable compression for slow connections
+    Compression yes
+
+    # Connection multiplexing (reuse connections)
+    ControlMaster auto
+    ControlPath ~/.ssh/sockets/%r@%h-%p
+    ControlPersist 600
+
+    # Strict host key checking (security)
+    StrictHostKeyChecking ask
+
+    # Forward agent (be careful with this)
+    ForwardAgent no
+
+    # Use IPv4 (unless IPv6 needed)
+    AddressFamily inet
+
+    # Timeout for connection attempts
+    ConnectTimeout 10
+
+    # Security: prefer strong algorithms
+    KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group-exchange-sha256
+    Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com
+    MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com
+
+    # Hash known hosts for privacy
+    HashKnownHosts yes
+
+    # Don't send environment variables
+    SendEnv -LC_*
+
+###############################################################################
+# GPU Training Nodes
+###############################################################################
+
+Host gpu-node-* gpu-*
+    User mluser
+    IdentityFile ~/.ssh/ml_platform_key
+    Port 22
+
+    # GPU nodes might need X11 for visualization
+    ForwardX11 no
+    ForwardX11Trusted no
+
+    # Common for Jupyter notebook tunneling
+    # LocalForward 8888 localhost:8888
+    # LocalForward 6006 localhost:6006  # TensorBoard
+
+Host gpu-node-1
+    HostName 192.168.1.101
+
+Host gpu-node-2
+    HostName 192.168.1.102
+
+Host gpu-node-3
+    HostName 192.168.1.103
+
+###############################################################################
+# ML API Servers
+###############################################################################
+
+Host ml-api-* api-*
+    User apiuser
+    IdentityFile ~/.ssh/ml_platform_key
+    Port 22
+
+    # API servers don't need X11
+    ForwardX11 no
+
+    # Disable agent forwarding for security
+    ForwardAgent no
+
+Host ml-api-1
+    HostName 192.168.1.201
+
+Host ml-api-2
+    HostName 192.168.1.202
+
+###############################################################################
+# Data Storage Nodes
+###############################################################################
+
+Host storage-* data-*
+    User datauser
+    IdentityFile ~/.ssh/ml_platform_key
+    Port 22
+
+    # High compression for data transfer
+    Compression yes
+    CompressionLevel 9
+
+Host storage-1
+    HostName 192.168.1.150
+
+###############################################################################
+# Database Servers
+###############################################################################
+
+Host db-* database-*
+    User dbadmin
+    IdentityFile ~/.ssh/ml_platform_key
+    Port 22
+
+    # Port forwarding for database access
+    # LocalForward 5432 localhost:5432  # PostgreSQL
+    # LocalForward 6379 localhost:6379  # Redis
+    # LocalForward 3306 localhost:3306  # MySQL
+
+Host postgres-1
+    HostName 192.168.1.50
+    # Tunnel PostgreSQL port
+    LocalForward 15432 localhost:5432
+
+Host redis-1
+    HostName 192.168.1.51
+    # Tunnel Redis port
+    LocalForward 16379 localhost:6379
+
+###############################################################################
+# Monitoring Stack
+###############################################################################
+
+Host monitoring-* metrics-*
+    User monitoruser
+    IdentityFile ~/.ssh/ml_platform_key
+    Port 22
+
+Host prometheus
+    HostName 192.168.1.90
+    LocalForward 19090 localhost:9090
+
+Host grafana
+    HostName 192.168.1.91
+    LocalForward 13000 localhost:3000
+
+###############################################################################
+# Bastion / Jump Host
+###############################################################################
+
+Host bastion jump jumphost
+    HostName bastion.ml-platform.com
+    User admin
+    IdentityFile ~/.ssh/ml_platform_key
+    Port 22
+
+    # Bastion shouldn't forward agent for security
+    ForwardAgent no
+
+    # Strict checking for bastion
+    StrictHostKeyChecking yes
+
+    # Keep bastion connection alive
+    ServerAliveInterval 30
+    ServerAliveCountMax 10
+
+###############################################################################
+# Internal Nodes (via Bastion)
+###############################################################################
+
+# Access internal GPU nodes via bastion
+Host internal-gpu-*
+    User mluser
+    IdentityFile ~/.ssh/ml_platform_key
+    ProxyJump bastion
+
+Host internal-gpu-1
+    HostName 10.100.1.10
+
+Host internal-gpu-2
+    HostName 10.100.1.11
+
+# Access internal databases via bastion
+Host internal-db-*
+    User dbadmin
+    IdentityFile ~/.ssh/ml_platform_key
+    ProxyJump bastion
+
+Host internal-postgres
+    HostName 10.100.2.10
+    ProxyJump bastion
+    LocalForward 15433 localhost:5432
+
+###############################################################################
+# Development/Staging Environments
+###############################################################################
+
+Host dev-* staging-*
+    User developer
+    IdentityFile ~/.ssh/ml_platform_dev_key
+    Port 22
+
+    # Less strict for dev environments
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    LogLevel ERROR
+
+Host dev-gpu-1
+    HostName dev-gpu-1.ml-platform.local
+
+Host staging-api
+    HostName staging-api.ml-platform.local
+
+###############################################################################
+# Production Environment
+###############################################################################
+
+Host prod-*
+    User produser
+    IdentityFile ~/.ssh/ml_platform_prod_key
+    Port 22
+
+    # Very strict for production
+    StrictHostKeyChecking yes
+
+    # Require specific verification
+    IdentitiesOnly yes
+
+    # Log all activity
+    LogLevel VERBOSE
+
+###############################################################################
+# Emergency Access / Break Glass
+###############################################################################
+
+Host emergency-*
+    User emergency
+    IdentityFile ~/.ssh/emergency_key
+    Port 22
+
+    # Emergency access via console/IPMI
+    # Only use when regular access is broken
+
+###############################################################################
+# Cloud Providers
+###############################################################################
+
+# AWS EC2 instances
+Host *.compute.amazonaws.com ec2-* *.aws
+    User ubuntu
+    IdentityFile ~/.ssh/aws-ml-platform.pem
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+
+# GCP instances
+Host *.googleapis.com gcp-*
+    User gcpuser
+    IdentityFile ~/.ssh/google_compute_engine
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+
+# Azure VMs
+Host *.cloudapp.azure.com azure-*
+    User azureuser
+    IdentityFile ~/.ssh/azure-ml-platform
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+
+###############################################################################
+# Wildcard Patterns for ML Infrastructure
+###############################################################################
+
+# Pattern for numbered GPU nodes
+Host gpu-[0-9] gpu-[0-9][0-9]
+    User mluser
+    IdentityFile ~/.ssh/ml_platform_key
+
+# Pattern for api nodes
+Host api-[0-9] api-[0-9][0-9]
+    User apiuser
+    IdentityFile ~/.ssh/ml_platform_key
+
+###############################################################################
+# Special Use Cases
+###############################################################################
+
+# Jupyter Hub access with port forwarding
+Host jupyterhub
+    HostName jupyterhub.ml-platform.com
+    User mluser
+    IdentityFile ~/.ssh/ml_platform_key
+    LocalForward 8888 localhost:8888
+    LocalForward 6006 localhost:6006  # TensorBoard
+
+# MLflow server
+Host mlflow
+    HostName mlflow.ml-platform.com
+    User mluser
+    IdentityFile ~/.ssh/ml_platform_key
+    LocalForward 5000 localhost:5000
+
+# Weights & Biases server
+Host wandb
+    HostName wandb.ml-platform.com
+    User mluser
+    IdentityFile ~/.ssh/ml_platform_key
+    LocalForward 8080 localhost:8080
+
+###############################################################################
+# Connection Debugging
+###############################################################################
+
+# Test connection with verbose output:
+# ssh -vv gpu-node-1
+
+# Test specific configuration:
+# ssh -F ~/.ssh/config -vv gpu-node-1
+
+# Show parsed configuration:
+# ssh -G gpu-node-1
+
+# Test connection without executing command:
+# ssh -nNT -L 8888:localhost:8888 gpu-node-1
+
+###############################################################################
+# Usage Examples
+###############################################################################
+
+# Direct connection:
+# ssh gpu-node-1
+
+# Connection via bastion:
+# ssh internal-gpu-1
+
+# Port forwarding:
+# ssh -L 8888:localhost:8888 gpu-node-1
+# # Now access http://localhost:8888 in browser
+
+# Copy files:
+# scp file.txt gpu-node-1:/tmp/
+# scp gpu-node-1:/tmp/result.txt ./
+
+# Copy directory:
+# scp -r ./project gpu-node-1:/home/mluser/
+
+# Rsync (better for large transfers):
+# rsync -avz --progress ./data/ gpu-node-1:/data/
+
+# Execute command remotely:
+# ssh gpu-node-1 'nvidia-smi'
+
+# Interactive session with GPU:
+# ssh -t gpu-node-1 'bash -l'
+
+# Tunnel multiple ports:
+# ssh -L 8888:localhost:8888 -L 6006:localhost:6006 gpu-node-1
+
+###############################################################################
+# Connection Multiplexing Benefits
+###############################################################################
+
+# First connection (creates master):
+# ssh gpu-node-1
+# # This establishes the master connection
+
+# Subsequent connections (reuse master):
+# ssh gpu-node-1  # Connects instantly (no re-authentication)
+
+# Check active master connections:
+# ls -la ~/.ssh/sockets/
+
+# Close master connection:
+# ssh -O exit gpu-node-1
+
+###############################################################################
+# Security Notes
+###############################################################################
+
+# 1. Key Management:
+#    - Keep private keys secure (chmod 600)
+#    - Use different keys for different environments
+#    - Rotate keys regularly
+#    - Use passphrases on private keys
+
+# 2. Agent Forwarding:
+#    - ForwardAgent should generally be "no"
+#    - Only enable for trusted hosts
+#    - Consider using ProxyJump instead
+
+# 3. StrictHostKeyChecking:
+#    - Use "yes" for production
+#    - Use "ask" for development
+#    - Never use "no" permanently (MITM risk)
+
+# 4. Known Hosts:
+#    - Regularly review ~/.ssh/known_hosts
+#    - Remove old/untrusted entries
+#    - HashKnownHosts provides privacy
+
+# 5. Audit:
+#    - Review this config file regularly
+#    - Remove unused host entries
+#    - Document all port forwards
+#    - Track who has access to which keys
+
+###############################################################################
+# Troubleshooting
+###############################################################################
+
+# Connection refused:
+# - Check if sshd is running: sudo systemctl status sshd
+# - Check firewall: sudo ufw status
+# - Check port: nc -zv hostname 22
+
+# Authentication failed:
+# - Verify key: ssh-keygen -lf ~/.ssh/ml_platform_key.pub
+# - Check permissions: ls -la ~/.ssh/
+# - Verify authorized_keys: cat ~/.ssh/authorized_keys
+
+# Timeout:
+# - Check network: ping hostname
+# - Traceroute: traceroute hostname
+# - Check MTU: ping -M do -s 1472 hostname
+
+# Permission denied (publickey):
+# - Wrong key: ssh -i ~/.ssh/correct_key hostname
+# - Key not in authorized_keys on server
+# - Wrong username
+
+###############################################################################
+# Advanced Features
+###############################################################################
+
+# Dynamic port forwarding (SOCKS proxy):
+# ssh -D 8080 bastion
+# # Configure browser to use localhost:8080 as SOCKS5 proxy
+
+# Reverse tunnel:
+# ssh -R 9000:localhost:8000 gpu-node-1
+# # Makes your local port 8000 available on gpu-node-1:9000
+
+# Jump through multiple hosts:
+# ssh -J bastion,internal-jump internal-gpu-1
+
+# X11 forwarding (when needed):
+# ssh -X gpu-node-1
+# ssh -Y gpu-node-1  # Trusted X11
+
+# Escape sequences:
+# ~.  # Disconnect
+# ~^Z # Background SSH
+# ~#  # List forwarded connections
+# ~?  # Help
+
+###############################################################################
+# Performance Tuning
+###############################################################################
+
+# For slow connections, enable compression:
+# ssh -C gpu-node-1
+
+# For fast connections, disable compression:
+# ssh -o Compression=no gpu-node-1
+
+# Cipher selection (fast but less secure):
+# ssh -c aes128-ctr gpu-node-1
+
+# Bypass DNS lookups:
+# ssh -o "GSSAPIAuthentication=no" gpu-node-1

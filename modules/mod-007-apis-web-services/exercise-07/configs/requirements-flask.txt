@@ -1,0 +1,19 @@
+# Flask ML API Requirements
+# Python 3.11+
+
+# Core web framework
+Flask==3.0.0
+Werkzeug==3.0.1
+
+# WSGI server for production
+gunicorn==21.2.0
+
+# Authentication
+PyJWT==2.8.0
+
+# ML and data processing
+numpy==1.26.2
+scikit-learn==1.3.2
+
+# Optional but recommended
+python-dotenv==1.0.0

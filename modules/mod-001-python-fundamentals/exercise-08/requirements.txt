@@ -1,0 +1,2 @@
+# No runtime dependencies for this package
+# Install development dependencies with: pip install -e ".[dev]"

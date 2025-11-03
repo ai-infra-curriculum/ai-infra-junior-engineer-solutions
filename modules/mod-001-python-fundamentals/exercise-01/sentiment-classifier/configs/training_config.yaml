@@ -1,0 +1,30 @@
+# Training Configuration for Sentiment Classifier
+
+# Model Configuration
+model_name: distilbert-base-uncased
+max_length: 128
+
+# Data Configuration
+data_path: ./data/sentiment_data.csv
+test_size: 0.2
+
+# Training Hyperparameters
+batch_size: 32
+learning_rate: 2.0e-5
+num_epochs: 3
+warmup_steps: 500
+
+# Optimizer Configuration
+weight_decay: 0.01
+adam_epsilon: 1.0e-8
+
+# Reproducibility
+random_seed: 42
+
+# Logging
+log_interval: 100  # Log every N batches
+save_interval: 1   # Save checkpoint every N epochs
+
+# Model Checkpointing
+output_dir: ./models
+save_best_only: true

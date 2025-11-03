@@ -1,0 +1,432 @@
+# Vertical Pod Autoscaler for Model Training Jobs
+# Demonstrates VPA for workloads with variable resource needs
+
+---
+# Deployment for model training workload
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-training-job
+  namespace: ml-platform
+  labels:
+    app: model-training
+    workload-type: training
+spec:
+  replicas: 1  # Training jobs typically run single replica
+  selector:
+    matchLabels:
+      app: model-training
+  template:
+    metadata:
+      labels:
+        app: model-training
+        workload-type: training
+    spec:
+      containers:
+      - name: trainer
+        image: python:3.11-slim
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -e
+          echo "=== ML Model Training Job ==="
+          echo "Starting training pipeline..."
+
+          # Simulate training with variable resource usage
+          while true; do
+            EPOCH=$((RANDOM % 10 + 1))
+            SAMPLES=$((RANDOM % 5000000 + 1000000))
+
+            echo "----------------------------------------"
+            echo "Epoch $EPOCH: Training with $SAMPLES samples"
+            echo "Timestamp: $(date)"
+
+            # Simulate training epoch with varying memory usage
+            python3 -c "
+          import time
+          import random
+          import sys
+
+          # Simulate different training phases
+          phase = random.choice(['data_loading', 'forward_pass', 'backward_pass', 'optimizer_step'])
+          print(f'Phase: {phase}')
+
+          # Variable memory allocation based on phase
+          if phase == 'data_loading':
+              # High memory for data loading
+              data = [random.random() for _ in range($SAMPLES)]
+              print(f'Loaded {len(data)} samples into memory')
+              time.sleep(15)
+          elif phase == 'forward_pass':
+              # Medium memory for forward pass
+              data = [random.random() for _ in range($SAMPLES // 2)]
+              print(f'Forward pass with {len(data)} activations')
+              time.sleep(20)
+          elif phase == 'backward_pass':
+              # High memory for gradients
+              gradients = [random.random() for _ in range($SAMPLES)]
+              print(f'Backward pass computing {len(gradients)} gradients')
+              time.sleep(25)
+          else:
+              # Low memory for optimizer step
+              params = [random.random() for _ in range(100000)]
+              print(f'Optimizer updating {len(params)} parameters')
+              time.sleep(10)
+
+          # Report memory usage
+          import resource
+          mem_mb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+          print(f'Peak memory usage: {mem_mb:.2f} MB')
+          sys.stdout.flush()
+            "
+
+            echo "Epoch $EPOCH completed"
+            sleep 5
+          done
+
+        resources:
+          # Initial requests (likely to be adjusted by VPA)
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 2000m    # Allow bursting
+            memory: 4Gi   # Generous limit for training
+
+        env:
+        - name: PYTHONUNBUFFERED
+          value: "1"
+
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 30
+
+---
+# VerticalPodAutoscaler for training job
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: model-training-vpa
+  namespace: ml-platform
+  labels:
+    app: model-training
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: model-training-job
+
+  # Update mode: Auto will automatically apply recommendations
+  updatePolicy:
+    updateMode: "Auto"  # Options: Off, Initial, Recreate, Auto
+
+  # Resource policy: Set bounds for VPA recommendations
+  resourcePolicy:
+    containerPolicies:
+    - containerName: trainer
+      # Minimum allowed resources
+      minAllowed:
+        cpu: 100m
+        memory: 128Mi
+      # Maximum allowed resources
+      maxAllowed:
+        cpu: 2000m
+        memory: 4Gi
+      # Which resources to control
+      controlledResources:
+      - cpu
+      - memory
+      # Controlled values: RequestsAndLimits or RequestsOnly
+      controlledValues: RequestsOnly
+
+---
+# Service to expose training metrics (optional)
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-training
+  namespace: ml-platform
+spec:
+  selector:
+    app: model-training
+  ports:
+  - name: metrics
+    port: 8080
+    targetPort: 8080
+  clusterIP: None  # Headless service for StatefulSet-like behavior
+
+---
+# ConfigMap with VPA usage guide
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vpa-training-guide
+  namespace: ml-platform
+data:
+  README.md: |
+    # VPA for Model Training Jobs
+
+    ## Overview
+
+    This VPA configuration automatically right-sizes resource requests for model training workloads
+    that have variable resource usage patterns.
+
+    ## VPA Configuration
+
+    - **Update Mode**: Auto (automatically applies recommendations)
+    - **Min Resources**: 100m CPU, 128Mi memory
+    - **Max Resources**: 2000m CPU, 4Gi memory
+    - **Controlled Resources**: CPU and memory
+    - **Controlled Values**: RequestsOnly (leaves limits unchanged)
+
+    ## How VPA Works
+
+    VPA has three components:
+
+    1. **Recommender**: Monitors resource usage and provides recommendations
+       - Collects metrics from metrics-server
+       - Analyzes historical usage patterns
+       - Generates recommendations every 1 minute
+
+    2. **Updater**: Evicts pods that need resource updates
+       - Checks if recommendations differ significantly from current requests
+       - Evicts pods to trigger recreation with new requests
+       - Respects PodDisruptionBudgets
+
+    3. **Admission Controller**: Sets resource requests on new/recreated pods
+       - Intercepts pod creation
+       - Applies VPA recommendations
+       - Overrides Deployment resource requests
+
+    ## Monitoring VPA
+
+    ```bash
+    # Check VPA status
+    kubectl get vpa model-training-vpa -n ml-platform
+
+    # Describe VPA for detailed recommendations
+    kubectl describe vpa model-training-vpa -n ml-platform
+
+    # View recommendations in YAML
+    kubectl get vpa model-training-vpa -n ml-platform -o yaml
+
+    # Watch pod resource updates
+    watch 'kubectl get pods -n ml-platform -l app=model-training -o custom-columns=NAME:.metadata.name,CPU_REQ:.spec.containers[0].resources.requests.cpu,MEM_REQ:.spec.containers[0].resources.requests.memory'
+    ```
+
+    ## Understanding VPA Output
+
+    ```yaml
+    status:
+      recommendation:
+        containerRecommendations:
+        - containerName: trainer
+          lowerBound:    # Minimum recommended for basic operation
+            cpu: 250m
+            memory: 512Mi
+          target:        # Recommended resource requests
+            cpu: 500m
+            memory: 1Gi
+          upperBound:    # Maximum recommended (rare peaks)
+            cpu: 800m
+            memory: 2Gi
+          uncappedTarget: # Recommendation without policy limits
+            cpu: 600m
+            memory: 1.2Gi
+    ```
+
+    **Interpretation:**
+    - **Lower Bound**: Minimum resources needed (pod may OOMKill below this)
+    - **Target**: Ideal resource requests (VPA will set this)
+    - **Upper Bound**: Maximum resources for peak usage
+    - **Uncapped Target**: What VPA would recommend without min/max constraints
+
+    ## VPA Update Modes
+
+    ### Off (Monitoring Only)
+    ```yaml
+    updateMode: "Off"
+    ```
+    - VPA only provides recommendations
+    - No automatic updates applied
+    - Use for monitoring and manual optimization
+
+    ### Initial (On Pod Creation Only)
+    ```yaml
+    updateMode: "Initial"
+    ```
+    - VPA sets resources only when pods are first created
+    - No updates to running pods
+    - Useful for workloads that can't tolerate restarts
+
+    ### Recreate (Evict and Recreate)
+    ```yaml
+    updateMode: "Recreate"
+    ```
+    - VPA evicts pods that need resource updates
+    - Pods recreated with new resource requests
+    - Respects PodDisruptionBudgets
+
+    ### Auto (Fully Automatic)
+    ```yaml
+    updateMode: "Auto"
+    ```
+    - Currently same as "Recreate"
+    - Future: May update without pod restart (in-place resize)
+
+    ## Testing VPA
+
+    ### Step 1: Deploy with low resource requests
+
+    ```bash
+    kubectl apply -f 20-training-job-vpa.yaml
+
+    # Check initial resources
+    kubectl get pods -n ml-platform -l app=model-training -o yaml | grep -A 2 "resources:"
+    ```
+
+    ### Step 2: Wait for VPA to gather data (5-10 minutes)
+
+    ```bash
+    # Watch VPA recommendations appear
+    watch kubectl describe vpa model-training-vpa -n ml-platform
+    ```
+
+    ### Step 3: Verify VPA applied recommendations
+
+    ```bash
+    # Check if pod was evicted and recreated
+    kubectl get events -n ml-platform --sort-by='.lastTimestamp' | grep model-training
+
+    # Check new resource requests
+    kubectl get pods -n ml-platform -l app=model-training -o yaml | grep -A 2 "requests:"
+    ```
+
+    ### Expected Results
+
+    ```
+    Initial Requests:
+      CPU: 100m
+      Memory: 128Mi
+
+    After 10 minutes (VPA recommendations):
+      CPU: 250-500m (depends on actual usage)
+      Memory: 512Mi-1.5Gi (depends on training data size)
+
+    VPA Action:
+      - Evicted pod after detecting under-provisioning
+      - Recreated pod with updated requests
+      - New requests based on P90 usage over last 8 days
+    ```
+
+    ## VPA Recommendation Algorithm
+
+    VPA uses historical data to compute recommendations:
+
+    ```
+    Target = P90(usage over last 8 days)
+    Lower Bound = P50(usage)
+    Upper Bound = P95(usage)
+    ```
+
+    - **Target**: 90th percentile usage (handles most workloads)
+    - **Lower Bound**: 50th percentile (minimum viable resources)
+    - **Upper Bound**: 95th percentile (handles rare spikes)
+
+    ## Combining VPA with HPA
+
+    ⚠️ **Warning**: Don't use VPA and HPA together on the same resource!
+
+    They conflict:
+    - HPA scales replicas based on resource utilization
+    - VPA changes resource requests
+    - When VPA increases requests, utilization % drops → HPA scales down
+    - Causes instability and unexpected behavior
+
+    **Solution**: Use VPA in "Off" mode for recommendations, manually tune HPA:
+
+    ```bash
+    # Get VPA recommendations
+    kubectl get vpa model-training-vpa -n ml-platform -o jsonpath='{.status.recommendation.containerRecommendations[0].target}'
+
+    # Apply recommendations to HPA deployment
+    kubectl set resources deployment my-hpa-app --requests=cpu=500m,memory=1Gi
+    ```
+
+    ## Troubleshooting
+
+    ### VPA not providing recommendations
+
+    ```bash
+    # Check VPA components are running
+    kubectl get pods -n kube-system | grep vpa
+
+    # Check recommender logs
+    kubectl logs -n kube-system -l app=vpa-recommender
+
+    # Ensure metrics-server is working
+    kubectl top pods -n ml-platform
+    ```
+
+    ### VPA recommendations seem incorrect
+
+    ```bash
+    # Check actual resource usage
+    kubectl top pods -n ml-platform -l app=model-training
+
+    # VPA needs time to gather data (minimum 5 minutes)
+    # Wait 10-30 minutes for accurate recommendations
+
+    # Check if resource policy limits are too restrictive
+    kubectl get vpa model-training-vpa -n ml-platform -o yaml | grep -A 10 resourcePolicy
+    ```
+
+    ### Pod keeps getting evicted
+
+    ```bash
+    # Check eviction events
+    kubectl get events -n ml-platform | grep Evicted
+
+    # Possible causes:
+    # 1. VPA is being too aggressive (increase stabilization)
+    # 2. Resource usage is highly variable
+    # 3. VPA recommendations exceed maxAllowed limits
+
+    # Solution: Use "Off" mode or "Initial" mode
+    kubectl patch vpa model-training-vpa -n ml-platform --type='json' \
+      -p='[{"op": "replace", "path": "/spec/updatePolicy/updateMode", "value": "Off"}]'
+    ```
+
+    ## Best Practices
+
+    ✅ Start with updateMode="Off" to observe recommendations
+    ✅ Set reasonable min/max bounds with resourcePolicy
+    ✅ Wait 24-48 hours for accurate recommendations
+    ✅ Use controlledValues=RequestsOnly (don't modify limits)
+    ✅ Don't combine with HPA on the same deployment
+    ✅ Use VPA for workloads with predictable but unknown resource needs
+    ✅ Review VPA recommendations before enabling "Auto" mode
+
+    ## Use Cases for VPA
+
+    ✅ **Good**: Training jobs with variable memory usage
+    ✅ **Good**: Batch processing with changing input sizes
+    ✅ **Good**: Development environments (right-size over time)
+    ✅ **Good**: Long-running workers with memory leaks (auto-restart)
+    ❌ **Bad**: High-availability APIs (restarts cause downtime)
+    ❌ **Bad**: Stateful applications (eviction loses state)
+    ❌ **Bad**: Applications with HPA (conflicts)
+
+    ## Cost Savings Example
+
+    Without VPA:
+    - Developers over-provision by 2-3x "to be safe"
+    - Training job requests: 2 CPU, 8Gi memory
+    - Actual usage: 500m CPU, 2Gi memory
+    - Wasted resources: 75% CPU, 75% memory
+
+    With VPA:
+    - VPA right-sizes to actual usage
+    - Training job requests: 500m CPU, 2Gi memory
+    - Cost savings: ~70% reduction in requested resources
+    - Cluster can fit 4x more training jobs

@@ -1,0 +1,440 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sli-recording-rules
+  namespace: monitoring
+  labels:
+    app: prometheus
+    component: sli-rules
+data:
+  sli_rules.yml: |
+    # SLI Recording Rules for ML Platform
+    # Based on Google SRE Workbook methodology
+    # These recording rules define Service Level Indicators that feed into SLO calculations
+
+    groups:
+    # ========================================================================
+    # Model Serving API SLIs (Real-time inference service)
+    # ========================================================================
+    - name: sli_model_api_availability
+      interval: 30s
+      rules:
+
+      # Availability SLI: Ratio of successful requests (2xx) to total requests
+      # Good event: HTTP 2xx response
+      # Valid event: All HTTP requests
+      - record: sli:availability:ratio
+        labels:
+          service: model-api
+          slo_type: availability
+        expr: |
+          (
+            sum(rate(http_requests_total{job="model-api",code=~"2.."}[5m]))
+          ) / (
+            sum(rate(http_requests_total{job="model-api"}[5m]))
+          )
+
+      # Availability by model (for debugging)
+      - record: sli:availability:ratio:by_model
+        labels:
+          service: model-api
+        expr: |
+          (
+            sum by (model) (rate(http_requests_total{job="model-api",code=~"2.."}[5m]))
+          ) / (
+            sum by (model) (rate(http_requests_total{job="model-api"}[5m]))
+          )
+
+      # Total good events (successful requests)
+      - record: sli:availability:good_total
+        labels:
+          service: model-api
+        expr: |
+          sum(rate(http_requests_total{job="model-api",code=~"2.."}[5m]))
+
+      # Total valid events (all requests)
+      - record: sli:availability:valid_total
+        labels:
+          service: model-api
+        expr: |
+          sum(rate(http_requests_total{job="model-api"}[5m]))
+
+    - name: sli_model_api_latency
+      interval: 30s
+      rules:
+
+      # Latency SLI: Ratio of fast requests (<200ms) to total requests
+      # Good event: Request completes in <200ms
+      # Valid event: All HTTP requests
+      - record: sli:latency:good_ratio
+        labels:
+          service: model-api
+          slo_type: latency
+          threshold: "200ms"
+        expr: |
+          (
+            sum(rate(http_request_duration_seconds_bucket{job="model-api",le="0.2"}[5m]))
+          ) / (
+            sum(rate(http_request_duration_seconds_count{job="model-api"}[5m]))
+          )
+
+      # Latency by model
+      - record: sli:latency:good_ratio:by_model
+        labels:
+          service: model-api
+          threshold: "200ms"
+        expr: |
+          (
+            sum by (model) (rate(http_request_duration_seconds_bucket{job="model-api",le="0.2"}[5m]))
+          ) / (
+            sum by (model) (rate(http_request_duration_seconds_count{job="model-api"}[5m]))
+          )
+
+      # P95 latency (for reference, not used in SLO)
+      - record: sli:latency:p95
+        labels:
+          service: model-api
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_request_duration_seconds_bucket{job="model-api"}[5m])) by (le)
+          )
+
+    - name: sli_model_api_quality
+      interval: 300s  # 5 minutes (quality checked less frequently)
+      rules:
+
+      # Model quality SLI: Accuracy ratio
+      # Good event: Prediction with >92% accuracy
+      # Valid event: All predictions with ground truth
+      - record: sli:quality:accuracy_ratio
+        labels:
+          service: model-api
+          slo_type: quality
+          threshold: "0.92"
+        expr: |
+          (
+            sum(model_correct_predictions_total{job="model-api"})
+          ) / (
+            sum(model_total_predictions_with_ground_truth_total{job="model-api"})
+          )
+
+      # Model quality by model
+      - record: sli:quality:accuracy_ratio:by_model
+        labels:
+          service: model-api
+        expr: |
+          (
+            sum by (model) (model_correct_predictions_total{job="model-api"})
+          ) / (
+            sum by (model) (model_total_predictions_with_ground_truth_total{job="model-api"})
+          )
+
+      # Model drift detection (deviation from baseline)
+      - record: sli:quality:drift
+        labels:
+          service: model-api
+        expr: |
+          abs(
+            sli:quality:accuracy_ratio{service="model-api"}
+            - avg_over_time(sli:quality:accuracy_ratio{service="model-api"}[7d])
+          )
+
+    # ========================================================================
+    # Feature Store SLIs (Critical dependency for all models)
+    # ========================================================================
+    - name: sli_feature_store_availability
+      interval: 30s
+      rules:
+
+      # High availability requirement (99.99% target)
+      - record: sli:availability:ratio
+        labels:
+          service: feature-store
+          slo_type: availability
+        expr: |
+          (
+            sum(rate(http_requests_total{job="feature-store",code=~"2.."}[5m]))
+          ) / (
+            sum(rate(http_requests_total{job="feature-store"}[5m]))
+          )
+
+      # Feature store read availability
+      - record: sli:availability:ratio:reads
+        labels:
+          service: feature-store
+          operation: read
+        expr: |
+          (
+            sum(rate(http_requests_total{job="feature-store",method="GET",code=~"2.."}[5m]))
+          ) / (
+            sum(rate(http_requests_total{job="feature-store",method="GET"}[5m]))
+          )
+
+      # Feature store write availability
+      - record: sli:availability:ratio:writes
+        labels:
+          service: feature-store
+          operation: write
+        expr: |
+          (
+            sum(rate(http_requests_total{job="feature-store",method=~"POST|PUT",code=~"2.."}[5m]))
+          ) / (
+            sum(rate(http_requests_total{job="feature-store",method=~"POST|PUT"}[5m]))
+          )
+
+    - name: sli_feature_store_latency
+      interval: 30s
+      rules:
+
+      # Very strict latency requirement (p99 < 10ms)
+      - record: sli:latency:good_ratio
+        labels:
+          service: feature-store
+          slo_type: latency
+          threshold: "10ms"
+        expr: |
+          (
+            sum(rate(http_request_duration_seconds_bucket{job="feature-store",le="0.01"}[5m]))
+          ) / (
+            sum(rate(http_request_duration_seconds_count{job="feature-store"}[5m]))
+          )
+
+      # P99 latency (for monitoring)
+      - record: sli:latency:p99
+        labels:
+          service: feature-store
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(http_request_duration_seconds_bucket{job="feature-store"}[5m])) by (le)
+          )
+
+    # ========================================================================
+    # Batch Inference SLIs (Asynchronous processing)
+    # ========================================================================
+    - name: sli_batch_inference_success
+      interval: 300s  # 5 minutes (batch jobs don't need real-time monitoring)
+      rules:
+
+      # Success rate SLI
+      # Good event: Job completed successfully
+      # Valid event: All job completions
+      - record: sli:success:ratio
+        labels:
+          service: batch-inference
+          slo_type: success_rate
+        expr: |
+          (
+            sum(increase(batch_job_completions_total{job="batch-inference",status="success"}[5m]))
+          ) / (
+            sum(increase(batch_job_completions_total{job="batch-inference"}[5m]))
+          )
+
+      # Job completion time (target: <4 hours)
+      - record: sli:completion_time:good_ratio
+        labels:
+          service: batch-inference
+          slo_type: completion_time
+          threshold: "4h"
+        expr: |
+          (
+            sum(rate(batch_job_duration_seconds_bucket{job="batch-inference",le="14400"}[5m]))
+          ) / (
+            sum(rate(batch_job_duration_seconds_count{job="batch-inference"}[5m]))
+          )
+
+      # Average job duration
+      - record: sli:completion_time:mean
+        labels:
+          service: batch-inference
+        expr: |
+          sum(rate(batch_job_duration_seconds_sum{job="batch-inference"}[5m]))
+            /
+          sum(rate(batch_job_duration_seconds_count{job="batch-inference"}[5m]))
+
+    # ========================================================================
+    # Error Budget Calculations (30-day rolling window)
+    # ========================================================================
+    - name: slo_error_budget_model_api
+      interval: 60s
+      rules:
+
+      # Error budget remaining for availability SLO (99.9%)
+      # Formula: (Actual availability - SLO target) / (1 - SLO target)
+      # Example: (0.995 - 0.999) / (1 - 0.999) = -4.0 (negative means violating SLO)
+      - record: slo:error_budget:remaining_ratio
+        labels:
+          service: model-api
+          slo: availability
+          target: "99.9"
+        expr: |
+          (
+            avg_over_time(sli:availability:ratio{service="model-api"}[30d])
+            - 0.999
+          ) / (1 - 0.999)
+
+      # Error budget burn rate (1-hour window)
+      # Burn rate > 1.0 means consuming budget faster than sustainable
+      - record: slo:error_budget:burn_rate_1h
+        labels:
+          service: model-api
+          slo: availability
+        expr: |
+          (1 - avg_over_time(sli:availability:ratio{service="model-api"}[1h]))
+          / (1 - 0.999)
+
+      # Error budget burn rate (6-hour window)
+      - record: slo:error_budget:burn_rate_6h
+        labels:
+          service: model-api
+          slo: availability
+        expr: |
+          (1 - avg_over_time(sli:availability:ratio{service="model-api"}[6h]))
+          / (1 - 0.999)
+
+      # Error budget burn rate (3-day window)
+      - record: slo:error_budget:burn_rate_3d
+        labels:
+          service: model-api
+          slo: availability
+        expr: |
+          (1 - avg_over_time(sli:availability:ratio{service="model-api"}[3d]))
+          / (1 - 0.999)
+
+      # Days to error budget exhaustion (at current burn rate)
+      - record: slo:error_budget:days_to_exhaustion
+        labels:
+          service: model-api
+          slo: availability
+        expr: |
+          30 * slo:error_budget:remaining_ratio{service="model-api",slo="availability"}
+            /
+          greatest(slo:error_budget:burn_rate_1h{service="model-api"}, 0.001)
+
+      # Error budget spent (percentage)
+      - record: slo:error_budget:spent_ratio
+        labels:
+          service: model-api
+          slo: availability
+        expr: |
+          1 - slo:error_budget:remaining_ratio{service="model-api",slo="availability"}
+
+    - name: slo_error_budget_feature_store
+      interval: 60s
+      rules:
+
+      # Error budget for feature store (99.99% target)
+      - record: slo:error_budget:remaining_ratio
+        labels:
+          service: feature-store
+          slo: availability
+          target: "99.99"
+        expr: |
+          (
+            avg_over_time(sli:availability:ratio{service="feature-store"}[30d])
+            - 0.9999
+          ) / (1 - 0.9999)
+
+      # Burn rates
+      - record: slo:error_budget:burn_rate_1h
+        labels:
+          service: feature-store
+          slo: availability
+        expr: |
+          (1 - avg_over_time(sli:availability:ratio{service="feature-store"}[1h]))
+          / (1 - 0.9999)
+
+      - record: slo:error_budget:burn_rate_6h
+        labels:
+          service: feature-store
+          slo: availability
+        expr: |
+          (1 - avg_over_time(sli:availability:ratio{service="feature-store"}[6h]))
+          / (1 - 0.9999)
+
+    - name: slo_error_budget_batch_inference
+      interval: 300s
+      rules:
+
+      # Error budget for batch inference (95% target)
+      - record: slo:error_budget:remaining_ratio
+        labels:
+          service: batch-inference
+          slo: success_rate
+          target: "95.0"
+        expr: |
+          (
+            avg_over_time(sli:success:ratio{service="batch-inference"}[30d])
+            - 0.95
+          ) / (1 - 0.95)
+
+      # Burn rates
+      - record: slo:error_budget:burn_rate_1h
+        labels:
+          service: batch-inference
+          slo: success_rate
+        expr: |
+          (1 - avg_over_time(sli:success:ratio{service="batch-inference"}[1h]))
+          / (1 - 0.95)
+
+    # ========================================================================
+    # Composite SLOs (Combined metrics)
+    # ========================================================================
+    - name: slo_composite_user_experience
+      interval: 60s
+      rules:
+
+      # User experience SLO: Both availability AND latency must be good
+      # This represents true "good" user experience
+      - record: sli:user_experience:good_ratio
+        labels:
+          service: model-api
+          slo_type: composite
+        expr: |
+          sli:availability:ratio{service="model-api"}
+          *
+          sli:latency:good_ratio{service="model-api"}
+
+      # Platform health: All services meeting their SLOs
+      - record: slo:platform:all_services_healthy
+        expr: |
+          min(
+            slo:error_budget:remaining_ratio{service="model-api"} > 0,
+            slo:error_budget:remaining_ratio{service="feature-store"} > 0,
+            slo:error_budget:remaining_ratio{service="batch-inference"} > 0
+          )
+
+    # ========================================================================
+    # SLO Compliance Tracking (Historical)
+    # ========================================================================
+    - name: slo_compliance_tracking
+      interval: 3600s  # 1 hour
+      rules:
+
+      # Count of SLO violations in past 24 hours
+      - record: slo:violations:count_24h
+        labels:
+          service: model-api
+        expr: |
+          count_over_time(
+            (sli:availability:ratio{service="model-api"} < 0.999)[24h:]
+          )
+
+      # Percentage of time meeting SLO (over 7 days)
+      - record: slo:compliance:percentage_7d
+        labels:
+          service: model-api
+        expr: |
+          (
+            count_over_time((sli:availability:ratio{service="model-api"} >= 0.999)[7d:])
+          ) / (
+            count_over_time(sli:availability:ratio{service="model-api"}[7d:])
+          ) * 100
+
+      # Longest SLO violation duration (hours)
+      - record: slo:violation:max_duration_hours
+        labels:
+          service: model-api
+        expr: |
+          max_over_time(
+            (sli:availability:ratio{service="model-api"} < 0.999)[7d:]
+          ) * 24

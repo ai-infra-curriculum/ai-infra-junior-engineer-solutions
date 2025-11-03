@@ -1,0 +1,400 @@
+name: CD Pipeline
+
+on:
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types: [completed]
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      version:
+        description: 'Model version to deploy (e.g., v2.1.0)'
+        required: false
+        type: string
+
+env:
+  DOCKER_REGISTRY: gcr.io
+  IMAGE_NAME: production-ml-api
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # ============================================================================
+  # Build and Push Docker Image
+  # ============================================================================
+  build-push:
+    name: Build and Push
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+
+    outputs:
+      image-tag: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          lfs: true  # Pull Git LFS files (models)
+
+      - name: Checkout LFS objects
+        run: git lfs pull
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.DOCKER_REGISTRY }}
+          username: _json_key
+          password: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=semver,pattern={{version}}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            MODEL_VERSION=${{ inputs.version || 'latest' }}
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v3
+        with:
+          name: sbom
+          path: sbom.spdx.json
+
+  # ============================================================================
+  # Deploy to Staging
+  # ============================================================================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: build-push
+    environment:
+      name: staging
+      url: https://staging.ml-api.example.com
+    if: github.ref == 'refs/heads/develop' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'staging')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Kubernetes
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBECONFIG_STAGING }}" | base64 -d > kubeconfig
+          export KUBECONFIG=kubeconfig
+
+      - name: Deploy to staging
+        run: |
+          kubectl set image deployment/model-api \
+            model=${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}:${{ needs.build-push.outputs.image-tag }} \
+            -n staging
+
+          kubectl rollout status deployment/model-api -n staging --timeout=5m
+
+      - name: Run smoke tests
+        run: |
+          # Wait for deployment to be ready
+          sleep 30
+
+          # Get staging URL
+          STAGING_URL=$(kubectl get ingress model-api-ingress -n staging -o jsonpath='{.spec.rules[0].host}')
+
+          # Health check
+          curl -f https://$STAGING_URL/health || exit 1
+
+          # Model version check
+          VERSION=$(curl -s https://$STAGING_URL/version | jq -r '.model_version')
+          echo "Deployed model version: $VERSION"
+
+      - name: Run integration tests
+        run: |
+          pytest tests/integration/ --env=staging -v
+
+      - name: Notify Slack
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        run: |
+          curl -X POST $SLACK_WEBHOOK \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "text": "✅ Deployed to Staging",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Deployment Status: SUCCESS* ✅\n*Environment:* Staging\n*Version:* `${{ needs.build-push.outputs.image-tag }}`\n*Branch:* `${{ github.ref_name }}`"
+                  }
+                }
+              ]
+            }' || true
+
+  # ============================================================================
+  # Deploy to Production (with Canary)
+  # ============================================================================
+  deploy-production-canary:
+    name: Deploy to Production (Canary)
+    runs-on: ubuntu-latest
+    needs: [build-push, deploy-staging]
+    environment:
+      name: production
+      url: https://api.ml-system.example.com
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && inputs.environment == 'production')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Kubernetes
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBECONFIG_PRODUCTION }}" | base64 -d > kubeconfig
+          export KUBECONFIG=kubeconfig
+
+      - name: Deploy canary (10% traffic)
+        run: |
+          # Apply canary deployment
+          kubectl apply -f kubernetes/overlays/canary/
+
+          # Update canary image
+          kubectl set image deployment/model-api-canary \
+            model=${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}:${{ needs.build-push.outputs.image-tag }} \
+            -n production
+
+          kubectl rollout status deployment/model-api-canary -n production --timeout=5m
+
+      - name: Monitor canary metrics (10 minutes)
+        run: |
+          echo "Monitoring canary deployment for 10 minutes..."
+
+          START_TIME=$(date +%s)
+          DURATION=600  # 10 minutes
+
+          while [ $(($(date +%s) - START_TIME)) -lt $DURATION ]; do
+            # Get metrics from Prometheus
+            ERROR_RATE=$(curl -s "http://prometheus.monitoring:9090/api/v1/query?query=rate(http_requests_total{deployment='model-api-canary',status='5xx'}[5m])" | jq -r '.data.result[0].value[1]')
+            LATENCY_P95=$(curl -s "http://prometheus.monitoring:9090/api/v1/query?query=histogram_quantile(0.95,rate(http_request_duration_seconds_bucket{deployment='model-api-canary'}[5m]))" | jq -r '.data.result[0].value[1]')
+
+            echo "Error rate: $ERROR_RATE, P95 latency: $LATENCY_P95"
+
+            # Check thresholds
+            if (( $(echo "$ERROR_RATE > 0.01" | bc -l) )); then
+              echo "❌ Error rate too high: $ERROR_RATE"
+              exit 1
+            fi
+
+            if (( $(echo "$LATENCY_P95 > 0.5" | bc -l) )); then
+              echo "❌ Latency too high: $LATENCY_P95"
+              exit 1
+            fi
+
+            sleep 30
+          done
+
+          echo "✅ Canary metrics look good!"
+
+      - name: Promote canary to full deployment
+        run: |
+          # Update main deployment
+          kubectl set image deployment/model-api \
+            model=${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}:${{ needs.build-push.outputs.image-tag }} \
+            -n production
+
+          kubectl rollout status deployment/model-api -n production --timeout=10m
+
+      - name: Remove canary
+        run: |
+          kubectl delete -f kubernetes/overlays/canary/ -n production
+
+      - name: Tag model version
+        if: inputs.version != ''
+        run: |
+          git tag -a model-${{ inputs.version }} -m "Model Release ${{ inputs.version }}
+
+          Deployed to production: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          Git commit: ${{ github.sha }}
+          Docker image: ${{ env.DOCKER_REGISTRY }}/${{ github.repository }}/${{ env.IMAGE_NAME }}:${{ needs.build-push.outputs.image-tag }}
+
+          Deployment verification:
+          - Canary deployment: Successful
+          - Metrics: Within SLO thresholds
+          - Error rate: < 1%
+          - Latency P95: < 500ms
+
+          🤖 Automated deployment via GitHub Actions"
+
+          git push origin model-${{ inputs.version }}
+
+      - name: Update model registry
+        if: inputs.version != ''
+        run: |
+          # Update MODELS.md with new version
+          echo "Updating model registry..."
+          # (This would be a script that updates MODELS.md)
+
+      - name: Run production smoke tests
+        run: |
+          sleep 60  # Wait for full rollout
+
+          PROD_URL=$(kubectl get ingress model-api-ingress -n production -o jsonpath='{.spec.rules[0].host}')
+
+          # Health check
+          curl -f https://$PROD_URL/health || exit 1
+
+          # Model version check
+          VERSION=$(curl -s https://$PROD_URL/version | jq -r '.model_version')
+          echo "Production model version: $VERSION"
+
+          # Basic inference test
+          curl -X POST https://$PROD_URL/predict \
+            -H "Content-Type: application/json" \
+            -d '{"data": [[0.5, 0.3, 0.8]]}' || exit 1
+
+      - name: Notify Slack
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        run: |
+          curl -X POST $SLACK_WEBHOOK \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "text": "🚀 Deployed to Production",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Deployment Status: SUCCESS* 🚀\n*Environment:* Production\n*Version:* `${{ needs.build-push.outputs.image-tag }}`\n*Model:* `${{ inputs.version }}`\n*Strategy:* Canary (10% → 100%)\n*Branch:* `${{ github.ref_name }}`\n*Deployed by:* ${{ github.actor }}"
+                  }
+                }
+              ]
+            }' || true
+
+  # ============================================================================
+  # Rollback
+  # ============================================================================
+  rollback:
+    name: Rollback Deployment
+    runs-on: ubuntu-latest
+    if: failure() && (needs.deploy-staging.result == 'failure' || needs.deploy-production-canary.result == 'failure')
+    needs: [deploy-staging, deploy-production-canary]
+    environment: production
+
+    steps:
+      - name: Configure kubectl
+        run: |
+          echo "${{ secrets.KUBECONFIG_PRODUCTION }}" | base64 -d > kubeconfig
+          export KUBECONFIG=kubeconfig
+
+      - name: Rollback deployment
+        run: |
+          kubectl rollout undo deployment/model-api -n production
+          kubectl rollout status deployment/model-api -n production --timeout=5m
+
+      - name: Delete canary if exists
+        run: |
+          kubectl delete deployment/model-api-canary -n production --ignore-not-found=true
+
+      - name: Notify Slack of rollback
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+        run: |
+          curl -X POST $SLACK_WEBHOOK \
+            -H 'Content-Type: application/json' \
+            -d '{
+              "text": "⚠️ Production Rollback Executed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Rollback Status: COMPLETED* ⚠️\n*Environment:* Production\n*Reason:* Deployment failure detected\n*Action:* Rolled back to previous version\n*Investigate:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Run>"
+                  }
+                }
+              ]
+            }' || true
+
+  # ============================================================================
+  # Post-Deployment Validation
+  # ============================================================================
+  post-deployment:
+    name: Post-Deployment Validation
+    runs-on: ubuntu-latest
+    needs: deploy-production-canary
+    if: success()
+
+    steps:
+      - name: Run load tests
+        run: |
+          # Run k6 load tests against production
+          k6 run --vus 50 --duration 5m tests/load/k6-test.js || true
+
+      - name: Check SLO compliance
+        run: |
+          # Query Prometheus for SLO metrics
+          echo "Checking SLO compliance..."
+
+          # Availability SLO: 99.9%
+          AVAILABILITY=$(curl -s "http://prometheus.monitoring:9090/api/v1/query?query=avg_over_time(up{job='model-api'}[1h])" | jq -r '.data.result[0].value[1]')
+          echo "Availability: $AVAILABILITY (target: > 0.999)"
+
+          # Latency SLO: P95 < 500ms
+          LATENCY=$(curl -s "http://prometheus.monitoring:9090/api/v1/query?query=histogram_quantile(0.95,rate(http_request_duration_seconds_bucket{job='model-api'}[5m]))" | jq -r '.data.result[0].value[1]')
+          echo "P95 Latency: ${LATENCY}s (target: < 0.5s)"
+
+      - name: Update deployment dashboard
+        run: |
+          echo "Updating deployment dashboard..."
+          # This would update a dashboard or status page
+
+  # ============================================================================
+  # Summary
+  # ============================================================================
+  cd-success:
+    name: CD Success
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, deploy-production-canary, post-deployment]
+    if: success()
+
+    steps:
+      - name: Deployment summary
+        run: |
+          echo "✅ Continuous Deployment completed successfully!"
+          echo "Staging: ✅"
+          echo "Production (Canary): ✅"
+          echo "Post-deployment validation: ✅"

@@ -1,0 +1,379 @@
+name: ML API Testing CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run tests daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    # Allow manual trigger
+
+env:
+  PYTHON_VERSION: '3.11'
+  SECRET_KEY: ${{ secrets.SECRET_KEY || 'test-secret-key-for-ci' }}
+
+jobs:
+  # Linting and code quality checks
+  lint:
+    name: Lint and Code Quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 black isort mypy pylint
+
+      - name: Run Black (code formatting check)
+        run: black --check --diff .
+        continue-on-error: true
+
+      - name: Run isort (import sorting check)
+        run: isort --check-only --diff .
+        continue-on-error: true
+
+      - name: Run Flake8 (style guide enforcement)
+        run: |
+          # Stop on serious errors, warnings are ok
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          # Warning-level issues (don't fail build)
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
+        continue-on-error: false
+
+      - name: Run MyPy (static type checking)
+        run: mypy src/ --ignore-missing-imports --no-strict-optional
+        continue-on-error: true
+
+  # Security scanning
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install safety bandit
+
+      - name: Run Safety (dependency vulnerability check)
+        run: |
+          pip install -r requirements.txt
+          safety check --json
+        continue-on-error: true
+
+      - name: Run Bandit (security issue scanner)
+        run: bandit -r src/ -f json -o bandit-report.json
+        continue-on-error: true
+
+      - name: Upload Bandit report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bandit-report
+          path: bandit-report.json
+
+  # Unit tests
+  test-unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    needs: [lint]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Run unit tests
+        run: |
+          pytest tests/ -m "unit and not slow" \
+            --cov=src \
+            --cov-report=xml \
+            --cov-report=html \
+            --cov-report=term-missing \
+            --junitxml=test-results-unit.xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: ./coverage.xml
+          flags: unit
+          name: unit-tests
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unit-test-results
+          path: |
+            test-results-unit.xml
+            htmlcov/
+
+  # Integration tests
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [lint]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Run integration tests
+        run: |
+          pytest tests/ -m "integration and not slow" \
+            --cov=src \
+            --cov-report=xml \
+            --cov-report=html \
+            --cov-report=term-missing \
+            --junitxml=test-results-integration.xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: ./coverage.xml
+          flags: integration
+          name: integration-tests
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-test-results
+          path: |
+            test-results-integration.xml
+            htmlcov/
+
+  # Contract/schema tests
+  test-contract:
+    name: Contract Tests
+    runs-on: ubuntu-latest
+    needs: [lint]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Run contract tests
+        run: |
+          pytest tests/ -m "contract" \
+            --junitxml=test-results-contract.xml
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: contract-test-results
+          path: test-results-contract.xml
+
+  # Multi-version Python testing
+  test-matrix:
+    name: Test Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    needs: [test-unit, test-integration]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+
+      - name: Run all tests (excluding slow and load)
+        run: |
+          pytest tests/ -m "not slow and not load" \
+            --junitxml=test-results-py${{ matrix.python-version }}.xml
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-py${{ matrix.python-version }}
+          path: test-results-py${{ matrix.python-version }}.xml
+
+  # Docker build test
+  test-docker:
+    name: Docker Build Test
+    runs-on: ubuntu-latest
+    needs: [test-unit]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: ml-api:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test Docker image
+        run: |
+          docker run --rm ml-api:test python -c "import sys; print(f'Python {sys.version}')"
+
+  # Performance benchmarking
+  benchmark:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    needs: [test-unit, test-integration]
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+          pip install pytest-benchmark
+
+      - name: Run benchmarks
+        run: |
+          pytest tests/ -m "not slow and not load" --benchmark-only \
+            --benchmark-json=benchmark-results.json
+        continue-on-error: true
+
+      - name: Store benchmark results
+        uses: benchmark-action/github-action-benchmark@v1
+        if: always()
+        with:
+          name: Python Benchmark
+          tool: 'pytest'
+          output-file-path: benchmark-results.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: false
+
+  # Generate test report
+  report:
+    name: Generate Test Report
+    runs-on: ubuntu-latest
+    needs: [test-unit, test-integration, test-contract]
+    if: always()
+
+    steps:
+      - name: Download all test results
+        uses: actions/download-artifact@v4
+        with:
+          path: test-results
+
+      - name: Publish test report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Test Results
+          path: 'test-results/**/*.xml'
+          reporter: java-junit
+
+  # Deployment (only on main branch with successful tests)
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: [test-unit, test-integration, test-contract, security]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy notification
+        run: |
+          echo "All tests passed! Ready for deployment."
+          echo "This is where you would deploy to production."
+
+      # Example deployment steps (commented out):
+      # - name: Deploy to production
+      #   run: |
+      #     # Your deployment commands here
+      #     echo "Deploying to production..."
+
+      # - name: Notify deployment success
+      #   uses: 8398a7/action-slack@v3
+      #   with:
+      #     status: ${{ job.status }}
+      #     text: 'Deployment to production completed successfully'
+      #     webhook_url: ${{ secrets.SLACK_WEBHOOK }}
