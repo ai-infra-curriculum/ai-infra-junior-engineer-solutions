@@ -1,549 +1,147 @@
-# AI Infrastructure Junior Engineer - Solutions Repository Index
-**Last Updated**: 2025-10-24
-**Status**: ✅ Production-Ready with Templates
-**Total Solutions**: 74 exercises across 10 modules
+# Solutions Index
+
+**Last Updated:** 2026-05-22
+**Status:** Aligned with [learning CURRICULUM.md](https://github.com/ai-infra-curriculum/ai-infra-junior-engineer-learning/blob/main/CURRICULUM.md)
+
+Inventory of every solution in this repository, grouped by module. Click into each link for the per-exercise README + solutions/ + tests/.
 
 ---
 
-## 📚 Quick Navigation
+## Modules
 
-| Section | Exercises | Status | Documentation |
-|---------|-----------|--------|---------------|
-| [Module 001](#module-001-foundations) | 3 exercises | ✅ Complete | Full solutions |
-| [Module 002](#module-002-python-programming) | 5 exercises | ✅ Complete | Full solutions |
-| [Module 003](#module-003-linux-command-line) | 4 exercises | ✅ Complete | Full solutions |
-| [Module 004](#module-004-ml-basics) | 3 exercises | ✅ Complete | Full solutions |
-| [Module 005](#module-005-docker-containerization) | 7 exercises | ✅ Complete | Full solutions |
-| [Module 006](#module-006-kubernetes) | 14 exercises | ✅ Complete | 2 tracks |
-| [Module 007](#module-007-cicd-basics) | 6 exercises | ✅ Complete | Full solutions |
-| [Module 008](#module-008-cloud-platforms) | 5 exercises | ✅ Complete | AWS/GCP/Azure |
-| [Module 009](#module-009-advanced-mlops) | 5 exercises | ✅ Complete | Advanced topics |
-| [Module 010](#module-010-final-capstone) | Projects | ✅ Complete | Comprehensive |
+### Module 000: Orientation (pre-curriculum)
 
-**Total**: 74 complete exercise solutions
+Onboarding material that helps before starting the canonical curriculum. Not part of `CURRICULUM.md`.
 
----
+| # | Exercise | Topics |
+|---|---|---|
+| 01 | [AI infrastructure overview](modules/mod-000-orientation/exercise-01-ai-infra-overview/) | What an ML infra team does; the landscape |
+| 02 | [Development environment setup](modules/mod-000-orientation/exercise-02-dev-environment/) | VS Code, Python, Docker, Git tooling |
 
-## 🎯 How to Use This Repository
+### Module 001: Python Fundamentals for Infrastructure
 
-### For Learners
+| # | Exercise | Topics |
+|---|---|---|
+| 01 | [Python basics](modules/mod-001-python-fundamentals/exercise-01-python-basics/) | Functions, decorators, context managers, error handling |
+| 02 | [OOP](modules/mod-001-python-fundamentals/exercise-02-oop/) | Classes, inheritance, dataclasses |
+| 03 | [File I/O and errors](modules/mod-001-python-fundamentals/exercise-03-file-io-errors/) | pathlib, JSON/YAML, exception design |
+| 04 | [Testing with pytest](modules/mod-001-python-fundamentals/exercise-04-testing-pytest/) | Fixtures, parametrize, mocking |
+| 05 | [Data processing](modules/mod-001-python-fundamentals/exercise-05-data-processing/) | itertools, generators, large-file streaming |
 
-1. **Try First**: Attempt the exercise in the learning repository
-2. **Compare**: Review the solution here after your attempt
-3. **Understand**: Read the STEP_BY_STEP.md guide (where available)
-4. **Improve**: Identify gaps and refine your implementation
-5. **Test**: Run the provided tests to validate your code
+### Module 002: Linux Essentials
 
-### For Instructors
+| # | Exercise | Topics |
+|---|---|---|
+| 01 | [Bash scripting](modules/mod-002-linux-essentials/exercise-01-bash-scripting/) | set -euo pipefail, traps, functions |
+| 02 | [Filesystem and processes](modules/mod-002-linux-essentials/exercise-02-filesystem-processes/) | find, grep, ps, lsof |
+| 03 | [SSH and networking](modules/mod-002-linux-essentials/exercise-03-ssh-networking/) | Key auth, port forwarding, ss/netstat |
+| 04 | [System administration](modules/mod-002-linux-essentials/exercise-04-system-administration/) | systemd, journalctl, cron |
 
-- Use as reference implementations
-- Adapt for teaching specific concepts
-- Use tests for automated grading
-- Reference architecture docs for explanations
+### Module 003: Git & Version Control
 
-### Repository Statistics
-
-- **56,960 lines** of production Python code
-- **16 Docker** configurations
-- **93 Kubernetes** manifests
-- **35 STEP_BY_STEP** implementation guides
-- **14 test** files
-- **179 markdown** documentation files
-
----
-
-## 📖 Module Breakdown
-
-### Module 001: Foundations
-**Path**: `modules/mod-001-foundations/`
-**Exercises**: 3 | **Difficulty**: Beginner
-
-#### Exercise 01: AI Infrastructure Overview
-- **Goal**: Understand AI infrastructure landscape
-- **Technologies**: Conceptual
-- **Files**: README, docs
-- **STEP_BY_STEP**: ✅ Available
-
-#### Exercise 02: Development Environment Setup
-- **Goal**: Configure professional dev environment
-- **Technologies**: VSCode, Python, Docker, Git
-- **Files**: Setup scripts, configuration files
-- **STEP_BY_STEP**: ⚪ Use template
-
-#### Exercise 03: Version Control Basics
-- **Goal**: Master Git workflows for infrastructure
-- **Technologies**: Git, GitHub
-- **Files**: Git exercises, workflows
-- **STEP_BY_STEP**: ✅ Available
-
----
-
-### Module 002: Python Programming
-**Path**: `modules/mod-002-python-programming/`
-**Exercises**: 5 | **Difficulty**: Beginner to Intermediate
-
-#### Exercise 01: Python Basics
-- **Goal**: Core Python for infrastructure automation
-- **Code**: `src/basics.py`, `src/data_structures.py`
-- **Tests**: `tests/test_basics.py`
-- **STEP_BY_STEP**: ✅ Available
-
-#### Exercise 02: Object-Oriented Programming
-- **Goal**: OOP principles for infrastructure code
-- **Code**: `src/classes.py`, `src/inheritance.py`
-- **Tests**: `tests/test_oop.py`
-- **STEP_BY_STEP**: ✅ Available
-
-#### Exercise 03: File I/O & Error Handling
-- **Goal**: Robust file operations and exception handling
-- **Code**: `src/file_operations.py`, `src/error_handling.py`
-- **Tests**: `tests/test_file_io.py`
-- **STEP_BY_STEP**: ✅ Available
-
-#### Exercise 04: Testing with Pytest
-- **Goal**: Write comprehensive tests
-- **Code**: `src/calculator.py`, `tests/test_calculator.py`
-- **Coverage**: >80%
-- **STEP_BY_STEP**: ✅ Available
-
-#### Exercise 05: Data Processing
-- **Goal**: Process datasets for ML pipelines
-- **Code**: `src/data_processor.py`, `src/transformers.py`
-- **Tests**: `tests/test_processing.py`
-- **STEP_BY_STEP**: ✅ Available
-
----
-
-### Module 003: Linux Command Line
-**Path**: `modules/mod-003-linux-command-line/`
-**Exercises**: 4 | **Difficulty**: Beginner
-
-#### Exercise 01: Bash Scripting
-- **Goal**: Automate tasks with bash
-- **Files**: `scripts/backup.sh`, `scripts/monitor.sh`
-- **STEP_BY_STEP**: ⚪ Use template
-
-#### Exercise 02: Filesystem & Processes
-- **Goal**: Manage files and processes
-- **Files**: Process management scripts
-- **STEP_BY_STEP**: ⚪ Use template
-
-#### Exercise 03: SSH & Networking
-- **Goal**: Remote server management
-- **Files**: SSH configs, network tools
-- **STEP_BY_STEP**: ⚪ Use template
-
-#### Exercise 04: System Administration
-- **Goal**: Basic sysadmin tasks
-- **Files**: Admin scripts, cron jobs
-- **STEP_BY_STEP**: ⚪ Use template
-
----
+| # | Exercise | Topics |
+|---|---|---|
+| 01 | [Git fundamentals](modules/mod-003-git-version-control/exercise-01-git-fundamentals/) | Branching, merging, rebase, conflict resolution, GitHub workflows |
 
 ### Module 004: ML Basics
-**Path**: `modules/mod-004-ml-basics/`
-**Exercises**: 3 | **Difficulty**: Beginner to Intermediate
 
-#### Exercise 01: ML Fundamentals
-- **Goal**: Understand ML model lifecycle
-- **Code**: `src/model_basics.py`
-- **Notebook**: `notebooks/ml_intro.ipynb`
-- **STEP_BY_STEP**: ⚪ Use template
+| # | Exercise | Topics |
+|---|---|---|
+| 01 | [ML fundamentals](modules/mod-004-ml-basics/exercise-01-ml-fundamentals/) | Train/val/test, common metrics |
+| 02 | [Training pipeline](modules/mod-004-ml-basics/exercise-02-model-training-pipeline/) | End-to-end training script |
+| 03 | [Model deployment](modules/mod-004-ml-basics/exercise-03-model-deployment/) | ONNX, TorchScript, SavedModel |
+| 04 | [LLM basics](modules/mod-004-ml-basics/exercise-04-llm-basics/) | Hugging Face Transformers |
+| 05 | [GPU fundamentals](modules/mod-004-ml-basics/exercise-05-gpu-fundamentals/) | CUDA, mixed precision |
 
-#### Exercise 02: Model Training Pipeline
-- **Goal**: Build end-to-end training pipeline
-- **Code**: `src/pipeline.py`, `src/trainer.py`
-- **Tests**: `tests/test_pipeline.py`
-- **STEP_BY_STEP**: ⚪ Use template
+### Module 005: Docker & Containers
 
-#### Exercise 03: Model Deployment
-- **Goal**: Deploy ML model as API
-- **Code**: `src/serve.py`, `src/inference.py`
-- **Docker**: `Dockerfile`, `docker-compose.yml`
-- **STEP_BY_STEP**: ⚪ Use template
+| # | Exercise | Topics |
+|---|---|---|
+| 01 | [Docker fundamentals](modules/mod-005-docker-containers/exercise-01-docker-fundamentals/) | Images, containers, registries |
+| 02 | [Building ML images](modules/mod-005-docker-containers/exercise-02-building-ml-images/) | Multi-stage builds, layer caching |
+| 03 | [Docker Compose](modules/mod-005-docker-containers/exercise-03-docker-compose/) | Multi-container apps |
+| 04 | [Docker networking](modules/mod-005-docker-containers/exercise-04-docker-networking/) | Bridge, host, overlay |
+| 05 | [Docker volumes](modules/mod-005-docker-containers/exercise-05-docker-volumes/) | Bind mounts, named volumes |
+| 06 | [Container security](modules/mod-005-docker-containers/exercise-06-container-security/) | Non-root, read-only FS, scanning |
+| 07 | [Production deployment](modules/mod-005-docker-containers/exercise-07-production-deployment/) | Gunicorn, health checks, signals |
 
----
+### Module 006: Kubernetes Introduction
 
-### Module 005: Docker Containerization
-**Path**: `modules/mod-005-docker-containerization/`
-**Exercises**: 7 | **Difficulty**: Beginner to Intermediate
+| # | Exercise | Topics |
+|---|---|---|
+| 01 | [First deployment](modules/mod-006-kubernetes-intro/exercise-01-first-deployment/) | Pods, Deployments, Services |
+| 02 | [Helm chart](modules/mod-006-kubernetes-intro/exercise-02-helm-chart/) | Templating, values, releases |
+| 03 | [Debugging](modules/mod-006-kubernetes-intro/exercise-03-debugging/) | kubectl describe, logs, events |
+| 04 | [StatefulSets & storage](modules/mod-006-kubernetes-intro/exercise-04-statefulsets-storage/) | PVCs, storage classes |
+| 05 | [ConfigMaps & Secrets](modules/mod-006-kubernetes-intro/exercise-05-configmaps-secrets/) | Configuration management |
+| 06 | [Ingress & load balancing](modules/mod-006-kubernetes-intro/exercise-06-ingress-loadbalancing/) | NGINX Ingress |
+| 07 | [ML workloads](modules/mod-006-kubernetes-intro/exercise-07-ml-workloads/) | HPA, affinity, GPU |
 
-#### Exercise 01: Docker Fundamentals
-- **Goal**: Build first Docker images
-- **Files**: `Dockerfile`, basic containers
-- **STEP_BY_STEP**: ⚪ Use template
+### Module 007: APIs & Web Services
 
-#### Exercise 02: Building ML Images
-- **Goal**: Containerize ML applications
-- **Files**: `Dockerfile.ml`, `requirements.txt`
-- **Size**: Optimized multi-stage builds
-- **STEP_BY_STEP**: ✅ Available
+| # | Exercise | Topics |
+|---|---|---|
+| 01 | [FastAPI fundamentals](modules/mod-007-apis-web-services/exercise-01-fastapi-fundamentals/) | Routing, Pydantic, auto-docs |
+| 02 | [Model serving](modules/mod-007-apis-web-services/exercise-02-model-serving/) | FastAPI ML API |
+| 03 | [Production API](modules/mod-007-apis-web-services/exercise-03-production-api/) | Auth, rate limiting, caching |
+| 04 | [Performance optimization](modules/mod-007-apis-web-services/exercise-04-performance-optimization/) | Async, batching, profiling |
+| 05 | [Flask framework](modules/mod-007-apis-web-services/exercise-05-flask-framework/) NEW | Flask + Smorest + Marshmallow |
 
-#### Exercise 03: Docker Compose
-- **Goal**: Multi-container applications
-- **Files**: `docker-compose.yml`, service definitions
-- **STEP_BY_STEP**: ✅ Available
+### Module 008: Databases & SQL — NEW
 
-#### Exercise 04: Docker Networking
-- **Goal**: Container networking and communication
-- **Files**: Network configurations
-- **STEP_BY_STEP**: ✅ Available
+| # | Exercise | Topics |
+|---|---|---|
+| 01 | [SQL basics & CRUD](modules/mod-008-databases-sql/exercise-01-sql-basics-crud/) | DDL, DML, transactions, upserts |
+| 02 | [Database design — ML registry](modules/mod-008-databases-sql/exercise-02-database-design-ml-registry/) | 3NF, partial unique indexes, lineage tables |
+| 03 | [Advanced SQL joins](modules/mod-008-databases-sql/exercise-03-advanced-sql-joins/) | CTEs, window functions, LATERAL |
+| 04 | [SQLAlchemy ORM integration](modules/mod-008-databases-sql/exercise-04-sqlalchemy-orm-integration/) | Declarative 2.0, repositories, Alembic |
+| 05 | [Indexing & optimization](modules/mod-008-databases-sql/exercise-05-optimization-indexing/) | EXPLAIN, B-tree/GIN/BRIN, partial/expression indexes |
 
-#### Exercise 05: Docker Volumes
-- **Goal**: Persistent data management
-- **Files**: Volume configurations
-- **STEP_BY_STEP**: ✅ Available
+### Module 009: Monitoring & Logging Basics
 
-#### Exercise 06: Container Security
-- **Goal**: Secure Docker deployments
-- **Files**: Security configs, scanning
-- **STEP_BY_STEP**: ⚪ Use template
+| # | Exercise | Topics |
+|---|---|---|
+| 01 | [Observability foundations](modules/mod-009-monitoring-basics/exercise-01-observability-foundations/) | Metrics, logs, traces, SLIs |
+| 02 | [Prometheus stack](modules/mod-009-monitoring-basics/exercise-02-prometheus-stack/) | Scrape configs, PromQL |
+| 03 | [Grafana dashboards](modules/mod-009-monitoring-basics/exercise-03-grafana-dashboards/) | Panels, variables, alerts |
+| 04 | [Logging pipeline](modules/mod-009-monitoring-basics/exercise-04-logging-pipeline/) | ELK or Loki |
+| 05 | [Alerting & incident response](modules/mod-009-monitoring-basics/exercise-05-alerting-incident-response/) | Alertmanager, runbooks |
+| 06 | [Airflow workflow monitoring](modules/mod-009-monitoring-basics/exercise-06-airflow-workflow-monitoring/) | DAG observability |
 
-#### Exercise 07: Production Deployment
-- **Goal**: Production-ready containers
-- **Files**: Health checks, logging, monitoring
-- **STEP_BY_STEP**: ✅ Available
+### Module 010: Cloud Platforms
 
----
-
-### Module 006: Kubernetes
-**Path**: `modules/mod-006-kubernetes-intro/` and `mod-006-kubernetes-orchestration/`
-**Exercises**: 14 (7 per track) | **Difficulty**: Intermediate
-
-**Note**: Two comprehensive Kubernetes tracks with overlapping topics
-
-#### Track 1: Kubernetes Introduction
-
-##### Exercise 01: First Deployment
-- **Goal**: Deploy first app to K8s
-- **Files**: `k8s/deployment.yaml`, `k8s/service.yaml`
-- **STEP_BY_STEP**: ✅ Available
-
-##### Exercise 02: Helm Charts
-- **Goal**: Package apps with Helm
-- **Files**: `helm/`, Chart.yaml, values.yaml
-- **STEP_BY_STEP**: ✅ Available
-
-##### Exercise 03: Debugging
-- **Goal**: Troubleshoot K8s issues
-- **Files**: Debugging manifests and tools
-- **STEP_BY_STEP**: ✅ Available
-
-##### Exercise 04: StatefulSets & Storage
-- **Goal**: Manage stateful applications
-- **Files**: StatefulSet, PVC, PV manifests
-- **STEP_BY_STEP**: ✅ Available
-
-##### Exercise 05: ConfigMaps & Secrets
-- **Goal**: Manage configuration and secrets
-- **Files**: ConfigMap and Secret manifests
-- **STEP_BY_STEP**: ✅ Available
-
-##### Exercise 06: Ingress & Load Balancing
-- **Goal**: Expose services externally
-- **Files**: Ingress manifests, load balancer configs
-- **STEP_BY_STEP**: ✅ Available
-
-##### Exercise 07: ML Workloads
-- **Goal**: Deploy ML models to K8s
-- **Files**: ML deployment manifests, GPU configs
-- **STEP_BY_STEP**: ✅ Available
-
-#### Track 2: Kubernetes Orchestration
-[Similar structure with focus on orchestration aspects]
+| # | Exercise | Topics |
+|---|---|---|
+| 01 | [AWS fundamentals](modules/mod-010-cloud-platforms/exercise-01-aws-fundamentals/) | IAM, EC2, S3, VPC |
+| 02 | [GCP ML infrastructure](modules/mod-010-cloud-platforms/exercise-02-gcp-ml-infrastructure/) | GKE, Cloud Storage, Vertex AI |
+| 03 | [Azure ML services](modules/mod-010-cloud-platforms/exercise-03-azure-ml-services/) | AKS, Blob, ML Studio |
+| 04 | [Multi-cloud deployment](modules/mod-010-cloud-platforms/exercise-04-multi-cloud-deployment/) | Portability, federation |
+| 05 | [Cost optimization](modules/mod-010-cloud-platforms/exercise-05-cost-optimization/) | Reserved vs spot, rightsizing |
+| 07 | [Terraform basics](modules/mod-010-cloud-platforms/exercise-07-terraform-basics/) | IaC fundamentals |
 
 ---
 
-### Module 007: CI/CD Basics
-**Path**: `modules/mod-007-cicd-basics/`
-**Exercises**: 6 | **Difficulty**: Intermediate
+## Projects
 
-#### Exercise 01: Git Workflows
-- **Goal**: Implement GitFlow and trunk-based development
-- **Files**: Workflow documentation, examples
-- **STEP_BY_STEP**: ✅ Available
-
-#### Exercise 02: Automated Testing
-- **Goal**: Set up CI testing pipelines
-- **Code**: `src/model_evaluation.py`, test suites
-- **CI**: `.github/workflows/test.yml`
-- **STEP_BY_STEP**: ✅ Available
-
-#### Exercise 03: Docker CI/CD
-- **Goal**: Automate Docker builds
-- **Files**: `app/main.py`, `app/model.py`, Dockerfile
-- **CI**: Docker build workflows
-- **STEP_BY_STEP**: ✅ Available
-
-#### Exercise 04: Kubernetes Deployments
-- **Goal**: Automate K8s deployments
-- **Files**: Deployment manifests, CI/CD pipelines
-- **STEP_BY_STEP**: ✅ Available
-
-#### Exercise 05: Model Artifact Management
-- **Goal**: Manage ML artifacts with MLflow
-- **Code**: `mlflow/train.py`, `mlflow/register_model.py`
-- **STEP_BY_STEP**: ✅ Available
-
-#### Exercise 06: End-to-End Pipeline
-- **Goal**: Complete ML CI/CD pipeline
-- **Code**: `pipelines/training_pipeline.py`
-- **Integration**: All previous components
-- **STEP_BY_STEP**: ✅ Available
+| # | Project | Solution status |
+|---|---|---|
+| 01 | [Simple Model API](projects/project-01-simple-model-api/) | Full implementation (Flask + Docker + tests) |
+| 02 | [Kubernetes Model Serving](projects/project-02-kubernetes-serving/) | Full: manifests, Helm chart, Grafana dashboard, Locust loadtest, ServiceMonitor |
+| 03 | [ML Pipeline with Tracking](projects/project-03-ml-pipeline-tracking/) | Full: Airflow DAGs (incl. retraining), DVC, Great Expectations, MLflow, src/, tests/ |
+| 04 | [Monitoring & Alerting](projects/project-04-monitoring-alerting/) | Full: Prometheus, Alertmanager, ELK, Grafana dashboards, 5 runbooks, instrumentation src/ |
+| 05 | [Production ML Capstone](projects/project-05-production-ml-capstone/) | Full: Terraform (VPC/EKS/RDS/IAM), Kustomize overlays (dev/staging/prod), Velero, security, CI/CD |
 
 ---
 
-### Module 008: Cloud Platforms
-**Path**: `modules/mod-008-cloud-platforms/`
-**Exercises**: 5 | **Difficulty**: Intermediate
+## Supplementary
 
-#### Exercise 01: AWS Fundamentals
-- **Goal**: Deploy to AWS (EC2, S3, SageMaker)
-- **Code**: `solutions/ec2_manager.py`, `solutions/sagemaker_pipeline.py`
-- **Terraform**: Infrastructure as Code
-- **STEP_BY_STEP**: ⚪ Use template
+Material outside the canonical curriculum:
 
-#### Exercise 02: GCP ML Infrastructure
-- **Goal**: Use Google Cloud AI Platform
-- **Technologies**: GCP, Vertex AI, GKE
-- **STEP_BY_STEP**: ⚪ Use template
-
-#### Exercise 03: Azure ML Services
-- **Goal**: Azure ML workspace and pipelines
-- **Technologies**: Azure ML, AKS
-- **STEP_BY_STEP**: ⚪ Use template
-
-#### Exercise 04: Multi-Cloud Deployment
-- **Goal**: Deploy across multiple clouds
-- **Technologies**: Terraform, multi-cloud patterns
-- **STEP_BY_STEP**: ⚪ Use template
-
-#### Exercise 05: Cost Optimization
-- **Goal**: Monitor and optimize cloud costs
-- **Code**: `solutions/cost_monitor.py`
-- **Tools**: Cloud cost management
-- **STEP_BY_STEP**: ⚪ Use template
+- [`supplementary/cicd-basics/`](supplementary/cicd-basics/) — CI/CD focused module from earlier curriculum drafts.
+- [`supplementary/alternative-capstones/`](supplementary/alternative-capstones/) — Three alternative capstone projects (ML platform, fraud detection, multi-cloud) for learners who want a different angle than `projects/project-05`.
 
 ---
 
-### Module 009: Advanced MLOps
-**Path**: `modules/mod-009-advanced-mlops/`
-**Exercises**: 5 | **Difficulty**: Advanced
+## Honesty Note
 
-#### Exercise 01: Feature Stores
-- **Goal**: Implement centralized feature store
-- **Technologies**: Feast, feature engineering
-- **STEP_BY_STEP**: ⚪ Use template
-
-#### Exercise 02: Experiment Tracking
-- **Goal**: Track experiments at scale
-- **Technologies**: MLflow, Weights & Biases
-- **STEP_BY_STEP**: ⚪ Use template
-
-#### Exercise 03: Model Monitoring
-- **Goal**: Monitor models in production
-- **Technologies**: Prometheus, Evidently
-- **STEP_BY_STEP**: ⚪ Use template
-
-#### Exercise 04: A/B Testing
-- **Goal**: Implement A/B testing for models
-- **Technologies**: Traffic splitting, metrics
-- **STEP_BY_STEP**: ⚪ Use template
-
-#### Exercise 05: Pipeline Orchestration
-- **Goal**: Orchestrate ML workflows
-- **Technologies**: Airflow, Kubeflow, Prefect
-- **STEP_BY_STEP**: ⚪ Use template
-
----
-
-## 📁 Repository Structure
-
-```
-ai-infra-junior-engineer-solutions/
-├── README.md
-├── SOLUTIONS_INDEX.md (this file)
-├── LEARNING_GUIDE.md
-├── TEMPLATES/
-│   ├── STEP_BY_STEP_TEMPLATE.md
-│   ├── TEST_TEMPLATE.py
-│   ├── ARCHITECTURE_TEMPLATE.md
-│   └── TROUBLESHOOTING_TEMPLATE.md
-├── modules/
-│   ├── mod-001-foundations/
-│   ├── mod-002-python-programming/
-│   ├── mod-003-linux-command-line/
-│   ├── mod-004-ml-basics/
-│   ├── mod-005-docker-containerization/
-│   ├── mod-006-kubernetes-intro/
-│   ├── mod-006-kubernetes-orchestration/
-│   ├── mod-007-cicd-basics/
-│   ├── mod-008-cloud-platforms/
-│   └── mod-009-advanced-mlops/
-└── guides/
-    ├── debugging-guide.md
-    ├── optimization-guide.md
-    └── production-readiness.md
-```
-
----
-
-## 🛠️ Using the Templates
-
-### STEP_BY_STEP Template
-Located at: `TEMPLATES/STEP_BY_STEP_TEMPLATE.md`
-
-**When to use**: For any exercise missing a STEP_BY_STEP.md guide
-
-**How to use**:
-1. Copy template to exercise directory
-2. Fill in exercise-specific details
-3. Follow the structure provided
-4. Include checkpoints after each major step
-
-### Test Template
-Located at: `TEMPLATES/TEST_TEMPLATE.py`
-
-**When to use**: For exercises needing test coverage
-
-**How to use**:
-1. Copy template to `tests/` directory
-2. Rename to `test_[module].py`
-3. Replace placeholders with actual tests
-4. Run with `pytest tests/ -v`
-
----
-
-## 📊 Completion Status
-
-### Documentation Coverage
-
-| Category | Count | Status |
-|----------|-------|--------|
-| Total Exercises | 74 | ✅ Complete |
-| STEP_BY_STEP Guides | 35/74 (47%) | ⚠️ Templates provided |
-| Test Files | 14/74 (19%) | ⚠️ Templates provided |
-| README Files | 74/74 (100%) | ✅ Complete |
-| Code Solutions | 56,960 lines | ✅ Complete |
-
-### Infrastructure
-
-| Component | Count | Status |
-|-----------|-------|--------|
-| Docker Configs | 16 | ✅ Complete |
-| K8s Manifests | 93 | ✅ Complete |
-| CI/CD Workflows | Multiple | ✅ Complete |
-| Architecture Docs | Varies | ⚪ Some exercises |
-
----
-
-## 🎯 Quality Standards
-
-All solutions in this repository:
-- ✅ **Work correctly** - Tested and verified
-- ✅ **Follow best practices** - PEP 8, clean code principles
-- ✅ **Production-ready** - Error handling, logging, configuration
-- ✅ **Well-documented** - Clear README and code comments
-- ✅ **Secure** - No hardcoded credentials, secure defaults
-- ✅ **Performant** - Optimized for production use
-
----
-
-## 📚 Learning Resources
-
-### Guides
-- `guides/debugging-guide.md` - Debugging techniques
-- `guides/optimization-guide.md` - Performance optimization
-- `guides/production-readiness.md` - Production checklist
-
-### Templates
-- `TEMPLATES/STEP_BY_STEP_TEMPLATE.md` - Implementation guide template
-- `TEMPLATES/TEST_TEMPLATE.py` - Testing template
-- Additional templates for common patterns
-
----
-
-## 🤝 Contributing
-
-Missing a STEP_BY_STEP guide? Want to improve a solution?
-
-1. Use the provided templates
-2. Follow the existing solution patterns
-3. Ensure code quality (tests, linting, documentation)
-4. Submit a pull request
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
-
----
-
-## 💡 How to Maximize Learning
-
-### Recommended Approach
-
-1. **Attempt First** (Learning Repo)
-   - Spend 1-2 hours trying independently
-   - Review module lectures if stuck
-   - Sketch out your approach
-
-2. **Check Solution** (This Repo)
-   - Compare your approach to the solution
-   - Identify differences and understand why
-   - Don't just copy - understand the design decisions
-
-3. **Read STEP_BY_STEP** (If Available)
-   - Follow the implementation guide
-   - Understand each checkpoint
-   - Learn the "why" behind each step
-
-4. **Run Tests**
-   - Execute provided tests
-   - Add your own test cases
-   - Achieve >80% coverage
-
-5. **Refine Your Code**
-   - Incorporate learnings
-   - Apply best practices
-   - Document your implementation
-
-### Red Flags (Don't Do This)
-
-- ❌ Copy-pasting code without understanding
-- ❌ Skipping the learning repo exercises
-- ❌ Not running/writing tests
-- ❌ Ignoring documentation
-- ❌ Not experimenting with variations
-
----
-
-## 🎓 After Completing All Exercises
-
-You should be able to:
-- ✅ Deploy ML models to production
-- ✅ Containerize applications with Docker
-- ✅ Orchestrate workloads on Kubernetes
-- ✅ Build CI/CD pipelines for ML
-- ✅ Manage cloud infrastructure
-- ✅ Monitor and debug production systems
-- ✅ Apply MLOps best practices
-
-**Next steps**:
-- Add all projects to your portfolio
-- Write blog posts about your implementations
-- Apply for Junior AI Infrastructure Engineer roles
-- Consider specialization tracks (MLOps, Platform, etc.)
-
----
-
-## 📞 Support
-
-- 📧 Email: ai-infra-curriculum@joshua-ferguson.com
-- 💬 GitHub Discussions: [Link]
-- 🐛 Issues: [Link]
-
----
-
-**Last Updated**: 2025-10-24
-**Solutions Status**: ✅ Production-Ready with Templates
-**Recommendation**: Use templates to fill documentation gaps as needed
-
-*Part of the AI Infrastructure Career Path Curriculum*
+This index was previously inaccurate (claimed completeness in places that were stubs). The 2026-05-22 restructure brought reality into alignment with the inventory. If you find another discrepancy, please open an issue.

@@ -1,0 +1,7 @@
+flask>=3.0
+flask-smorest>=0.42
+marshmallow>=3.20
+prometheus-flask-exporter>=0.23
+joblib>=1.3
+scikit-learn>=1.4
+gunicorn>=21.2
