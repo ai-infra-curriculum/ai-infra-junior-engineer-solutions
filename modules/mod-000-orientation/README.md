@@ -164,7 +164,7 @@ If you encounter issues:
 1. Check the **Troubleshooting** section in each exercise README
 2. Review the **docs/** folder for detailed guides
 3. Search GitHub issues for similar problems
-4. Ask questions in the [community forum](https://github.com/ai-infra-curriculum/discussions)
+4. Ask questions in the repo's [GitHub Discussions](https://github.com/ai-infra-curriculum/ai-infra-junior-engineer-learning/discussions)
 
 ---
 

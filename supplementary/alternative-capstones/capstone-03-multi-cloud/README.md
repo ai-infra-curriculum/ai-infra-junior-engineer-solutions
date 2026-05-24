@@ -488,11 +488,11 @@ Cost breakdown:
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
+See the repo-root [CONTRIBUTING.md](../../../CONTRIBUTING.md) for development guidelines.
 
 ## License
 
-MIT License - See [LICENSE](LICENSE) for details.
+MIT License — see the repo-root [LICENSE](../../../LICENSE) for details.
 
 ## Support
 
