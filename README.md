@@ -10,6 +10,19 @@ Reference solutions for every exercise and project in the [Junior AI Infrastruct
 
 ---
 
+## What's New — 2026-05-27
+
+- All TODO-laden Python scaffolds across projects 02-05 replaced with working reference implementations. Each project's `src/` and `tests/` are now real, runnable code:
+  - **Project 02 (Kubernetes serving)**: `app.py` (Flask + Prometheus + K8s liveness/readiness probes + SIGTERM graceful shutdown), new `model.py` (deterministic stand-in `ModelLoader`), `tests/test_k8s.py` (full kubernetes-client integration tests, auto-skip when cluster unreachable).
+  - **Project 03 (ML pipeline)**: end-to-end Airflow DAG with XCom flow + kill-fast validation + MLflow registry staging, plus full pytest suite for ingestion / preprocessing / MLflow tracker / DAG shape.
+  - **Project 04 (Monitoring)**: full Prometheus instrumentation + ML-specific drift detection (KS / PSI / JS), performance monitor, confidence analyzer with calibration, data-quality monitor.
+  - **Project 05 (Production capstone)**: integrated Flask + Prometheus + MLflow `ModelManager` with API-key auth + image validation; full e2e test suite that auto-skips when `API_URL` unreachable.
+  - **Supplementary multi-cloud capstone**: real cross-cloud e2e checks (sync, failover, latency SLO, DR) configured via `MULTI_CLOUD_API_URLS`.
+- New `.github/workflows/runtime-validation.yml` adds `kubectl apply --dry-run`, `terraform validate`, and `docker buildx` smoke gates across `projects/` and `modules/`.
+- Audit score: 52 → 62.
+
+---
+
 ## What's New — May 2026
 
 The repository was restructured to align module numbering with the canonical curriculum (`CURRICULUM.md`). Highlights:
