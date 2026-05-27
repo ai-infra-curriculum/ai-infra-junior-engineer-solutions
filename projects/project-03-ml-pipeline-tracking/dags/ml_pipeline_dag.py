@@ -1,448 +1,372 @@
+"""Airflow DAG for the end-to-end ML training pipeline.
+
+Pipeline stages (in execution order):
+    ingest_data  -> validate_data  -> preprocess_data  -> version_data_dvc
+                  -> train_model   -> evaluate_model    -> register_model
+                  -> send_success_email
+
+Task callables push their useful outputs to XCom so downstream tasks can
+pick them up without re-reading from disk.
+
+The DAG is written to fail fast on data-quality issues (validation has
+``retries=0``) but tolerate transient ingestion / training problems with
+exponential backoff.
 """
-Airflow DAG for ML Training Pipeline
 
-This DAG orchestrates the complete ML pipeline from data ingestion to model registration.
-
-Learning Objectives:
-- Design Airflow DAGs with proper task dependencies
-- Implement PythonOperators for ML tasks
-- Use XCom for inter-task communication
-- Handle errors and retries
-- Schedule pipelines
-
-TODO: Complete all sections marked with TODO
-"""
-
-from airflow import DAG
-from airflow.operators.python import PythonOperator
-from airflow.operators.email import EmailOperator
-from airflow.utils.dates import days_ago
-from datetime import datetime, timedelta
-import sys
-from pathlib import Path
-
-# TODO: Add project source to Python path
-# Hint: sys.path.insert(0, '/path/to/src')
+from __future__ import annotations
 
 import logging
+import os
+import subprocess
+import sys
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Any, Dict
+
+from airflow import DAG
+from airflow.operators.email import EmailOperator
+from airflow.operators.python import PythonOperator
+from airflow.utils.dates import days_ago
+
+# Allow the DAG to import from the project's ``src`` directory regardless
+# of which directory Airflow loads DAGs from.
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 
 logger = logging.getLogger(__name__)
 
 
-# ============================================================================
-# DAG Configuration
-# ============================================================================
+# ---------------------------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------------------------
 
-# TODO: Define default_args for all tasks
-default_args = {
-    'owner': 'ml-team',
-    'depends_on_past': False,
-    'email': ['mlops@example.com'],  # TODO: Update with your email
-    'email_on_failure': True,
-    'email_on_retry': False,
-    'retries': 3,  # TODO: Set appropriate retry count
-    'retry_delay': timedelta(minutes=5),  # TODO: Set retry delay
-    # TODO: Add execution_timeout
-    # 'execution_timeout': timedelta(hours=2),
+PIPELINE_CONFIG: Dict[str, Any] = {
+    "raw_data_path": "/opt/airflow/data/raw",
+    "processed_data_path": "/opt/airflow/data/processed",
+    "model_save_path": "/opt/airflow/models",
+    "artifacts_path": "/opt/airflow/artifacts",
+    "source_csv": "/opt/airflow/data/source/dataset.csv",
+    "mlflow_tracking_uri": os.getenv("MLFLOW_TRACKING_URI", "http://mlflow:5000"),
+    "experiment_name": "image_classification_pipeline",
+    "registered_model_name": "image_classifier",
+    "accuracy_threshold": 0.85,
+    "class_names": ["cat", "dog", "bird", "fish"],
+    "notify_email": os.getenv("ML_NOTIFY_EMAIL", "mlops@example.com"),
 }
 
-# TODO: Define pipeline configuration
-PIPELINE_CONFIG = {
-    'raw_data_path': '/opt/airflow/data/raw',
-    'processed_data_path': '/opt/airflow/data/processed',
-    'model_save_path': '/opt/airflow/models',
-    'artifacts_path': '/opt/airflow/artifacts',
-    'mlflow_tracking_uri': 'http://mlflow:5000',
-    'experiment_name': 'image_classification_pipeline',
+DEFAULT_ARGS: Dict[str, Any] = {
+    "owner": "ml-team",
+    "depends_on_past": False,
+    "email": [PIPELINE_CONFIG["notify_email"]],
+    "email_on_failure": True,
+    "email_on_retry": False,
+    "retries": 3,
+    "retry_delay": timedelta(minutes=5),
+    "retry_exponential_backoff": True,
+    "max_retry_delay": timedelta(minutes=30),
+    "execution_timeout": timedelta(hours=2),
 }
 
 
-# ============================================================================
-# Task Functions
-# ============================================================================
+# ---------------------------------------------------------------------------
+# Task functions
+# ---------------------------------------------------------------------------
 
-def ingest_data(**context):
-    """
-    Task: Ingest data from source.
 
-    TODO:
-    1. Import DataIngestion class
-    2. Initialize with configuration
-    3. Ingest data from CSV (or API, database)
-    4. Save raw data
-    5. Push data path to XCom for next task
-    6. Return success message
-    """
+def ingest_data(**context: Any) -> str:
+    """Ingest the source CSV into the raw-data lake."""
+    from src.data_ingestion import DataIngestion  # local import = fast DAG load
+
     logger.info("Starting data ingestion...")
-
-    # TODO: Import DataIngestion
-    # from src.data_ingestion import DataIngestion
-
-    # TODO: Initialize ingestion
-    # ingestion = DataIngestion(PIPELINE_CONFIG)
-
-    # TODO: Ingest data
-    # Example: df = ingestion.ingest_from_csv('/opt/airflow/data/source/dataset.csv')
-
-    # TODO: Save raw data
-    # output_path = ingestion.save_raw_data(df, 'raw_dataset.csv')
-
-    # TODO: Push path to XCom
-    # context['task_instance'].xcom_push(key='raw_data_path', value=str(output_path))
-
-    logger.info("Data ingestion complete")
-    return "Data ingestion successful"
+    ingestion = DataIngestion(PIPELINE_CONFIG)
+    df = ingestion.ingest_from_csv(PIPELINE_CONFIG["source_csv"])
+    output_path = ingestion.save_raw_data(df, "raw_dataset.csv")
+    context["task_instance"].xcom_push(key="raw_data_path", value=str(output_path))
+    context["task_instance"].xcom_push(key="row_count", value=len(df))
+    logger.info("Data ingestion complete: %d rows -> %s", len(df), output_path)
+    return f"Ingested {len(df)} rows"
 
 
-def validate_data(**context):
-    """
-    Task: Validate data quality with Great Expectations.
+def validate_data(**context: Any) -> str:
+    """Run Great Expectations against the freshly-ingested data."""
+    import pandas as pd
 
-    TODO:
-    1. Pull raw data path from XCom
-    2. Load data
-    3. Initialize DataValidator
-    4. Create expectation suite
-    5. Run validation
-    6. Raise error if validation fails
-    7. Return validation result
-    """
-    logger.info("Starting data validation...")
+    from src.data_validation import DataValidator
 
-    # TODO: Pull data path from previous task
-    # raw_data_path = context['task_instance'].xcom_pull(
-    #     task_ids='ingest_data',
-    #     key='raw_data_path'
-    # )
+    raw_data_path = context["task_instance"].xcom_pull(
+        task_ids="ingest_data", key="raw_data_path"
+    )
+    if not raw_data_path:
+        raise ValueError("ingest_data did not push raw_data_path; cannot validate.")
 
-    # TODO: Load data
-    # import pandas as pd
-    # df = pd.read_csv(raw_data_path)
-
-    # TODO: Import and initialize validator
-    # from src.data_validation import DataValidator
-    # validator = DataValidator()
-
-    # TODO: Create expectations
-    # validator.create_expectation_suite("data_quality_suite")
-
-    # TODO: Validate
-    # validation_passed = validator.validate_data(df, "data_quality_suite")
-
-    # TODO: Raise error if validation fails
-    # if not validation_passed:
-    #     raise ValueError("Data validation failed! Check validation report.")
-
-    logger.info("Data validation passed")
-    return "Data validation successful"
+    logger.info("Validating %s", raw_data_path)
+    df = pd.read_csv(raw_data_path)
+    validator = DataValidator()
+    suite_name = "data_quality_suite"
+    validator.create_expectation_suite(suite_name)
+    validation_passed = validator.validate_data(df, suite_name)
+    if not validation_passed:
+        # Validation failure is a fast-fail signal: training on bad data
+        # wastes GPU budget. Don't retry — surface the issue.
+        raise ValueError("Data validation failed — check Great Expectations report.")
+    context["task_instance"].xcom_push(key="validation_passed", value=True)
+    return "Validation passed"
 
 
-def preprocess_data(**context):
-    """
-    Task: Preprocess data (clean, encode, split).
+def preprocess_data(**context: Any) -> str:
+    """Clean + split the raw dataset into train/val/test."""
+    import pandas as pd
 
-    TODO:
-    1. Pull raw data path from XCom
-    2. Load data
-    3. Initialize DataPreprocessor
-    4. Run preprocessing pipeline
-    5. Push completion status to XCom
-    6. Return success message
-    """
-    logger.info("Starting data preprocessing...")
+    from src.preprocessing import DataPreprocessor
 
-    # TODO: Pull data path
-    # raw_data_path = context['task_instance'].xcom_pull(
-    #     task_ids='ingest_data',
-    #     key='raw_data_path'
-    # )
+    raw_data_path = context["task_instance"].xcom_pull(
+        task_ids="ingest_data", key="raw_data_path"
+    )
+    if not raw_data_path:
+        raise ValueError("ingest_data did not push raw_data_path; cannot preprocess.")
 
-    # TODO: Load data
-    # import pandas as pd
-    # df = pd.read_csv(raw_data_path)
-
-    # TODO: Import and initialize preprocessor
-    # from src.preprocessing import DataPreprocessor
-    # preprocessor = DataPreprocessor(PIPELINE_CONFIG)
-
-    # TODO: Run pipeline
-    # train, val, test = preprocessor.run_pipeline(df, label_column='label')
-
-    # TODO: Push status to XCom
-    # context['task_instance'].xcom_push(key='preprocessing_complete', value=True)
-
-    logger.info("Data preprocessing complete")
-    return "Preprocessing successful"
+    df = pd.read_csv(raw_data_path)
+    preprocessor = DataPreprocessor(PIPELINE_CONFIG)
+    train, val, test = preprocessor.run_pipeline(df, label_column="label")
+    context["task_instance"].xcom_push(
+        key="split_sizes",
+        value={"train": len(train), "val": len(val), "test": len(test)},
+    )
+    return (
+        f"Preprocessing complete: train={len(train)} val={len(val)} test={len(test)}"
+    )
 
 
-def version_data_dvc(**context):
-    """
-    Task: Version processed data with DVC.
-
-    TODO:
-    1. Run dvc add on processed data directory
-    2. Commit DVC file to git
-    3. Push to DVC remote
-    4. Tag with version
-    5. Return success message
-
-    Note: This requires DVC and Git to be set up in the Airflow container
-    """
-    logger.info("Versioning data with DVC...")
-
-    # TODO: Import subprocess
-    # import subprocess
-
-    # TODO: Add processed data to DVC
-    # try:
-    #     subprocess.run(['dvc', 'add', 'data/processed'], check=True)
-    #     subprocess.run(['dvc', 'push'], check=True)
-    #     subprocess.run(['git', 'add', 'data/processed.dvc', '.gitignore'], check=True)
-    #     subprocess.run(
-    #         ['git', 'commit', '-m', f'Data version {datetime.now().isoformat()}'],
-    #         check=True
-    #     )
-    # except subprocess.CalledProcessError as e:
-    #     logger.error(f"DVC versioning failed: {e}")
-    #     raise
-
-    logger.info("Data versioning complete")
-    return "DVC versioning successful"
+def version_data_dvc(**context: Any) -> str:
+    """Track the processed dataset with DVC + Git."""
+    commands = [
+        ["dvc", "add", "data/processed"],
+        ["dvc", "push"],
+        ["git", "add", "data/processed.dvc", ".gitignore"],
+        [
+            "git",
+            "commit",
+            "-m",
+            f"Pipeline data version {datetime.utcnow().isoformat()}",
+        ],
+    ]
+    cwd = str(_PROJECT_ROOT)
+    for cmd in commands:
+        logger.info("Running: %s", " ".join(cmd))
+        try:
+            subprocess.run(cmd, cwd=cwd, check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as exc:
+            # ``git commit`` with no changes returns non-zero. Treat that
+            # case as a soft success because it means the dataset is
+            # unchanged from the previous run.
+            if cmd[0] == "git" and cmd[1] == "commit" and "nothing to commit" in (
+                exc.stdout or ""
+            ):
+                logger.info("No data changes since previous run; skipping commit.")
+                break
+            logger.error("Command failed: %s\nstderr: %s", cmd, exc.stderr)
+            raise
+    return "DVC versioning complete"
 
 
-def train_model(**context):
-    """
-    Task: Train ML model with MLflow tracking.
+def train_model(**context: Any) -> str:
+    """Train a fresh model and log everything to MLflow."""
+    import pandas as pd
+    import torch
+    from torch.utils.data import DataLoader
 
-    TODO:
-    1. Initialize MLflowTracker
-    2. Load preprocessed data
-    3. Create data loaders
-    4. Define training parameters
-    5. Initialize ModelTrainer
-    6. Run training
-    7. Push best validation accuracy to XCom
-    8. Return success message
-    """
-    logger.info("Starting model training...")
+    from src.training import ImageDataset, MLflowTracker, ModelTrainer
 
-    # TODO: Import required classes
-    # from src.training import MLflowTracker, ModelTrainer
-    # import pandas as pd
+    processed = Path(PIPELINE_CONFIG["processed_data_path"])
+    train_df = pd.read_csv(processed / "train.csv")
+    val_df = pd.read_csv(processed / "val.csv")
 
-    # TODO: Initialize MLflow tracker
-    # tracker = MLflowTracker(
-    #     tracking_uri=PIPELINE_CONFIG['mlflow_tracking_uri'],
-    #     experiment_name=PIPELINE_CONFIG['experiment_name']
-    # )
+    train_loader = DataLoader(
+        ImageDataset(train_df),
+        batch_size=32,
+        shuffle=True,
+        num_workers=2,
+        pin_memory=torch.cuda.is_available(),
+    )
+    val_loader = DataLoader(
+        ImageDataset(val_df),
+        batch_size=64,
+        shuffle=False,
+        num_workers=2,
+        pin_memory=torch.cuda.is_available(),
+    )
 
-    # TODO: Load processed data
-    # train_df = pd.read_csv(f"{PIPELINE_CONFIG['processed_data_path']}/train.csv")
-    # val_df = pd.read_csv(f"{PIPELINE_CONFIG['processed_data_path']}/val.csv")
-
-    # TODO: Create data loaders
-    # Note: You'll need to implement a Dataset class for your data
-    # train_loader = ...
-    # val_loader = ...
-
-    # TODO: Define training parameters
+    tracker = MLflowTracker(
+        tracking_uri=PIPELINE_CONFIG["mlflow_tracking_uri"],
+        experiment_name=PIPELINE_CONFIG["experiment_name"],
+    )
     params = {
-        'model_name': 'resnet18',
-        'num_epochs': 10,
-        'batch_size': 32,
-        'learning_rate': 0.001,
-        'optimizer': 'adam',
-        'lr_step_size': 5,
-        'lr_gamma': 0.1,
-        'early_stopping_patience': 3
+        "model_name": "resnet18",
+        "num_epochs": 10,
+        "batch_size": 32,
+        "learning_rate": 0.001,
+        "optimizer": "adam",
+        "lr_step_size": 5,
+        "lr_gamma": 0.1,
+        "early_stopping_patience": 3,
     }
-
-    # TODO: Initialize trainer
-    # trainer = ModelTrainer(PIPELINE_CONFIG, tracker)
-
-    # TODO: Run training
-    # model, best_val_acc = trainer.train(
-    #     train_loader=train_loader,
-    #     val_loader=val_loader,
-    #     num_classes=4,
-    #     params=params
-    # )
-
-    # TODO: Push metrics to XCom
-    # context['task_instance'].xcom_push(key='best_val_acc', value=best_val_acc)
-
-    logger.info("Model training complete")
-    return "Training successful"
+    trainer = ModelTrainer(PIPELINE_CONFIG, tracker)
+    _, best_val_acc, run_id = trainer.train(
+        train_loader=train_loader,
+        val_loader=val_loader,
+        num_classes=len(PIPELINE_CONFIG["class_names"]),
+        params=params,
+    )
+    context["task_instance"].xcom_push(key="best_val_acc", value=best_val_acc)
+    context["task_instance"].xcom_push(key="mlflow_run_id", value=run_id)
+    return f"Training complete: best_val_acc={best_val_acc:.4f}"
 
 
-def evaluate_model(**context):
-    """
-    Task: Evaluate model on test set.
+def evaluate_model(**context: Any) -> str:
+    """Evaluate the latest model against the held-out test set."""
+    import pandas as pd
+    import torch
+    from torch.utils.data import DataLoader
 
-    TODO:
-    1. Load test data
-    2. Load best model
-    3. Initialize ModelEvaluator
-    4. Run evaluation
-    5. Push test metrics to XCom
-    6. Return success message
-    """
-    logger.info("Starting model evaluation...")
+    from src.evaluation import ModelEvaluator
+    from src.training import ImageDataset
 
-    # TODO: Import required classes
-    # from src.evaluation import ModelEvaluator
-    # import pandas as pd
-    # import torch
+    processed = Path(PIPELINE_CONFIG["processed_data_path"])
+    test_df = pd.read_csv(processed / "test.csv")
+    test_loader = DataLoader(
+        ImageDataset(test_df), batch_size=64, shuffle=False
+    )
 
-    # TODO: Load test data
-    # test_df = pd.read_csv(f"{PIPELINE_CONFIG['processed_data_path']}/test.csv")
-
-    # TODO: Create test data loader
-    # test_loader = ...
-
-    # TODO: Load best model
-    # model_path = f"{PIPELINE_CONFIG['model_save_path']}/best_model.pth"
-    # model = torch.load(model_path)
-
-    # TODO: Initialize evaluator
-    # class_names = ['cat', 'dog', 'bird', 'fish']
-    # evaluator = ModelEvaluator(PIPELINE_CONFIG, class_names)
-
-    # TODO: Run evaluation
-    # metrics = evaluator.evaluate(model, test_loader)
-
-    # TODO: Push metrics to XCom
-    # context['task_instance'].xcom_push(key='test_metrics', value=metrics)
-
-    logger.info("Model evaluation complete")
-    return "Evaluation successful"
+    model_path = Path(PIPELINE_CONFIG["model_save_path"]) / "best_model.pth"
+    model = torch.load(model_path, map_location="cpu")
+    evaluator = ModelEvaluator(PIPELINE_CONFIG, PIPELINE_CONFIG["class_names"])
+    metrics = evaluator.evaluate(model, test_loader)
+    context["task_instance"].xcom_push(key="test_metrics", value=metrics)
+    return f"Evaluation complete: test_accuracy={metrics['test_accuracy']:.4f}"
 
 
-def register_model(**context):
-    """
-    Task: Register model in MLflow Model Registry if it meets criteria.
+def register_model(**context: Any) -> str:
+    """Register the model with MLflow if it clears the accuracy bar."""
+    import mlflow
+    from mlflow.tracking import MlflowClient
 
-    TODO:
-    1. Pull test metrics from XCom
-    2. Check if model meets production criteria (e.g., accuracy >= 85%)
-    3. If yes, register model in MLflow
-    4. Transition to Staging stage
-    5. Return registration result
-    """
-    logger.info("Starting model registration...")
+    test_metrics = context["task_instance"].xcom_pull(
+        task_ids="evaluate_model", key="test_metrics"
+    )
+    if not test_metrics:
+        raise ValueError("evaluate_model did not push test_metrics.")
 
-    # TODO: Pull test metrics
-    # test_metrics = context['task_instance'].xcom_pull(
-    #     task_ids='evaluate_model',
-    #     key='test_metrics'
-    # )
+    accuracy = test_metrics.get("test_accuracy", 0.0)
+    threshold = PIPELINE_CONFIG["accuracy_threshold"]
+    if accuracy < threshold:
+        logger.info(
+            "Skipping registration: accuracy %.4f below threshold %.4f",
+            accuracy,
+            threshold,
+        )
+        return f"Not registered — accuracy {accuracy:.4f} < {threshold:.4f}"
 
-    # TODO: Check production criteria
-    # accuracy_threshold = 0.85
-    # if test_metrics['test_accuracy'] >= accuracy_threshold:
-    #     # TODO: Import MLflow
-    #     import mlflow
-    #
-    #     # TODO: Get latest run ID
-    #     experiment = mlflow.get_experiment_by_name(PIPELINE_CONFIG['experiment_name'])
-    #     runs = mlflow.search_runs(
-    #         experiment_ids=[experiment.experiment_id],
-    #         order_by=["start_time DESC"],
-    #         max_results=1
-    #     )
-    #     run_id = runs.iloc[0]['run_id']
-    #
-    #     # TODO: Register model
-    #     model_uri = f"runs:/{run_id}/model"
-    #     result = mlflow.register_model(
-    #         model_uri=model_uri,
-    #         name="image_classifier"
-    #     )
-    #
-    #     # TODO: Transition to Staging
-    #     client = mlflow.tracking.MlflowClient()
-    #     client.transition_model_version_stage(
-    #         name="image_classifier",
-    #         version=result.version,
-    #         stage="Staging"
-    #     )
-    #
-    #     logger.info(f"Registered model version {result.version}")
-    #     return f"Model registered: version {result.version}"
-    # else:
-    #     logger.info(f"Model did not meet criteria (accuracy: {test_metrics['test_accuracy']:.2%})")
-    #     return "Model not registered - did not meet criteria"
+    run_id = context["task_instance"].xcom_pull(
+        task_ids="train_model", key="mlflow_run_id"
+    )
+    if not run_id:
+        # Fallback: look up the latest run in the experiment.
+        mlflow.set_tracking_uri(PIPELINE_CONFIG["mlflow_tracking_uri"])
+        experiment = mlflow.get_experiment_by_name(PIPELINE_CONFIG["experiment_name"])
+        runs = mlflow.search_runs(
+            experiment_ids=[experiment.experiment_id],
+            order_by=["start_time DESC"],
+            max_results=1,
+        )
+        run_id = runs.iloc[0]["run_id"]
 
-    return "Model registration complete"
+    model_uri = f"runs:/{run_id}/model"
+    registration = mlflow.register_model(
+        model_uri=model_uri, name=PIPELINE_CONFIG["registered_model_name"]
+    )
+
+    client = MlflowClient(tracking_uri=PIPELINE_CONFIG["mlflow_tracking_uri"])
+    client.transition_model_version_stage(
+        name=PIPELINE_CONFIG["registered_model_name"],
+        version=registration.version,
+        stage="Staging",
+        archive_existing_versions=False,
+    )
+    logger.info(
+        "Registered %s version %s -> Staging",
+        PIPELINE_CONFIG["registered_model_name"],
+        registration.version,
+    )
+    return f"Registered version {registration.version} (Staging)"
 
 
-# ============================================================================
-# DAG Definition
-# ============================================================================
+# ---------------------------------------------------------------------------
+# DAG definition
+# ---------------------------------------------------------------------------
 
-# TODO: Create the DAG
 dag = DAG(
-    dag_id='ml_training_pipeline',
-    default_args=default_args,
-    description='End-to-end ML training pipeline with MLflow tracking',
-    # TODO: Set schedule (weekly on Sundays at midnight)
-    schedule_interval='@weekly',
+    dag_id="ml_training_pipeline",
+    default_args=DEFAULT_ARGS,
+    description="End-to-end ML training pipeline with MLflow tracking",
+    schedule_interval="0 0 * * 0",  # Sunday 00:00 UTC.
     start_date=days_ago(1),
-    catchup=False,  # Don't run for past dates
-    max_active_runs=1,  # Only one run at a time
-    tags=['ml', 'training', 'production'],
+    catchup=False,
+    max_active_runs=1,
+    tags=["ml", "training", "production"],
+    doc_md=__doc__,
 )
 
-# TODO: Define tasks
+
 with dag:
-    # Task 1: Ingest Data
     task_ingest = PythonOperator(
-        task_id='ingest_data',
+        task_id="ingest_data",
         python_callable=ingest_data,
-        # TODO: Add provide_context=True if using Airflow < 2.0
     )
 
-    # Task 2: Validate Data
     task_validate = PythonOperator(
-        task_id='validate_data',
+        task_id="validate_data",
         python_callable=validate_data,
+        # Validation failures should fail fast, not retry against the
+        # same broken dataset.
+        retries=0,
     )
 
-    # Task 3: Preprocess Data
     task_preprocess = PythonOperator(
-        task_id='preprocess_data',
+        task_id="preprocess_data",
         python_callable=preprocess_data,
     )
 
-    # Task 4: Version Data with DVC
     task_dvc = PythonOperator(
-        task_id='version_data_dvc',
+        task_id="version_data_dvc",
         python_callable=version_data_dvc,
+        # DVC operations involve network I/O — keep the default retries.
     )
 
-    # Task 5: Train Model
     task_train = PythonOperator(
-        task_id='train_model',
+        task_id="train_model",
         python_callable=train_model,
+        execution_timeout=timedelta(hours=6),
+        # Training is expensive; only retry on truly transient failures.
+        retries=1,
+        retry_delay=timedelta(minutes=15),
     )
 
-    # Task 6: Evaluate Model
     task_evaluate = PythonOperator(
-        task_id='evaluate_model',
+        task_id="evaluate_model",
         python_callable=evaluate_model,
     )
 
-    # Task 7: Register Model
     task_register = PythonOperator(
-        task_id='register_model',
+        task_id="register_model",
         python_callable=register_model,
     )
 
-    # Task 8: Send Success Email
     task_notify = EmailOperator(
-        task_id='send_success_email',
-        to='mlops@example.com',  # TODO: Update email
-        subject='[SUCCESS] ML Training Pipeline - {{ ds }}',
+        task_id="send_success_email",
+        to=PIPELINE_CONFIG["notify_email"],
+        subject="[SUCCESS] ML Training Pipeline - {{ ds }}",
         html_content="""
         <h3>ML Training Pipeline Completed Successfully</h3>
         <p><strong>Execution Date:</strong> {{ ds }}</p>
@@ -452,30 +376,26 @@ with dag:
         """,
     )
 
-    # TODO: Define task dependencies
-    # The pipeline should flow as:
-    # ingest → validate → preprocess → version → train → evaluate → register → notify
+    (
+        task_ingest
+        >> task_validate
+        >> task_preprocess
+        >> task_dvc
+        >> task_train
+        >> task_evaluate
+        >> task_register
+        >> task_notify
+    )
 
-    task_ingest >> task_validate >> task_preprocess >> task_dvc
-    task_dvc >> task_train >> task_evaluate >> task_register >> task_notify
 
-
-# ============================================================================
-# DAG Testing (for local development)
-# ============================================================================
-
-if __name__ == "__main__":
-    """
-    Test the DAG structure without running tasks.
-
-    TODO:
-    1. Print DAG information
-    2. Verify task dependencies
-    3. Check for cycles
-    """
+if __name__ == "__main__":  # pragma: no cover - manual smoke test
     print(f"DAG: {dag.dag_id}")
     print(f"Schedule: {dag.schedule_interval}")
     print(f"Tasks: {len(dag.tasks)}")
-    print("\nTask Dependencies:")
+    print("\nTask dependencies:")
     for task in dag.tasks:
-        print(f"  {task.task_id}: upstream={task.upstream_task_ids}, downstream={task.downstream_task_ids}")
+        print(
+            f"  {task.task_id}: "
+            f"upstream={sorted(task.upstream_task_ids)} "
+            f"downstream={sorted(task.downstream_task_ids)}"
+        )
