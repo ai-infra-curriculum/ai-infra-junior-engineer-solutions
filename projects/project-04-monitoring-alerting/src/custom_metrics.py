@@ -1,64 +1,67 @@
-"""
-Custom ML Metrics for Monitoring
+"""Custom ML metrics for production monitoring.
 
-This module implements ML-specific metrics that go beyond standard application monitoring:
+This module implements ML-specific metrics that go beyond standard
+application monitoring:
+
 - Data drift detection (distribution shift in features)
 - Model performance degradation tracking
 - Prediction confidence analysis
-- Feature importance drift
 - Data quality monitoring
 
-Learning Objectives:
-- Implement data drift detection using statistical tests
-- Track model performance over time
-- Monitor data quality issues
-- Understand ML-specific observability challenges
-- Build custom metric exporters for Prometheus
-
 References:
-- Statistical Tests: https://docs.scipy.org/doc/scipy/reference/stats.html
+- scipy.stats: https://docs.scipy.org/doc/scipy/reference/stats.html
 - Evidently AI: https://evidentlyai.com/
-- ML Monitoring Best Practices: https://christophergs.com/machine%20learning/2020/03/14/how-to-monitor-machine-learning-models/
 """
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 from scipy import stats
 from scipy.spatial.distance import jensenshannon
-from typing import Dict, List, Optional, Tuple
-import logging
-from dataclasses import dataclass
-from datetime import datetime
-import json
 
-# TODO: Import your metrics from instrumentation.py
-# from instrumentation import (
-#     data_drift_score,
-#     model_accuracy,
-#     missing_features_total,
-#     model_prediction_confidence
-# )
+# Prometheus exporters are looked up lazily from instrumentation.py so this
+# module remains importable in test contexts without a Prometheus registry.
+try:
+    from .instrumentation import (
+        data_drift_score,
+        missing_features_total,
+        model_accuracy,
+    )
+except Exception:  # pragma: no cover - exercised only when instrumentation absent
+    data_drift_score = None
+    missing_features_total = None
+    model_accuracy = None
+
 
 logger = logging.getLogger(__name__)
 
 
-# =============================================================================
-# Data Classes for Results
-# =============================================================================
+# ---------------------------------------------------------------------------
+# Result DTOs
+# ---------------------------------------------------------------------------
 
-@dataclass
+
+@dataclass(frozen=True)
 class DriftDetectionResult:
-    """Results from drift detection test."""
+    """One feature's drift-detection outcome."""
+
     feature_name: str
     statistic: float
-    p_value: float
+    p_value: Optional[float]
     is_drift: bool
     test_method: str
     timestamp: datetime
 
 
-@dataclass
+@dataclass(frozen=True)
 class ModelPerformanceMetrics:
-    """Model performance metrics over time."""
+    """Snapshot of model classification metrics."""
+
     accuracy: float
     precision: float
     recall: float
@@ -67,708 +70,449 @@ class ModelPerformanceMetrics:
     timestamp: datetime
 
 
-# =============================================================================
+# ---------------------------------------------------------------------------
 # Data Drift Detection
-# =============================================================================
+# ---------------------------------------------------------------------------
+
+
+# PSI bins above 0.25 traditionally indicate "significant" distribution shift.
+_PSI_DRIFT_THRESHOLD = 0.25
+# JS divergence above 0.1 is a conservative "noticeable shift" boundary.
+_JS_DRIFT_THRESHOLD = 0.1
+_PSI_EPSILON = 1e-10
+
 
 class DataDriftDetector:
+    """Detect distribution shifts in input data using statistical tests.
+
+    Implements:
+        - Kolmogorov-Smirnov (``ks``) — continuous features.
+        - Population Stability Index (``psi``) — binned distributions.
+        - Jensen-Shannon divergence (``js``) — probability distributions.
     """
-    Detect distribution shifts in input data using statistical tests.
 
-    This class implements multiple drift detection methods:
-    1. Kolmogorov-Smirnov (KS) Test: For continuous features
-    2. Population Stability Index (PSI): For binned distributions
-    3. Jensen-Shannon Divergence: For probability distributions
-    4. Chi-Square Test: For categorical features
-
-    Usage:
-        # Initialize with reference data (training set)
-        detector = DataDriftDetector(
-            reference_data=X_train,
-            feature_names=feature_names,
-            threshold=0.05
-        )
-
-        # Check for drift in production data
-        drift_results = detector.detect_drift(X_production)
-
-        # Export metrics to Prometheus
-        detector.export_drift_metrics()
-    """
+    SUPPORTED_METHODS = ("ks", "psi", "js")
 
     def __init__(
         self,
         reference_data: np.ndarray,
         feature_names: List[str],
         threshold: float = 0.05,
-        method: str = 'ks'
-    ):
-        """
-        Initialize drift detector with reference distribution.
+        method: str = "ks",
+    ) -> None:
+        if method not in self.SUPPORTED_METHODS:
+            raise ValueError(
+                f"Unsupported method '{method}'. "
+                f"Choose from {self.SUPPORTED_METHODS}."
+            )
+        reference_data = np.asarray(reference_data)
+        if reference_data.ndim != 2:
+            raise ValueError("reference_data must be 2D (n_samples, n_features).")
+        if len(feature_names) != reference_data.shape[1]:
+            raise ValueError(
+                f"Number of feature names ({len(feature_names)}) must match "
+                f"number of features ({reference_data.shape[1]})."
+            )
+        self.reference_data = reference_data
+        self.feature_names = list(feature_names)
+        self.threshold = threshold
+        self.method = method
+        self.n_features = reference_data.shape[1]
 
-        Args:
-            reference_data: Training data distribution (n_samples, n_features)
-            feature_names: List of feature names
-            threshold: P-value threshold for drift detection (default: 0.05)
-            method: Drift detection method ('ks', 'psi', 'js', 'chi2')
-        """
-        # TODO: Store reference data and parameters
-        # self.reference_data = reference_data
-        # self.feature_names = feature_names
-        # self.threshold = threshold
-        # self.method = method
-        # self.n_features = reference_data.shape[1]
-        #
-        # # Validate inputs
-        # if len(feature_names) != self.n_features:
-        #     raise ValueError(
-        #         f"Number of feature names ({len(feature_names)}) "
-        #         f"must match number of features ({self.n_features})"
-        #     )
-
-        pass  # Remove after implementing
+    # -- statistical tests -------------------------------------------------
 
     def kolmogorov_smirnov_test(
-        self,
-        reference: np.ndarray,
-        current: np.ndarray
+        self, reference: np.ndarray, current: np.ndarray
     ) -> Tuple[float, float]:
-        """
-        Perform Kolmogorov-Smirnov test for distribution shift.
-
-        The KS test compares two distributions and returns:
-        - statistic: Maximum distance between CDFs (0-1)
-        - p_value: Probability distributions are the same
-
-        Args:
-            reference: Reference distribution (1D array)
-            current: Current distribution to test (1D array)
-
-        Returns:
-            Tuple of (statistic, p_value)
-        """
-        # TODO: Implement KS test using scipy.stats.ks_2samp
-        #
-        # Example:
-        # statistic, p_value = stats.ks_2samp(reference, current)
-        #
-        # Interpretation:
-        # - statistic close to 0 = similar distributions
-        # - statistic close to 1 = very different distributions
-        # - p_value < threshold = reject null hypothesis (drift detected)
-        #
-        # return statistic, p_value
-
-        pass  # Remove after implementing
+        """Return (statistic, p_value) for the two-sample KS test."""
+        statistic, p_value = stats.ks_2samp(reference, current)
+        return float(statistic), float(p_value)
 
     def population_stability_index(
-        self,
-        reference: np.ndarray,
-        current: np.ndarray,
-        bins: int = 10
+        self, reference: np.ndarray, current: np.ndarray, bins: int = 10
     ) -> float:
-        """
-        Calculate Population Stability Index (PSI).
-
-        PSI measures distribution shift using binned histograms:
-        - PSI < 0.1: No significant change
-        - PSI 0.1-0.25: Moderate change
-        - PSI > 0.25: Significant change
-
-        Formula:
-        PSI = Σ (current% - reference%) * ln(current% / reference%)
-
-        Args:
-            reference: Reference distribution
-            current: Current distribution
-            bins: Number of bins for histogram
-
-        Returns:
-            PSI score (0 = identical, higher = more drift)
-        """
-        # TODO: Implement PSI calculation
-        #
-        # Steps:
-        # 1. Create histogram bins from reference data
-        #    ref_hist, bin_edges = np.histogram(reference, bins=bins)
-        #    cur_hist, _ = np.histogram(current, bins=bin_edges)
-        #
-        # 2. Convert to percentages
-        #    ref_pct = ref_hist / len(reference)
-        #    cur_pct = cur_hist / len(current)
-        #
-        # 3. Avoid division by zero (add small epsilon)
-        #    epsilon = 1e-10
-        #    ref_pct = np.where(ref_pct == 0, epsilon, ref_pct)
-        #    cur_pct = np.where(cur_pct == 0, epsilon, cur_pct)
-        #
-        # 4. Calculate PSI
-        #    psi = np.sum((cur_pct - ref_pct) * np.log(cur_pct / ref_pct))
-        #
-        # return psi
-
-        pass  # Remove after implementing
+        """Population Stability Index between two 1D distributions."""
+        ref_hist, bin_edges = np.histogram(reference, bins=bins)
+        cur_hist, _ = np.histogram(current, bins=bin_edges)
+        ref_pct = ref_hist / max(len(reference), 1)
+        cur_pct = cur_hist / max(len(current), 1)
+        ref_pct = np.where(ref_pct == 0, _PSI_EPSILON, ref_pct)
+        cur_pct = np.where(cur_pct == 0, _PSI_EPSILON, cur_pct)
+        return float(np.sum((cur_pct - ref_pct) * np.log(cur_pct / ref_pct)))
 
     def jensen_shannon_divergence(
-        self,
-        reference: np.ndarray,
-        current: np.ndarray,
-        bins: int = 50
+        self, reference: np.ndarray, current: np.ndarray, bins: int = 50
     ) -> float:
-        """
-        Calculate Jensen-Shannon divergence between distributions.
+        """Jensen-Shannon distance between two 1D distributions."""
+        ref_hist, bin_edges = np.histogram(reference, bins=bins, density=True)
+        cur_hist, _ = np.histogram(current, bins=bin_edges, density=True)
+        ref_sum = np.sum(ref_hist) or 1.0
+        cur_sum = np.sum(cur_hist) or 1.0
+        ref_prob = ref_hist / ref_sum
+        cur_prob = cur_hist / cur_sum
+        return float(jensenshannon(ref_prob, cur_prob))
 
-        JS divergence is symmetric and bounded [0, 1]:
-        - 0 = identical distributions
-        - 1 = completely different distributions
+    # -- top-level drift sweep --------------------------------------------
 
-        Args:
-            reference: Reference distribution
-            current: Current distribution
-            bins: Number of bins for histogram
+    def detect_drift(self, current_data: np.ndarray) -> List[DriftDetectionResult]:
+        """Run the configured drift test across every feature."""
+        current_data = np.asarray(current_data)
+        if current_data.shape[1] != self.n_features:
+            raise ValueError(
+                f"current_data has {current_data.shape[1]} features; "
+                f"expected {self.n_features}."
+            )
 
-        Returns:
-            JS divergence score (0-1)
-        """
-        # TODO: Implement JS divergence
-        #
-        # Steps:
-        # 1. Create normalized histograms
-        #    ref_hist, bin_edges = np.histogram(reference, bins=bins, density=True)
-        #    cur_hist, _ = np.histogram(current, bins=bin_edges, density=True)
-        #
-        # 2. Normalize to probability distributions
-        #    ref_prob = ref_hist / np.sum(ref_hist)
-        #    cur_prob = cur_hist / np.sum(cur_hist)
-        #
-        # 3. Calculate JS divergence
-        #    from scipy.spatial.distance import jensenshannon
-        #    js_distance = jensenshannon(ref_prob, cur_prob)
-        #
-        # return js_distance
+        results: List[DriftDetectionResult] = []
+        now = datetime.now()
+        for index, feature_name in enumerate(self.feature_names):
+            reference_feature = self.reference_data[:, index]
+            current_feature = current_data[:, index]
 
-        pass  # Remove after implementing
+            if self.method == "ks":
+                statistic, p_value = self.kolmogorov_smirnov_test(
+                    reference_feature, current_feature
+                )
+                is_drift = p_value < self.threshold
+            elif self.method == "psi":
+                statistic = self.population_stability_index(
+                    reference_feature, current_feature
+                )
+                p_value = None
+                is_drift = statistic > _PSI_DRIFT_THRESHOLD
+            else:  # method == "js"
+                statistic = self.jensen_shannon_divergence(
+                    reference_feature, current_feature
+                )
+                p_value = None
+                is_drift = statistic > _JS_DRIFT_THRESHOLD
 
-    def detect_drift(
-        self,
-        current_data: np.ndarray
-    ) -> List[DriftDetectionResult]:
-        """
-        Detect drift across all features.
+            result = DriftDetectionResult(
+                feature_name=feature_name,
+                statistic=statistic,
+                p_value=p_value,
+                is_drift=is_drift,
+                test_method=self.method,
+                timestamp=now,
+            )
+            results.append(result)
 
-        Args:
-            current_data: Current production data (n_samples, n_features)
+            if is_drift:
+                logger.warning(
+                    "Drift detected in %s: statistic=%.4f p_value=%s method=%s",
+                    feature_name,
+                    statistic,
+                    f"{p_value:.4f}" if p_value is not None else "n/a",
+                    self.method,
+                )
+        return results
 
-        Returns:
-            List of drift detection results per feature
-        """
-        # TODO: Implement drift detection for all features
-        #
-        # Pseudocode:
-        # results = []
-        #
-        # for i, feature_name in enumerate(self.feature_names):
-        #     reference_feature = self.reference_data[:, i]
-        #     current_feature = current_data[:, i]
-        #
-        #     # Choose method
-        #     if self.method == 'ks':
-        #         statistic, p_value = self.kolmogorov_smirnov_test(
-        #             reference_feature, current_feature
-        #         )
-        #         is_drift = p_value < self.threshold
-        #
-        #     elif self.method == 'psi':
-        #         statistic = self.population_stability_index(
-        #             reference_feature, current_feature
-        #         )
-        #         p_value = None
-        #         is_drift = statistic > 0.25  # PSI threshold
-        #
-        #     elif self.method == 'js':
-        #         statistic = self.jensen_shannon_divergence(
-        #             reference_feature, current_feature
-        #         )
-        #         p_value = None
-        #         is_drift = statistic > 0.5  # JS threshold
-        #
-        #     # Create result
-        #     result = DriftDetectionResult(
-        #         feature_name=feature_name,
-        #         statistic=statistic,
-        #         p_value=p_value,
-        #         is_drift=is_drift,
-        #         test_method=self.method,
-        #         timestamp=datetime.now()
-        #     )
-        #
-        #     results.append(result)
-        #
-        #     # Log drift detection
-        #     if is_drift:
-        #         logger.warning(
-        #             f"Drift detected in {feature_name}: "
-        #             f"statistic={statistic:.4f}, p_value={p_value}"
-        #         )
-        #
-        # return results
-
-        pass  # Remove after implementing
-
-    def export_drift_metrics(self, drift_results: List[DriftDetectionResult]):
-        """
-        Export drift detection results to Prometheus metrics.
-
-        Args:
-            drift_results: List of drift detection results
-        """
-        # TODO: Update Prometheus drift metrics
-        #
-        # for result in drift_results:
-        #     # Update drift score gauge
-        #     data_drift_score.labels(
-        #         feature_name=result.feature_name
-        #     ).set(result.statistic)
-        #
-        #     # Log to application logs (for Elasticsearch)
-        #     logger.info(
-        #         "Drift detection result",
-        #         extra={
-        #             'feature_name': result.feature_name,
-        #             'statistic': result.statistic,
-        #             'p_value': result.p_value,
-        #             'is_drift': result.is_drift,
-        #             'method': result.test_method
-        #         }
-        #     )
-
-        pass  # Remove after implementing
+    def export_drift_metrics(self, drift_results: List[DriftDetectionResult]) -> None:
+        """Push drift statistics into Prometheus (if available) and logs."""
+        for result in drift_results:
+            if data_drift_score is not None:
+                data_drift_score.labels(feature_name=result.feature_name).set(
+                    result.statistic
+                )
+            logger.info(
+                "Drift detection result",
+                extra={
+                    "feature_name": result.feature_name,
+                    "statistic": result.statistic,
+                    "p_value": result.p_value,
+                    "is_drift": result.is_drift,
+                    "method": result.test_method,
+                },
+            )
 
 
-# =============================================================================
+# ---------------------------------------------------------------------------
 # Model Performance Monitor
-# =============================================================================
+# ---------------------------------------------------------------------------
 
+
+@dataclass
 class ModelPerformanceMonitor:
-    """
-    Monitor model performance metrics over time.
+    """Track model classification metrics across a rolling stream."""
 
-    Tracks:
-    - Accuracy, Precision, Recall, F1 Score
-    - Performance degradation alerts
-    - Ground truth feedback loop
-    - Confusion matrix tracking
-
-    Usage:
-        monitor = ModelPerformanceMonitor(model_name='resnet50')
-
-        # Log predictions
-        monitor.log_prediction(prediction=1, ground_truth=1)
-
-        # Calculate metrics (after collecting enough ground truth)
-        metrics = monitor.calculate_metrics()
-
-        # Check for degradation
-        is_degraded = monitor.check_degradation(baseline_accuracy=0.90)
-    """
-
-    def __init__(self, model_name: str, min_samples: int = 100):
-        """
-        Initialize performance monitor.
-
-        Args:
-            model_name: Name of the model being monitored
-            min_samples: Minimum samples before calculating metrics
-        """
-        # TODO: Initialize monitor
-        # self.model_name = model_name
-        # self.min_samples = min_samples
-        # self.predictions = []
-        # self.ground_truth = []
-        # self.prediction_timestamps = []
-
-        pass  # Remove after implementing
+    model_name: str
+    min_samples: int = 100
+    _predictions: List[int] = field(default_factory=list)
+    _ground_truth: List[int] = field(default_factory=list)
+    _prediction_timestamps: List[datetime] = field(default_factory=list)
+    _pending: Dict[str, int] = field(default_factory=dict)
 
     def log_prediction(
         self,
         prediction: int,
         ground_truth: Optional[int] = None,
-        prediction_id: Optional[str] = None
-    ):
-        """
-        Log a prediction with optional ground truth.
+        prediction_id: Optional[str] = None,
+    ) -> None:
+        """Record a prediction (with optional immediate label)."""
+        self._predictions.append(int(prediction))
+        self._prediction_timestamps.append(datetime.now())
+        if ground_truth is not None:
+            self._ground_truth.append(int(ground_truth))
+        elif prediction_id is not None:
+            # Buffer the prediction until a label arrives via add_ground_truth.
+            self._pending[prediction_id] = int(prediction)
 
-        Args:
-            prediction: Model prediction (class index)
-            ground_truth: True label (optional, may come later)
-            prediction_id: Unique ID to match prediction with future ground truth
-        """
-        # TODO: Store prediction
-        #
-        # self.predictions.append(prediction)
-        # if ground_truth is not None:
-        #     self.ground_truth.append(ground_truth)
-        # self.prediction_timestamps.append(datetime.now())
-        #
-        # Note: In production, you might use a database to store predictions
-        # and match them with ground truth that arrives later
-
-        pass  # Remove after implementing
-
-    def add_ground_truth(self, prediction_id: str, ground_truth: int):
-        """
-        Add ground truth label for a previous prediction.
-
-        This simulates a feedback loop where ground truth labels
-        arrive after the prediction is made.
-
-        Args:
-            prediction_id: ID of the prediction
-            ground_truth: True label
-        """
-        # TODO: Implement ground truth feedback
-        #
-        # In a real system, you would:
-        # 1. Look up prediction by ID
-        # 2. Store ground truth
-        # 3. Update metrics
-
-        pass  # Remove after implementing
+    def add_ground_truth(self, prediction_id: str, ground_truth: int) -> None:
+        """Attach a label to a previously buffered prediction."""
+        if prediction_id not in self._pending:
+            logger.warning(
+                "Ground truth received for unknown prediction_id=%s", prediction_id
+            )
+            return
+        del self._pending[prediction_id]
+        # Pair the label with the most recent prediction lacking a label.
+        self._ground_truth.append(int(ground_truth))
 
     def calculate_metrics(self) -> Optional[ModelPerformanceMetrics]:
-        """
-        Calculate performance metrics from predictions and ground truth.
+        """Compute classification metrics over the buffered samples."""
+        if len(self._ground_truth) < self.min_samples:
+            logger.debug(
+                "Not enough samples for metrics calculation (%d / %d)",
+                len(self._ground_truth),
+                self.min_samples,
+            )
+            return None
 
-        Returns:
-            ModelPerformanceMetrics if enough samples, else None
-        """
-        # TODO: Implement metrics calculation
-        #
-        # if len(self.ground_truth) < self.min_samples:
-        #     logger.warning(
-        #         f"Not enough samples for metrics calculation "
-        #         f"({len(self.ground_truth)} / {self.min_samples})"
-        #     )
-        #     return None
-        #
-        # # Import sklearn metrics
-        # from sklearn.metrics import (
-        #     accuracy_score,
-        #     precision_score,
-        #     recall_score,
-        #     f1_score
-        # )
-        #
-        # # Calculate metrics
-        # accuracy = accuracy_score(self.ground_truth, self.predictions)
-        # precision = precision_score(
-        #     self.ground_truth,
-        #     self.predictions,
-        #     average='weighted'
-        # )
-        # recall = recall_score(
-        #     self.ground_truth,
-        #     self.predictions,
-        #     average='weighted'
-        # )
-        # f1 = f1_score(
-        #     self.ground_truth,
-        #     self.predictions,
-        #     average='weighted'
-        # )
-        #
-        # metrics = ModelPerformanceMetrics(
-        #     accuracy=accuracy,
-        #     precision=precision,
-        #     recall=recall,
-        #     f1_score=f1,
-        #     sample_count=len(self.ground_truth),
-        #     timestamp=datetime.now()
-        # )
-        #
-        # # Update Prometheus metrics
-        # model_accuracy.labels(model_name=self.model_name).set(accuracy)
-        #
-        # # Log metrics
-        # logger.info(
-        #     f"Model performance metrics: accuracy={accuracy:.4f}, "
-        #     f"precision={precision:.4f}, recall={recall:.4f}, f1={f1:.4f}"
-        # )
-        #
-        # return metrics
+        # Lazy import keeps sklearn out of the import path for tests that
+        # don't exercise this code.
+        from sklearn.metrics import (
+            accuracy_score,
+            f1_score,
+            precision_score,
+            recall_score,
+        )
 
-        pass  # Remove after implementing
+        labeled_predictions = self._predictions[: len(self._ground_truth)]
+        accuracy = float(accuracy_score(self._ground_truth, labeled_predictions))
+        precision = float(
+            precision_score(
+                self._ground_truth,
+                labeled_predictions,
+                average="weighted",
+                zero_division=0,
+            )
+        )
+        recall = float(
+            recall_score(
+                self._ground_truth,
+                labeled_predictions,
+                average="weighted",
+                zero_division=0,
+            )
+        )
+        f1 = float(
+            f1_score(
+                self._ground_truth,
+                labeled_predictions,
+                average="weighted",
+                zero_division=0,
+            )
+        )
+
+        metrics = ModelPerformanceMetrics(
+            accuracy=accuracy,
+            precision=precision,
+            recall=recall,
+            f1_score=f1,
+            sample_count=len(self._ground_truth),
+            timestamp=datetime.now(),
+        )
+
+        if model_accuracy is not None:
+            model_accuracy.labels(model_name=self.model_name).set(accuracy)
+
+        logger.info(
+            "Model performance metrics: accuracy=%.4f precision=%.4f "
+            "recall=%.4f f1=%.4f samples=%d",
+            accuracy,
+            precision,
+            recall,
+            f1,
+            metrics.sample_count,
+        )
+        return metrics
 
     def check_degradation(
-        self,
-        baseline_accuracy: float,
-        threshold: float = 0.1
+        self, baseline_accuracy: float, threshold: float = 0.1
     ) -> bool:
-        """
-        Check if model performance has degraded significantly.
+        """Return True when measured accuracy has dropped beyond ``threshold``."""
+        if len(self._ground_truth) < self.min_samples:
+            return False
+        from sklearn.metrics import accuracy_score
 
-        Args:
-            baseline_accuracy: Expected baseline accuracy
-            threshold: Degradation threshold (e.g., 0.1 = 10% drop)
-
-        Returns:
-            True if degradation detected, False otherwise
-        """
-        # TODO: Implement degradation check
-        #
-        # if len(self.ground_truth) < self.min_samples:
-        #     return False
-        #
-        # from sklearn.metrics import accuracy_score
-        # current_accuracy = accuracy_score(self.ground_truth, self.predictions)
-        # degradation = baseline_accuracy - current_accuracy
-        #
-        # if degradation > threshold:
-        #     logger.error(
-        #         f"Performance degradation detected! "
-        #         f"Baseline: {baseline_accuracy:.4f}, "
-        #         f"Current: {current_accuracy:.4f}, "
-        #         f"Degradation: {degradation:.4f}"
-        #     )
-        #     return True
-        #
-        # return False
-
-        pass  # Remove after implementing
+        labeled_predictions = self._predictions[: len(self._ground_truth)]
+        current_accuracy = float(accuracy_score(self._ground_truth, labeled_predictions))
+        degradation = baseline_accuracy - current_accuracy
+        if degradation > threshold:
+            logger.error(
+                "Performance degradation detected: baseline=%.4f current=%.4f "
+                "degradation=%.4f",
+                baseline_accuracy,
+                current_accuracy,
+                degradation,
+            )
+            return True
+        return False
 
 
-# =============================================================================
-# Prediction Confidence Analyzer
-# =============================================================================
+# ---------------------------------------------------------------------------
+# Confidence Analyzer
+# ---------------------------------------------------------------------------
+
 
 class ConfidenceAnalyzer:
-    """
-    Analyze prediction confidence scores over time.
+    """Track prediction confidence distribution across a sliding window."""
 
-    Tracks:
-    - Confidence distribution
-    - Low confidence predictions
-    - Confidence vs accuracy correlation
-    - Confidence drift
+    def __init__(self, window_size: int = 1000) -> None:
+        self.window_size = window_size
+        self._confidences: List[float] = []
+        self._correctness: List[bool] = []
 
-    Usage:
-        analyzer = ConfidenceAnalyzer()
-        analyzer.log_confidence(confidence=0.95, is_correct=True)
-        stats = analyzer.get_statistics()
-    """
-
-    def __init__(self, window_size: int = 1000):
-        """
-        Initialize confidence analyzer.
-
-        Args:
-            window_size: Number of recent predictions to analyze
-        """
-        # TODO: Initialize analyzer
-        # self.window_size = window_size
-        # self.confidences = []
-        # self.correctness = []  # Whether prediction was correct
-
-        pass  # Remove after implementing
-
-    def log_confidence(self, confidence: float, is_correct: Optional[bool] = None):
-        """
-        Log prediction confidence.
-
-        Args:
-            confidence: Prediction confidence (0-1)
-            is_correct: Whether prediction was correct (optional)
-        """
-        # TODO: Store confidence
-        #
-        # self.confidences.append(confidence)
-        # if is_correct is not None:
-        #     self.correctness.append(is_correct)
-        #
-        # # Keep only recent window
-        # if len(self.confidences) > self.window_size:
-        #     self.confidences = self.confidences[-self.window_size:]
-        #     self.correctness = self.correctness[-self.window_size:]
-
-        pass  # Remove after implementing
+    def log_confidence(
+        self, confidence: float, is_correct: Optional[bool] = None
+    ) -> None:
+        self._confidences.append(float(confidence))
+        if is_correct is not None:
+            self._correctness.append(bool(is_correct))
+        if len(self._confidences) > self.window_size:
+            self._confidences = self._confidences[-self.window_size :]
+            self._correctness = self._correctness[-self.window_size :]
 
     def get_statistics(self) -> Dict[str, float]:
-        """
-        Calculate confidence statistics.
+        if not self._confidences:
+            return {}
+        arr = np.asarray(self._confidences)
+        result: Dict[str, float] = {
+            "mean": float(arr.mean()),
+            "median": float(np.median(arr)),
+            "std": float(arr.std()),
+            "min": float(arr.min()),
+            "max": float(arr.max()),
+            "p25": float(np.percentile(arr, 25)),
+            "p50": float(np.percentile(arr, 50)),
+            "p75": float(np.percentile(arr, 75)),
+            "p95": float(np.percentile(arr, 95)),
+            "count": float(len(self._confidences)),
+        }
+        if self._correctness:
+            result["calibration_score"] = self._calculate_calibration()
+        return result
 
-        Returns:
-            Dictionary with statistics (mean, median, std, percentiles)
-        """
-        # TODO: Calculate statistics
-        #
-        # if len(self.confidences) == 0:
-        #     return {}
-        #
-        # confidences_array = np.array(self.confidences)
-        #
-        # stats = {
-        #     'mean': np.mean(confidences_array),
-        #     'median': np.median(confidences_array),
-        #     'std': np.std(confidences_array),
-        #     'min': np.min(confidences_array),
-        #     'max': np.max(confidences_array),
-        #     'p25': np.percentile(confidences_array, 25),
-        #     'p50': np.percentile(confidences_array, 50),
-        #     'p75': np.percentile(confidences_array, 75),
-        #     'p95': np.percentile(confidences_array, 95),
-        #     'count': len(self.confidences)
-        # }
-        #
-        # # Calculate calibration (if ground truth available)
-        # if len(self.correctness) > 0:
-        #     # Group by confidence bins and check accuracy
-        #     # This tells you if high confidence = high accuracy
-        #     stats['calibration_score'] = self._calculate_calibration()
-        #
-        # return stats
-
-        pass  # Remove after implementing
-
-    def _calculate_calibration(self) -> float:
-        """
-        Calculate model calibration score.
-
-        A well-calibrated model: predictions with 90% confidence are correct 90% of the time.
-
-        Returns:
-            Calibration error (lower is better)
-        """
-        # TODO: Implement calibration calculation
-        #
-        # This is advanced - optional for junior level
-        #
-        # Hint: Use sklearn.calibration.calibration_curve
-
-        return 0.0
+    def _calculate_calibration(self, n_bins: int = 10) -> float:
+        """Mean absolute calibration error across ``n_bins`` confidence buckets."""
+        confidences = np.asarray(self._confidences[: len(self._correctness)])
+        correctness = np.asarray(self._correctness, dtype=float)
+        if len(confidences) == 0:
+            return 0.0
+        bin_edges = np.linspace(0.0, 1.0, n_bins + 1)
+        bin_indices = np.digitize(confidences, bin_edges[1:-1])
+        weighted_error = 0.0
+        for bin_idx in range(n_bins):
+            mask = bin_indices == bin_idx
+            count = int(mask.sum())
+            if count == 0:
+                continue
+            avg_conf = float(confidences[mask].mean())
+            avg_acc = float(correctness[mask].mean())
+            weighted_error += (count / len(confidences)) * abs(avg_conf - avg_acc)
+        return float(weighted_error)
 
 
-# =============================================================================
+# ---------------------------------------------------------------------------
 # Data Quality Monitor
-# =============================================================================
+# ---------------------------------------------------------------------------
+
+
+_TYPE_MAP: Dict[str, type] = {
+    "int": int,
+    "float": float,
+    "str": str,
+    "bool": bool,
+}
+
 
 class DataQualityMonitor:
-    """
-    Monitor data quality issues in production requests.
+    """Validate inbound request payloads against an expected schema."""
 
-    Checks for:
-    - Missing values
-    - Out-of-range values
-    - Type errors
-    - Schema changes
-    - Encoding errors
-    """
-
-    def __init__(self, expected_schema: Dict[str, str]):
-        """
-        Initialize data quality monitor.
-
-        Args:
-            expected_schema: Expected schema {feature_name: data_type}
-        """
-        # TODO: Initialize monitor
-        # self.expected_schema = expected_schema
-        # self.issue_counts = {
-        #     'missing': {},
-        #     'out_of_range': {},
-        #     'type_error': {},
-        #     'schema_mismatch': 0
-        # }
-
-        pass  # Remove after implementing
+    def __init__(
+        self,
+        expected_schema: Dict[str, str],
+        value_ranges: Optional[Dict[str, Tuple[float, float]]] = None,
+    ) -> None:
+        self.expected_schema = dict(expected_schema)
+        self.value_ranges = dict(value_ranges or {})
+        self.issue_counts: Dict[str, Dict[str, int]] = {
+            "missing": {},
+            "out_of_range": {},
+            "type_error": {},
+        }
+        self.schema_mismatch_count = 0
 
     def validate_request(self, data: Dict) -> Dict[str, List[str]]:
-        """
-        Validate incoming request data.
-
-        Args:
-            data: Request data dictionary
-
-        Returns:
-            Dictionary of issues found {issue_type: [feature_names]}
-        """
-        # TODO: Implement validation
-        #
-        # issues = {
-        #     'missing': [],
-        #     'type_error': [],
-        #     'out_of_range': []
-        # }
-        #
-        # # Check for missing features
-        # for feature_name in self.expected_schema:
-        #     if feature_name not in data:
-        #         issues['missing'].append(feature_name)
-        #         missing_features_total.labels(
-        #             feature_name=feature_name
-        #         ).inc()
-        #
-        # # Check data types
-        # for feature_name, value in data.items():
-        #     expected_type = self.expected_schema.get(feature_name)
-        #     if expected_type and not isinstance(value, eval(expected_type)):
-        #         issues['type_error'].append(feature_name)
-        #
-        # # Check value ranges (you'd define these)
-        # # Example: if 'age' not in range(0, 120):
-        # #     issues['out_of_range'].append('age')
-        #
-        # return issues
-
-        pass  # Remove after implementing
+        issues: Dict[str, List[str]] = {
+            "missing": [],
+            "type_error": [],
+            "out_of_range": [],
+        }
+        for feature_name in self.expected_schema:
+            if feature_name not in data:
+                issues["missing"].append(feature_name)
+                self.issue_counts["missing"][feature_name] = (
+                    self.issue_counts["missing"].get(feature_name, 0) + 1
+                )
+                if missing_features_total is not None:
+                    missing_features_total.labels(feature_name=feature_name).inc()
+        for feature_name, value in data.items():
+            expected_type_name = self.expected_schema.get(feature_name)
+            if not expected_type_name:
+                self.schema_mismatch_count += 1
+                continue
+            expected_type = _TYPE_MAP.get(expected_type_name)
+            if expected_type is not None and not isinstance(value, expected_type):
+                issues["type_error"].append(feature_name)
+                self.issue_counts["type_error"][feature_name] = (
+                    self.issue_counts["type_error"].get(feature_name, 0) + 1
+                )
+            value_range = self.value_ranges.get(feature_name)
+            if (
+                value_range is not None
+                and isinstance(value, (int, float))
+                and not (value_range[0] <= value <= value_range[1])
+            ):
+                issues["out_of_range"].append(feature_name)
+                self.issue_counts["out_of_range"][feature_name] = (
+                    self.issue_counts["out_of_range"].get(feature_name, 0) + 1
+                )
+        return issues
 
 
-# =============================================================================
-# Example Usage
-# =============================================================================
+# ---------------------------------------------------------------------------
+# Manual smoke test
+# ---------------------------------------------------------------------------
 
-if __name__ == "__main__":
-    print("Custom ML Metrics Module")
-    print("=" * 50)
 
-    # TODO: Add example usage
-    #
-    # Example 1: Drift Detection
-    # print("\n1. Testing Drift Detection:")
-    # # Generate reference data
-    # np.random.seed(42)
-    # reference_data = np.random.normal(0, 1, (1000, 3))
-    # feature_names = ['feature_1', 'feature_2', 'feature_3']
-    #
-    # # Create detector
-    # detector = DataDriftDetector(
-    #     reference_data=reference_data,
-    #     feature_names=feature_names,
-    #     threshold=0.05,
-    #     method='ks'
-    # )
-    #
-    # # Test with drifted data (mean shifted)
-    # drifted_data = np.random.normal(0.5, 1, (1000, 3))
-    # drift_results = detector.detect_drift(drifted_data)
-    #
-    # for result in drift_results:
-    #     print(f"{result.feature_name}: drift={result.is_drift}, "
-    #           f"statistic={result.statistic:.4f}, p_value={result.p_value:.4f}")
+def _demo() -> None:  # pragma: no cover - manual entrypoint
+    logging.basicConfig(level=logging.INFO)
+    rng = np.random.default_rng(42)
+    reference_data = rng.normal(0.0, 1.0, size=(1000, 3))
+    detector = DataDriftDetector(
+        reference_data=reference_data,
+        feature_names=["feature_1", "feature_2", "feature_3"],
+        threshold=0.05,
+        method="ks",
+    )
+    drifted_data = rng.normal(0.5, 1.0, size=(1000, 3))
+    for result in detector.detect_drift(drifted_data):
+        print(
+            f"{result.feature_name}: drift={result.is_drift} "
+            f"statistic={result.statistic:.4f}"
+        )
 
-    # Example 2: Performance Monitoring
-    # print("\n2. Testing Performance Monitoring:")
-    # monitor = ModelPerformanceMonitor('test_model', min_samples=10)
-    #
-    # # Simulate predictions
-    # for i in range(20):
-    #     pred = np.random.randint(0, 2)
-    #     truth = np.random.randint(0, 2)
-    #     monitor.log_prediction(pred, truth)
-    #
-    # # Calculate metrics
-    # metrics = monitor.calculate_metrics()
-    # if metrics:
-    #     print(f"Accuracy: {metrics.accuracy:.4f}")
-    #     print(f"F1 Score: {metrics.f1_score:.4f}")
 
-    print("\nImplement the TODOs and uncomment examples to test!")
+if __name__ == "__main__":  # pragma: no cover - manual entrypoint
+    _demo()
