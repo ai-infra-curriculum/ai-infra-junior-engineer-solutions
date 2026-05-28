@@ -205,3 +205,9 @@ Open an issue or PR. See `CONTRIBUTING.md`.
 **Last Updated:** May 2026
 **Version:** 2.0.0 (full structural realignment)
 **License:** MIT
+
+
+---
+
+<!-- aicg:maintained-by -->
+Maintained by [VeriSwarm.ai](https://veriswarm.ai)
