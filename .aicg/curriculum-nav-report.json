@@ -1,0 +1,49 @@
+{
+  "curriculum_index_present": false,
+  "curriculum_md_present": false,
+  "findings": [
+    {
+      "message": "Repo has modules/projects but no CURRICULUM.md to navigate them.",
+      "path": "CURRICULUM.md",
+      "repo": "ai-infra-junior-engineer-solutions",
+      "severity": "warning",
+      "type": "missing_curriculum_md"
+    }
+  ],
+  "gap_count": 1,
+  "generated_at": "2026-05-28T19:34:27Z",
+  "modules_on_disk": [
+    "mod-001-python-fundamentals",
+    "mod-002-linux-essentials",
+    "mod-003-git-version-control",
+    "mod-004-ml-basics",
+    "mod-005-docker-containers",
+    "mod-006-kubernetes-intro",
+    "mod-007-apis-web-services",
+    "mod-008-databases-sql",
+    "mod-009-monitoring-basics",
+    "mod-010-cloud-platforms"
+  ],
+  "operation": "curriculum_nav_audit",
+  "projects_on_disk": [
+    "project-01-simple-model-api",
+    "project-02-kubernetes-serving",
+    "project-03-ml-pipeline-tracking",
+    "project-04-monitoring-alerting",
+    "project-05-production-ml-capstone"
+  ],
+  "repo": "ai-infra-junior-engineer-solutions",
+  "schema_version": 1,
+  "work_items": [
+    {
+      "details": "Repo has modules/projects but no CURRICULUM.md to navigate them.",
+      "id": "nav-missing-curriculum-md-curriculum-md",
+      "path": "CURRICULUM.md",
+      "repo": "ai-infra-junior-engineer-solutions",
+      "severity": "warning",
+      "subtype": "missing_curriculum_md",
+      "title": "Repo has modules/projects but no CURRICULUM.md to navigate them.",
+      "type": "curriculum_nav_drift"
+    }
+  ]
+}
