@@ -87,8 +87,8 @@ mainly for `docker run` / `docker-compose` scenarios.
 ## Cross-references
 
 - [`Dockerfile`](./Dockerfile) — the worked example.
-- [`docker-compose.yml`](./docker-compose.yml) — local dev
-  + observability stack.
+- [`docker-compose.yml`](./docker-compose.yml) — local dev +
+  observability stack.
 - Engineer-track for production-grade serving:
   `engineer-solutions/mod-103-containerization`.
 - The security track for image signing + supply chain:

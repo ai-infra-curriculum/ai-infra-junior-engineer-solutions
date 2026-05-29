@@ -48,8 +48,8 @@ my-org-ml-datasets/<env>/<dataset>/<version>/
 my-org-ml-audit/<env>/YYYY/MM/DD/
 ```
 
-Per-purpose buckets enable per-purpose retention + encryption
-+ access policies. A single bucket for everything is
+Per-purpose buckets enable per-purpose retention + encryption +
+access policies. A single bucket for everything is
 operationally simpler at first; gets expensive in audit.
 
 ### IAM via IRSA (IAM Roles for Service Accounts)
