@@ -1,0 +1,23 @@
+{
+  "audit_summary": {
+    "error_count": 0,
+    "gap_count": 547,
+    "module_count": 10,
+    "project_count": 5,
+    "status": "pass",
+    "warning_count": 547
+  },
+  "backlog_item_count": 0,
+  "backlog_items": [],
+  "generated_at": "2026-05-28T19:34:27Z",
+  "repo": {
+    "has_git": true,
+    "kind": "solutions",
+    "name": "ai-infra-junior-engineer-solutions",
+    "path": "/home/s0v3r1gn/ai-infra-curriculum/ai-infra-junior-engineer-solutions",
+    "track": "junior-engineer"
+  },
+  "schema_version": 2,
+  "work_item_count": 0,
+  "work_items": []
+}
