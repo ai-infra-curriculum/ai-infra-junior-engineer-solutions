@@ -167,13 +167,13 @@ Add PostgreSQL and Redis as optional dependencies:
 dependencies:
   - name: postgresql
     version: "12.x.x"
-    repository: https://charts.bitnami.com/bitnami
+    repository: http://web.archive.org/web/20220926183524/https://charts.bitnami.com/bitnami
     condition: postgresql.enabled
     tags:
       - database
   - name: redis
     version: "17.x.x"
-    repository: https://charts.bitnami.com/bitnami
+    repository: http://web.archive.org/web/20220926183524/https://charts.bitnami.com/bitnami
     condition: redis.enabled
     tags:
       - cache
