@@ -495,7 +495,7 @@ A curated guide to online communities, meetups, conferences, open-source project
 #### Technical Blogs
 
 **Netflix Tech Blog**
-- **URL**: https://netflixtechblog.com/
+- **URL**: http://web.archive.org/web/20250610080202/https://netflixtechblog.com/
 - **Topics**: ML at scale, infrastructure, DevOps
 - **Why Read**: Real-world large-scale systems
 
@@ -515,7 +515,7 @@ A curated guide to online communities, meetups, conferences, open-source project
 - **Why Read**: Scale and ML in production
 
 **Airbnb Engineering**
-- **URL**: https://medium.com/airbnb-engineering
+- **URL**: http://web.archive.org/web/20260525144214/https://medium.com/airbnb-engineering
 - **Topics**: ML, infrastructure, data
 - **Why Read**: Data-driven engineering
 
@@ -651,7 +651,7 @@ A curated guide to online communities, meetups, conferences, open-source project
 - **Why Use**: Practice Docker without local installation
 
 #### Play with Kubernetes
-- **URL**: https://labs.play-with-k8s.com/
+- **URL**: http://web.archive.org/web/20260418195827/https://labs.play-with-k8s.com/
 - **Topics**: Kubernetes
 - **Cost**: Free
 - **Why Use**: Kubernetes cluster in your browser
@@ -671,13 +671,13 @@ A curated guide to online communities, meetups, conferences, open-source project
 ### Coding Practice
 
 #### LeetCode
-- **URL**: https://leetcode.com/
+- **URL**: http://web.archive.org/web/20260601172606/https://leetcode.com/
 - **Topics**: Algorithms, system design
 - **Cost**: Free and premium
 - **Why Use**: Interview preparation
 
 #### HackerRank
-- **URL**: https://www.hackerrank.com/
+- **URL**: http://web.archive.org/web/20260531032825/https://www.hackerrank.com/
 - **Topics**: Python, algorithms, SQL
 - **Cost**: Free
 - **Why Use**: Skill development and practice
@@ -749,8 +749,8 @@ Most technical communities follow similar principles:
 - **WeWorkRemotely**: https://weworkremotely.com/
 - **RemoteOK**: https://remoteok.io/
 - **LinkedIn Jobs**: https://www.linkedin.com/jobs/
-- **Hired**: https://hired.com/
-- **AngelList**: https://angel.co/jobs
+- **Hired**: https://www.lhh.com/en-us/about-us/our-story
+- **AngelList**: http://web.archive.org/web/20230321003927/https://angel.co/jobs
 - **MLOps Jobs**: https://mlops.jobs/
 
 ### Interview Prep
@@ -791,7 +791,7 @@ Most technical communities follow similar principles:
 
 ### Community Aggregators
 
-- **DevOps News**: https://devops.com/
+- **DevOps News**: http://web.archive.org/web/20260515003243/https://devops.com/
 - **CNCF Community**: https://community.cncf.io/
 - **MLOps Community**: https://mlops.community/
 - **InfoQ**: https://www.infoq.com/
