@@ -86,7 +86,7 @@ A comprehensive collection of books, articles, courses, and documentation to sup
 - **Difficulty**: Beginner
 - **Time to Complete**: 20 minutes
 - **Why Valuable**: Gentle introduction to IaC concepts and benefits.
-- **Link**: https://www.hashicorp.com/resources/what-is-infrastructure-as-code
+- **Link**: http://web.archive.org/web/20250123182841/https://www.hashicorp.com/resources/what-is-infrastructure-as-code
 
 ### Video Courses
 
@@ -223,7 +223,7 @@ A comprehensive collection of books, articles, courses, and documentation to sup
 - **Difficulty**: Beginner to Intermediate
 - **Time to Complete**: 22 hours video content
 - **Why Valuable**: Comprehensive Python course with hands-on projects.
-- **Link**: https://www.udemy.com/course/complete-python-bootcamp/
+- **Link**: http://web.archive.org/web/20260320052721/https://www.udemy.com/course/complete-python-bootcamp/
 
 #### "Python 3 Programming Specialization" - Coursera
 - **Cost**: Free (audit) / Paid (certificate ~$49/month)
@@ -306,7 +306,7 @@ A comprehensive collection of books, articles, courses, and documentation to sup
 - **Difficulty**: Beginner to Intermediate
 - **Time to Complete**: 15-20 hours
 - **Why Valuable**: Interactive guide to learning Linux.
-- **Link**: https://linuxjourney.com/
+- **Link**: http://web.archive.org/web/20250828172638/https://linuxjourney.com/
 
 #### "The Art of Command Line"
 - **Cost**: Free
@@ -603,7 +603,7 @@ A comprehensive collection of books, articles, courses, and documentation to sup
 - **Difficulty**: Beginner to Advanced
 - **Time to Complete**: 19 hours video content
 - **Why Valuable**: Comprehensive Docker course with hands-on projects.
-- **Link**: https://www.udemy.com/course/docker-mastery/
+- **Link**: http://web.archive.org/web/20260422033217/https://www.udemy.com/course/docker-mastery/
 
 #### "Docker for Developers" - Pluralsight
 - **Cost**: Paid (Pluralsight subscription ~$29/month)
@@ -758,7 +758,7 @@ A comprehensive collection of books, articles, courses, and documentation to sup
 - **Difficulty**: Intermediate
 - **Time to Complete**: 12-15 hours
 - **Why Valuable**: Comprehensive Kubernetes course with labs.
-- **Link**: https://acloudguru.com/course/kubernetes-deep-dive
+- **Link**: http://web.archive.org/web/20230609021614/https://acloudguru.com/course/kubernetes-deep-dive
 
 ### Official Documentation
 
@@ -871,7 +871,7 @@ A comprehensive collection of books, articles, courses, and documentation to sup
 - **Difficulty**: Beginner to Intermediate
 - **Time to Complete**: 8 hours video content
 - **Why Valuable**: Comprehensive GitHub Actions course.
-- **Link**: https://www.udemy.com/course/github-actions-the-complete-guide/
+- **Link**: http://web.archive.org/web/20251219171703/https://www.udemy.com/course/github-actions-the-complete-guide/
 
 #### "DevOps: CI/CD with Jenkins Pipelines" - Pluralsight
 - **Cost**: Paid (Pluralsight subscription ~$29/month)
@@ -885,7 +885,7 @@ A comprehensive collection of books, articles, courses, and documentation to sup
 - **Difficulty**: Beginner
 - **Time to Complete**: 6 hours video content
 - **Why Valuable**: GitLab CI from scratch.
-- **Link**: https://www.udemy.com/course/gitlab-ci-pipelines-ci-cd-and-devops-for-beginners/
+- **Link**: http://web.archive.org/web/20260215043154/https://www.udemy.com/course/gitlab-ci-pipelines-ci-cd-and-devops-for-beginners/
 
 ### Official Documentation
 
@@ -997,7 +997,7 @@ A comprehensive collection of books, articles, courses, and documentation to sup
 - **Difficulty**: Beginner
 - **Time to Complete**: 12-15 hours
 - **Why Valuable**: AWS fundamentals certification prep.
-- **Link**: https://acloudguru.com/course/aws-certified-cloud-practitioner
+- **Link**: http://web.archive.org/web/20230603233652/https://acloudguru.com/course/aws-certified-cloud-practitioner
 
 #### "Google Cloud Platform Fundamentals" - Coursera
 - **Cost**: Free (audit) / Paid (certificate ~$49)
