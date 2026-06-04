@@ -555,7 +555,7 @@ Expected output:
 ### Practice
 - [Python Exercises on HackerRank](https://www.hackerrank.com/domains/python)
 - [Python Track on Exercism](https://exercism.org/tracks/python)
-- [LeetCode Easy Problems](https://leetcode.com/problemset/all/?difficulty=EASY)
+- [LeetCode Easy Problems](http://web.archive.org/web/20231113022234/https://leetcode.com/problemset/all/?difficulty=EASY)
 
 ### Books
 - "Python Crash Course" - Eric Matthes
