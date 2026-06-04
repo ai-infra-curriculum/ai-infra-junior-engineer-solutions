@@ -1628,7 +1628,7 @@ exa --tree
 exa -l --git
 ```
 
-**Links**: https://the.exa.website/
+**Links**: http://web.archive.org/web/20241128134034/https://the.exa.website/
 
 ### ripgrep (rg)
 
