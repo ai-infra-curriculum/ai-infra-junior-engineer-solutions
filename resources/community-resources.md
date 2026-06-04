@@ -150,19 +150,22 @@ A curated guide to online communities, meetups, conferences, open-source project
 - **Best For**: GCP questions, solutions, best practices
 - **Why Valuable**: Google Cloud experts and staff
 
-### GitHub Discussions
+### Project Forums
 
-#### TensorFlow
-- **URL**: https://github.com/tensorflow/tensorflow/discussions
+These projects host discussion on dedicated forums rather than GitHub Discussions:
+
+#### TensorFlow Forum
+- **URL**: https://discuss.tensorflow.org/
 - **Best For**: TensorFlow feature requests, implementation discussions
 
-#### PyTorch
-- **URL**: https://github.com/pytorch/pytorch/discussions
+#### PyTorch Forum
+- **URL**: https://discuss.pytorch.org/
 - **Best For**: PyTorch questions, feature discussions
 
-#### Kubernetes
-- **URL**: https://github.com/kubernetes/kubernetes/discussions
-- **Best For**: Kubernetes development, proposals
+#### Kubernetes — Slack + GitHub Issues
+- **Slack**: https://slack.k8s.io/
+- **Proposals (KEPs)**: https://github.com/kubernetes/enhancements
+- **Best For**: Kubernetes development, design proposals
 
 ---
 
@@ -223,7 +226,7 @@ A curated guide to online communities, meetups, conferences, open-source project
 - **Format**: In-person & Virtual
 - **Cost**: $100-$500
 - **Best For**: Container technology, Docker
-- **URL**: https://www.docker.com/dockercon/
+- **URL**: https://www.docker.com/events/ — landing page; per-event URL changes each year
 - **Why Attend**: Container ecosystem updates
 
 ### Regional & Virtual Events
@@ -677,7 +680,7 @@ A curated guide to online communities, meetups, conferences, open-source project
 - **Why Use**: Interview preparation
 
 #### HackerRank
-- **URL**: https://www.hackerrank.com/
+- **URL**: https://www.hackerrank.com/domains
 - **Topics**: Python, algorithms, SQL
 - **Cost**: Free
 - **Why Use**: Skill development and practice

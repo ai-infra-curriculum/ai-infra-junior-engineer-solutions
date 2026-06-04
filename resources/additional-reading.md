@@ -42,7 +42,7 @@ A comprehensive collection of books, articles, courses, and documentation to sup
 - **Difficulty**: Intermediate
 - **Time to Complete**: 12-15 hours
 - **Why Valuable**: Comprehensive guide to managing infrastructure through code, foundational for modern infrastructure practices.
-- **Link**: https://www.oreilly.com/library/view/infrastructure-as-code/9781491924358/
+- **Link**: https://www.oreilly.com/library/view/infrastructure-as-code/9781098114664/ — 2nd edition
 
 #### "Designing Data-Intensive Applications" by Martin Kleppmann
 - **Cost**: Paid (~$50)
@@ -142,7 +142,7 @@ A comprehensive collection of books, articles, courses, and documentation to sup
 - **Difficulty**: Beginner
 - **Time to Complete**: 20-25 hours
 - **Why Valuable**: Hands-on introduction to Python with practical projects.
-- **Link**: https://nostarch.com/pythoncrashcourse2e
+- **Link**: https://nostarch.com/python-crash-course-3rd-edition
 
 #### "Fluent Python" by Luciano Ramalho
 - **Cost**: Paid (~$50)
@@ -617,14 +617,14 @@ A comprehensive collection of books, articles, courses, and documentation to sup
 - **Difficulty**: Beginner
 - **Time to Complete**: 8-10 hours
 - **Why Valuable**: Hands-on labs with Docker fundamentals.
-- **Link**: https://acloudguru.com/course/docker-essentials
+- **Link**: https://www.pluralsight.com/cloud-guru/courses/docker-fundamentals — A Cloud Guru content now hosted on Pluralsight
 
-#### "Introduction to Containers" - edX (Linux Foundation)
+#### "Introduction to Kubernetes" - edX (Linux Foundation, LFS158)
 - **Cost**: Free (certificate ~$149)
 - **Difficulty**: Beginner
 - **Time to Complete**: 20-25 hours
-- **Why Valuable**: Linux Foundation's official container introduction.
-- **Link**: https://www.edx.org/course/introduction-to-containers
+- **Why Valuable**: Linux Foundation's official container-orchestration introduction.
+- **Link**: https://www.edx.org/learn/kubernetes/the-linux-foundation-introduction-to-kubernetes
 
 ### Official Documentation
 
@@ -714,7 +714,7 @@ A comprehensive collection of books, articles, courses, and documentation to sup
 - **Difficulty**: Intermediate
 - **Time to Complete**: 2-3 hours
 - **Why Valuable**: Deep dive into Kubernetes networking.
-- **Link**: https://kubernetes.io/blog/2020/05/11/kubernetes-networking-model/
+- **Link**: https://web.archive.org/web/2024/https://kubernetes.io/blog/2020/05/11/kubernetes-networking-model/
 
 #### "Kubernetes Best Practices" - Google Cloud
 - **Cost**: Free
@@ -728,7 +728,7 @@ A comprehensive collection of books, articles, courses, and documentation to sup
 - **Difficulty**: Intermediate
 - **Time to Complete**: 2 hours
 - **Why Valuable**: Applying 12-factor principles to Kubernetes.
-- **Link**: https://kubernetes.io/blog/2018/06/05/12-fractured-apps/
+- **Link**: https://web.archive.org/web/2024/https://kubernetes.io/blog/2018/06/05/12-fractured-apps/
 
 ### Video Courses
 
@@ -848,7 +848,7 @@ A comprehensive collection of books, articles, courses, and documentation to sup
 - **Difficulty**: Intermediate
 - **Time to Complete**: 2-3 hours
 - **Why Valuable**: Industry best practices for CI/CD.
-- **Link**: https://circleci.com/blog/ci-cd-best-practices/
+- **Link**: https://circleci.com/blog/topic/best-practices/
 
 #### "Google Cloud Build Documentation"
 - **Cost**: Free
@@ -878,7 +878,7 @@ A comprehensive collection of books, articles, courses, and documentation to sup
 - **Difficulty**: Intermediate
 - **Time to Complete**: 6-8 hours
 - **Why Valuable**: Jenkins pipeline best practices.
-- **Link**: https://www.pluralsight.com/courses/jenkins-pipelines-cicd
+- **Link**: https://www.pluralsight.com/search?categories=course&q=jenkins%20pipelines — Pluralsight Jenkins pipeline courses (paths shift between catalog refreshes)
 
 #### "GitLab CI: Pipelines, CI/CD and DevOps for Beginners" - Udemy
 - **Cost**: Paid (~$20-100, frequent sales)
@@ -930,7 +930,7 @@ A comprehensive collection of books, articles, courses, and documentation to sup
 - **Difficulty**: Intermediate
 - **Time to Complete**: 30-40 hours
 - **Why Valuable**: Comprehensive AWS fundamentals and best practices.
-- **Link**: https://www.wiley.com/en-us/AWS+Certified+Solutions+Architect+Study+Guide-p-9781119713081
+- **Link**: https://www.wiley.com/en-us/search?pq=AWS+Certified+Solutions+Architect — search; specific SKU paths change between editions
 
 #### "Google Cloud Platform in Action" by JJ Geewax
 - **Cost**: Paid (~$45)
@@ -1263,7 +1263,7 @@ A comprehensive collection of books, articles, courses, and documentation to sup
 - **Difficulty**: Intermediate
 - **Time to Complete**: 20-25 hours
 - **Why Valuable**: Production ML deployment strategies.
-- **Link**: https://www.coursera.org/learn/deploying-machine-learning-models-in-production
+- **Link**: https://www.coursera.org/specializations/machine-learning-engineering-for-production-mlops — DeepLearning.AI MLOps specialization (includes the deploying-models course)
 
 ### Official Documentation
 
