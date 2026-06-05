@@ -315,4 +315,4 @@ kubectl annotate app ml-api argocd.argoproj.io/compare-options-
 
 - [ArgoCD Documentation](https://argo-cd.readthedocs.io/)
 - [GitOps Best Practices](https://www.gitops.tech/)
-- [ArgoCD Best Practices](https://argoproj.github.io/argo-cd/user-guide/best_practices/)
+- [ArgoCD Best Practices](http://web.archive.org/web/20210801161615/https://argoproj.github.io/argo-cd/user-guide/best_practices/)
