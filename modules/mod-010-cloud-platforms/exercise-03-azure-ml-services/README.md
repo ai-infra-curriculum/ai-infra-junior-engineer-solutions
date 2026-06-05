@@ -22,7 +22,7 @@ Learn Microsoft Azure services for machine learning infrastructure including Azu
 
 ### 1. Create Azure Account
 
-1. Go to [azure.microsoft.com](https://azure.microsoft.com)
+1. Go to [azure.microsoft.com](https://azure.microsoft.com/en-us)
 2. Click "Start free"
 3. Follow the signup process
 4. Get $200 in free credits
