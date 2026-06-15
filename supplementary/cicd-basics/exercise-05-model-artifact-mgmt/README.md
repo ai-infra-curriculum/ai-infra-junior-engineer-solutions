@@ -349,7 +349,7 @@ mlflow.create_experiment(
 # Environment variables
 export AWS_ACCESS_KEY_ID=your-key
 export AWS_SECRET_ACCESS_KEY=your-secret
-export MLFLOW_S3_ENDPOINT_URL=https://s3.amazonaws.com
+export MLFLOW_S3_ENDPOINT_URL=https://aws.amazon.com/s3/
 ```
 
 ### Google Cloud Storage
