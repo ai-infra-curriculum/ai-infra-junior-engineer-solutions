@@ -1,5 +1,9 @@
 # AI Infrastructure Junior Engineer — Solutions Repository
 
+<!-- aicg:site-banner -->
+> 🎓 Part of the **[AI Infrastructure Curriculum](https://ai-infra-curriculum.github.io/)** — a free, open-source ladder of role-based AI-infrastructure programs. [Explore the ladder](https://ai-infra-curriculum.github.io/) · [Join the first live cohort](https://ai-infra-curriculum.github.io/junior.html)
+<!-- /aicg:site-banner -->
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Modules: 10](https://img.shields.io/badge/Modules-10-blue.svg)]()
 [![Aligned with curriculum](https://img.shields.io/badge/aligned%20with-CURRICULUM.md-green.svg)](https://github.com/ai-infra-curriculum/ai-infra-junior-engineer-learning/blob/main/CURRICULUM.md)
@@ -205,7 +209,6 @@ Open an issue or PR. See `CONTRIBUTING.md`.
 **Last Updated:** May 2026
 **Version:** 2.0.0 (full structural realignment)
 **License:** MIT
-
 
 ---
 
