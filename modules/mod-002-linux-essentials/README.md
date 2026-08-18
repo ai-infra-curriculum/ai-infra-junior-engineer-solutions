@@ -476,7 +476,7 @@ After each exercise, verify you can:
 ### Online Resources
 - [ExplainShell](https://explainshell.com/) - Explain shell commands
 - [ShellCheck](https://www.shellcheck.net/) - Shell script linter
-- [Linux Journey](https://linuxjourney.com/) - Interactive tutorials
+- [Linux Journey](https://labex.io/linuxjourney) - Interactive tutorials
 - [OverTheWire Bandit](https://overthewire.org/wargames/bandit/) - Command line game
 
 ### Practice
