@@ -671,7 +671,7 @@ kubectl exec -n ml-workloads <pod-name> -- touch /models/test.txt
 
 - [Kubeflow](https://www.kubeflow.org/) - ML toolkit for Kubernetes
 - [MLflow](https://mlflow.org/) - ML lifecycle management
-- [Seldon Core](https://www.seldon.io/) - ML deployment platform
+- [Seldon Core](http://web.archive.org/web/20260315103348/https://www.seldon.io/) - ML deployment platform
 - [KServe](https://kserve.github.io/website/) - Model serving platform
 - [Argo Workflows](https://argoproj.github.io/argo-workflows/) - Workflow engine
 
