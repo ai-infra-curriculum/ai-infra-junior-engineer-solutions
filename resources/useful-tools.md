@@ -1601,34 +1601,34 @@ bat -n file.py
 
 **Links**: https://github.com/sharkdp/bat
 
-### exa
+### eza
 
-**Description**: Modern replacement for ls.
+**Description**: Modern replacement for ls (the actively maintained successor to `exa`, which is now unmaintained).
 
 **Cost**: Free (Open Source)
 
 **Installation**:
 ```bash
 # macOS
-brew install exa
+brew install eza
 
 # Ubuntu/Debian
-sudo apt install exa
+sudo apt install eza
 ```
 
 **Basic Usage**:
 ```bash
 # List files
-exa
+eza
 
 # Tree view
-exa --tree
+eza --tree
 
 # Long format with git status
-exa -l --git
+eza -l --git
 ```
 
-**Links**: http://web.archive.org/web/20241128134034/https://the.exa.website/
+**Links**: https://github.com/eza-community/eza
 
 ### ripgrep (rg)
 
