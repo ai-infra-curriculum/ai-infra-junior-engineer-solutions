@@ -406,9 +406,16 @@ resource "aws_iam_role_policy_attachment" "sagemaker_full_access" {
 }
 
 # SSH Key Pair
+variable "ssh_public_key" {
+  description = "SSH public key material for the EC2 key pair (e.g. the contents of ~/.ssh/id_rsa.pub). Pass via TF_VAR_ssh_public_key or a tfvars file."
+  type        = string
+}
+
 resource "aws_key_pair" "ml_key" {
   key_name   = "${var.project_name}-key"
-  public_key = file("~/.ssh/id_rsa.pub")  # Update path to your public key
+  # Pass the key material via var.ssh_public_key rather than file("~/.ssh/id_rsa.pub"):
+  # `file()` is evaluated at plan/validate time and fails when the path is absent.
+  public_key = var.ssh_public_key
 
   tags = {
     Name = "${var.project_name}-key"
@@ -469,7 +476,7 @@ resource "aws_launch_template" "ml_gpu" {
               nvidia-smi -acp 0
 
               # Mount EFS (if using)
-              # echo "${aws_efs_file_system.ml_storage.id}:/ /mnt/efs efs defaults,_netdev 0 0" >> /etc/fstab
+              # echo "$${aws_efs_file_system.ml_storage.id}:/ /mnt/efs efs defaults,_netdev 0 0" >> /etc/fstab
               # mount -a
 
               # Set up Jupyter
