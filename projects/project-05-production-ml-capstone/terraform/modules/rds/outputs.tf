@@ -20,6 +20,8 @@ output "security_group_id" {
 }
 
 output "master_password_secret" {
-  value       = nonsensitive("set me via the root module")
+  # Placeholder only — nonsensitive() is invalid on a plain (already
+  # non-sensitive) string. Do not output the actual secret.
+  value       = "set me via the root module"
   description = "Do not output the actual secret. Wire it into a Secret in EKS via external-secrets or AWS Secrets Manager."
 }
