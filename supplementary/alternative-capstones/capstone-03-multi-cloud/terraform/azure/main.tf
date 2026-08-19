@@ -321,21 +321,26 @@ resource "azurerm_container_registry" "ml_platform" {
   sku                 = var.environment == "prod" ? "Premium" : "Standard"
   admin_enabled       = false
 
-  georeplications = var.environment == "prod" ? [
-    {
-      location                = "westus2"
+  # georeplications and network_rule_set are nested blocks in the azurerm
+  # provider, so they're expressed as dynamic blocks (Premium/prod only).
+  dynamic "georeplications" {
+    for_each = var.environment == "prod" ? ["westus2"] : []
+    content {
+      location                = georeplications.value
       zone_redundancy_enabled = true
     }
-  ] : []
+  }
 
-  network_rule_set = var.environment == "prod" ? {
-    default_action = "Deny"
-    ip_rule = []
-    virtual_network = [{
-      action    = "Allow"
-      subnet_id = azurerm_subnet.aks.id
-    }]
-  } : null
+  dynamic "network_rule_set" {
+    for_each = var.environment == "prod" ? [1] : []
+    content {
+      default_action = "Deny"
+      virtual_network {
+        action    = "Allow"
+        subnet_id = azurerm_subnet.aks.id
+      }
+    }
+  }
 
   tags = azurerm_resource_group.ml_platform.tags
 }

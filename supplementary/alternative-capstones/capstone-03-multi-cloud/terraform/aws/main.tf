@@ -377,7 +377,8 @@ resource "aws_security_group" "redis" {
 
 resource "aws_elasticache_replication_group" "ml_platform" {
   replication_group_id       = "${var.project_name}-redis-${var.environment}"
-  replication_group_description = "Redis cluster for ML platform"
+  # AWS provider v5 renamed `replication_group_description` to `description`.
+  description                = "Redis cluster for ML platform"
 
   engine               = "redis"
   engine_version       = "7.0"
