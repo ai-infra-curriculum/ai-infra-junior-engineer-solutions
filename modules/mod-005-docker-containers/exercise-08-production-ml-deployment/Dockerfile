@@ -5,7 +5,7 @@
 #   - runtime: lean, runs as non-root.
 
 # Pin by digest for reproducibility. Update the digest deliberately.
-FROM python:3.11-slim-bookworm@sha256:8a02ad24a7fdc6c4c7b8c87b7d23e76aebaa2e5f3a99b4a93c4d4f5ee5e72a3b AS builder
+FROM python:3.11-slim-bookworm@sha256:2e32f7d302adc1c37428355c1e646897c0c53f4fd60b6a551245fb90ee129f91 AS builder
 
 WORKDIR /build
 
@@ -24,7 +24,7 @@ COPY src ./src
 
 
 # ---- Runtime stage ----
-FROM python:3.11-slim-bookworm@sha256:8a02ad24a7fdc6c4c7b8c87b7d23e76aebaa2e5f3a99b4a93c4d4f5ee5e72a3b
+FROM python:3.11-slim-bookworm@sha256:2e32f7d302adc1c37428355c1e646897c0c53f4fd60b6a551245fb90ee129f91
 
 # Runtime-only deps (no compilers)
 RUN apt-get update && apt-get install -y --no-install-recommends \

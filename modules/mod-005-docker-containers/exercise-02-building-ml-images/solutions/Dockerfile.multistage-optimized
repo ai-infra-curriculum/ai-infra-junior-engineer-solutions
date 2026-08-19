@@ -2,7 +2,7 @@
 # Demonstrates advanced optimization techniques
 
 # Stage 1: Base with common dependencies
-FROM python:3.11-slim as base
+FROM python:3.11-slim AS base
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -10,7 +10,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # Stage 2: Builder for dependencies
-FROM base as builder
+FROM base AS builder
 
 # Install build tools
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -31,7 +31,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r /tmp/requirements-tensorflow.txt
 
 # Stage 3: Runtime
-FROM base as runtime
+FROM base AS runtime
 
 # Install only runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \

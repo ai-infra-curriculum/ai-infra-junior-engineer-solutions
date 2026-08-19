@@ -3,7 +3,7 @@
 # ====================================================================================
 # Stage 1: Base Image
 # ====================================================================================
-FROM python:3.11-slim as base
+FROM python:3.11-slim AS base
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
@@ -27,7 +27,7 @@ WORKDIR /app
 # ====================================================================================
 # Stage 2: Dependencies
 # ====================================================================================
-FROM base as dependencies
+FROM base AS dependencies
 
 # Copy requirements
 COPY requirements.txt .
@@ -38,7 +38,7 @@ RUN pip install --user -r requirements.txt
 # ====================================================================================
 # Stage 3: Production
 # ====================================================================================
-FROM base as production
+FROM base AS production
 
 # Copy Python dependencies from dependencies stage
 COPY --from=dependencies /root/.local /root/.local

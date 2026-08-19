@@ -2,7 +2,7 @@
 # Optimized for size and security
 
 # Stage 1: Build stage
-FROM python:3.11-slim as builder
+FROM python:3.11-slim AS builder
 
 WORKDIR /build
 
