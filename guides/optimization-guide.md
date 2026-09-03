@@ -1029,7 +1029,7 @@ app = FastAPI()
 @app.get("/api/aggregate")
 def aggregate_data():
     # These run sequentially (total: 3 seconds)
-    data1 = requests.get('http://api1.com/data').json()  # 1 second
+    data1 = requests.get('http://api1.com/').json()  # 1 second
     data2 = requests.get('http://api2.com/data').json()  # 1 second
     data3 = requests.get('http://api3.com/data').json()  # 1 second
 
@@ -1044,7 +1044,7 @@ async def aggregate_data():
     async with httpx.AsyncClient() as client:
         # These run in parallel! (total: 1 second)
         results = await asyncio.gather(
-            client.get('http://api1.com/data'),
+            client.get('http://api1.com/'),
             client.get('http://api2.com/data'),
             client.get('http://api3.com/data'),
         )
