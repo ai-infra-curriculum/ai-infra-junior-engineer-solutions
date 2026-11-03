@@ -864,7 +864,7 @@ def test_rate_limit_exceeded(client, auth_token):
 - [FastAPI Security](https://fastapi.tiangolo.com/tutorial/security/)
 - [OAuth2 Specification](https://oauth.net/2/)
 - [JWT Best Practices](https://tools.ietf.org/html/rfc8725)
-- [API Security Best Practices](https://owasp.org/www-project-api-security/)
+- [API Security Best Practices](https://owasp.org/projects/api-security-project)
 
 ## Next Steps
 
