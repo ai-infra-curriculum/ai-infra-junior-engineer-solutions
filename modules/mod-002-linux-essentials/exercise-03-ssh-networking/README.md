@@ -819,7 +819,7 @@ ssh -G hostname
 - [OpenSSH Documentation](https://www.openssh.com/manual.html)
 - [SSH Best Practices](https://www.ssh.com/academy/ssh/best-practices)
 - [Linux Networking](https://linux-training.be/networking/)
-- [UFW Documentation](https://help.ubuntu.com/community/UFW)
+- [UFW Documentation](https://wiki.ubuntu.com/UFW)
 - [Fail2ban](https://www.fail2ban.org/)
 
 ---
