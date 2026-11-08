@@ -160,7 +160,7 @@ buildah commit $container myimage
 **Installation**:
 ```bash
 # Linux
-wget https://github.com/wagoodman/dive/releases/download/v0.11.0/dive_0.11.0_linux_amd64.deb
+wget https://release-assets.githubusercontent.com/github-production-release-asset/133251103/379c318e-20fc-4860-88a6-57af2bedb564?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-11-08T16%3A40%3A54Z&rscd=attachment%3B+filename%3Ddive_0.11.0_linux_amd64.deb&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-11-08T15%3A40%3A37Z&ske=2026-11-08T16%3A40%3A54Z&sks=b&skv=2018-11-09&sig=LHd0i86Cga622fU7bsxGw236XN9%2BVBAMqX9tF1KuIyw%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5NDE1MzkyNywibmJmIjoxNzk0MTUzNjI3LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.LRnr6HF4fqIX1NtBvkoOmQcrTDd7LcxTFbCkUJ33mIs&response-content-disposition=attachment%3B%20filename%3Ddive_0.11.0_linux_amd64.deb&response-content-type=application%2Foctet-stream
 sudo apt install ./dive_0.11.0_linux_amd64.deb
 
 # macOS
@@ -343,7 +343,7 @@ kubectx
 brew install stern
 
 # Linux
-curl -LO https://github.com/stern/stern/releases/download/v1.25.0/stern_1.25.0_linux_amd64.tar.gz
+curl -LO https://release-assets.githubusercontent.com/github-production-release-asset/306013800/7fbd05dd-084e-4375-9e36-41763de70a10?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-11-08T16%3A41%3A23Z&rscd=attachment%3B+filename%3Dstern_1.25.0_linux_amd64.tar.gz&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-11-08T15%3A41%3A09Z&ske=2026-11-08T16%3A41%3A23Z&sks=b&skv=2018-11-09&sig=al5rlq%2FVi1ZQH7WiQNB9QOy5YM%2FKgy5UVkCEoXtcrUo%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5NDE1NTQyOSwibmJmIjoxNzk0MTUzNjI5LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.wtZDNxqSt0Sn7bhPelaJrpH3oGNkaLa_McCwmTouKPY&response-content-disposition=attachment%3B%20filename%3Dstern_1.25.0_linux_amd64.tar.gz&response-content-type=application%2Foctet-stream
 tar xzf stern_1.25.0_linux_amd64.tar.gz
 sudo mv stern /usr/local/bin/
 ```
@@ -451,7 +451,7 @@ minikube dashboard
 brew install kind
 
 # Linux
-curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
+curl -Lo ./kind https://release-assets.githubusercontent.com/github-production-release-asset/148545807/95b52467-d4b4-461d-91f8-adfcd6ac5437?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-11-08T16%3A47%3A36Z&rscd=attachment%3B+filename%3Dkind-linux-amd64&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-11-08T15%3A47%3A17Z&ske=2026-11-08T16%3A47%3A36Z&sks=b&skv=2018-11-09&sig=cgr4ZMt1wgPpKXi%2FRag59u%2F5ok0iCzKs%2FKd9myH38E4%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5NDE1MzkzMSwibmJmIjoxNzk0MTUzNjMxLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.FP7ISJ6XFSaCWGRzw0DdSszMVyXH6IjyktcCFb5J2yA&response-content-disposition=attachment%3B%20filename%3Dkind-linux-amd64&response-content-type=application%2Foctet-stream
 chmod +x ./kind
 sudo mv ./kind /usr/local/bin/kind
 ```
@@ -882,7 +882,7 @@ terraform destroy
 brew install terragrunt
 
 # Linux
-wget https://github.com/gruntwork-io/terragrunt/releases/download/v0.48.0/terragrunt_linux_amd64
+wget https://release-assets.githubusercontent.com/github-production-release-asset/59522149/efcb1582-f67b-47cb-8a58-82906a279952?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-11-08T16%3A41%3A44Z&rscd=attachment%3B+filename%3Dterragrunt_linux_amd64&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-11-08T15%3A41%3A28Z&ske=2026-11-08T16%3A41%3A44Z&sks=b&skv=2018-11-09&sig=CJHHuEhNwiJt1%2BASHrWw8qikZBBZ9daJA8pc%2FCpuddM%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5NDE1NTQzMywibmJmIjoxNzk0MTUzNjMzLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.dtyFCe3cYYcInyU8VKUO2llBoOcILvuFlRQRqE1TLRQ&response-content-disposition=attachment%3B%20filename%3Dterragrunt_linux_amd64&response-content-type=application%2Foctet-stream
 chmod +x terragrunt_linux_amd64
 sudo mv terragrunt_linux_amd64 /usr/local/bin/terragrunt
 ```
@@ -1109,7 +1109,7 @@ circleci local execute --job test
 docker run -p 9090:9090 prom/prometheus
 
 # Or download binary
-wget https://github.com/prometheus/prometheus/releases/download/v2.45.0/prometheus-2.45.0.linux-amd64.tar.gz
+wget https://release-assets.githubusercontent.com/github-production-release-asset/6838921/75753d2b-6c1e-4ac8-bdee-941c26d6aa46?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-11-08T16%3A47%3A14Z&rscd=attachment%3B+filename%3Dprometheus-2.45.0.linux-amd64.tar.gz&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-11-08T15%3A46%3A50Z&ske=2026-11-08T16%3A47%3A14Z&sks=b&skv=2018-11-09&sig=fztfiQGYjE9zQABePmkCAgJQP4TU%2FEOdoNyfTN60CeE%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5NDE1NTQzNCwibmJmIjoxNzk0MTUzNjM0LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.AkQo51Tj76lydeOPyvjmi3Cmb7qZ-br19k95ZTcGJ9o&response-content-disposition=attachment%3B%20filename%3Dprometheus-2.45.0.linux-amd64.tar.gz&response-content-type=application%2Foctet-stream
 tar xvf prometheus-2.45.0.linux-amd64.tar.gz
 cd prometheus-2.45.0.linux-amd64
 ./prometheus
@@ -1182,7 +1182,7 @@ docker run -d --name jaeger \
 **Installation**:
 ```bash
 # Download collector
-curl -LO https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v0.80.0/otelcol_0.80.0_linux_amd64.tar.gz
+curl -LO https://release-assets.githubusercontent.com/github-production-release-asset/400253676/090217ce-0d18-4c6c-8145-8f5d25bea6d3?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-11-08T16%3A47%3A43Z&rscd=attachment%3B+filename%3Dotelcol_0.80.0_linux_amd64.tar.gz&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-11-08T15%3A47%3A06Z&ske=2026-11-08T16%3A47%3A43Z&sks=b&skv=2018-11-09&sig=NUSmVBFO6Nnr9tUoqWDng1WTskN7nt%2BkEdu6xIWitDY%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5NDE1NTQzNSwibmJmIjoxNzk0MTUzNjM1LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.4V7NrKLKIZVm8xx30QZTZVT4hi-RuXcKLWmgWGTiZJ0&response-content-disposition=attachment%3B%20filename%3Dotelcol_0.80.0_linux_amd64.tar.gz&response-content-type=application%2Foctet-stream
 tar -xvf otelcol_0.80.0_linux_amd64.tar.gz
 ```
 
@@ -1197,7 +1197,7 @@ tar -xvf otelcol_0.80.0_linux_amd64.tar.gz
 **Installation**:
 ```bash
 # Linux
-sudo wget https://github.com/bcicen/ctop/releases/download/v0.7.7/ctop-0.7.7-linux-amd64 -O /usr/local/bin/ctop
+sudo wget https://release-assets.githubusercontent.com/github-production-release-asset/77419377/b06fd97b-a929-49bf-9169-fc290a3d2317?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-11-08T16%3A40%3A01Z&rscd=attachment%3B+filename%3Dctop-0.7.7-linux-amd64&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-11-08T15%3A39%3A50Z&ske=2026-11-08T16%3A40%3A01Z&sks=b&skv=2018-11-09&sig=Yf7oFy1FujVWX8Xpo8tylRLmPwHoGrTRgexqgWKCPYM%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5NDE1NTQzNiwibmJmIjoxNzk0MTUzNjM2LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.Kri_IQOS1OtUtL3iZt8V-GL_Gwov-CH71gVPUpAsMSY&response-content-disposition=attachment%3B%20filename%3Dctop-0.7.7-linux-amd64&response-content-type=application%2Foctet-stream -O /usr/local/bin/ctop
 sudo chmod +x /usr/local/bin/ctop
 
 # macOS
@@ -1557,7 +1557,7 @@ tmux attach
 brew install fzf
 
 # Linux
-git clone --depth 1 https://github.com/junegunn/fzf.git ~/.fzf
+git clone --depth 1 https://github.com/junegunn/fzf ~/.fzf
 ~/.fzf/install
 ```
 
