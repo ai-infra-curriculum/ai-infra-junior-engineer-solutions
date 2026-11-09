@@ -820,7 +820,7 @@ ssh -G hostname
 - [SSH Best Practices](https://www.ssh.com/academy/ssh/best-practices)
 - [Linux Networking](https://linux-training.be/networking/)
 - [UFW Documentation](https://wiki.ubuntu.com/UFW)
-- [Fail2ban](https://www.fail2ban.org/)
+- [Fail2ban](https://github.com/fail2ban/fail2ban)
 
 ---
 
