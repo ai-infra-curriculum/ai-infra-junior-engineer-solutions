@@ -108,8 +108,8 @@ When comparing your solution, evaluate:
 
 ```bash
 # 1. Clone both repositories
-git clone https://github.com/ai-infra-curriculum/ai-infra-junior-engineer-learning.git
-git clone https://github.com/ai-infra-curriculum/ai-infra-junior-engineer-solutions.git
+git clone https://github.com/ai-infra-curriculum/ai-infra-junior-engineer-learning
+git clone https://github.com/ai-infra-curriculum/ai-infra-junior-engineer-solutions
 
 # 2. Create a workspace
 mkdir ~/ai-infra-workspace
