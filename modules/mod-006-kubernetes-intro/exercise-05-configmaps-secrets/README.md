@@ -706,7 +706,7 @@ kubectl exec -n config-demo pod-name -- id
 
 - [External Secrets Operator](https://external-secrets.io/)
 - [HashiCorp Vault](https://www.vaultproject.io/)
-- [Sealed Secrets](https://github.com/bitnami-labs/sealed-secrets)
+- [Sealed Secrets](https://github.com/bitnami/sealed-secrets)
 - [AWS Secrets Manager](https://aws.amazon.com/secrets-manager/)
 - [Azure Key Vault](https://azure.microsoft.com/en-us/products/key-vault/)
 - [Google Secret Manager](https://cloud.google.com/secret-manager)
