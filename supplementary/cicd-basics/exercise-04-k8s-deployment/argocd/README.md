@@ -32,7 +32,7 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.pas
 ```bash
 brew install argocd
 # or
-curl -sSL -o /usr/local/bin/argocd https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+curl -sSL -o /usr/local/bin/argocd https://release-assets.githubusercontent.com/github-production-release-asset/120896210/95b91adc-5a60-4097-aea1-b493c5eb7591?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-11-10T15%3A52%3A25Z&rscd=attachment%3B+filename%3Dargocd-linux-amd64&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-11-10T14%3A52%3A22Z&ske=2026-11-10T15%3A52%3A25Z&sks=b&skv=2018-11-09&sig=4BQYHf2jzjA7bFJbjemapaRmdCfkMIV%2Fx0usoKqkW3A%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5NDMyNjQwNCwibmJmIjoxNzk0MzIyODA0LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.dMeWS5pnqqjmgtKrV-zZt4_8WhJ1Zj6Lyrcb3XavWxM&response-content-disposition=attachment%3B%20filename%3Dargocd-linux-amd64&response-content-type=application%2Foctet-stream
 chmod +x /usr/local/bin/argocd
 ```
 
