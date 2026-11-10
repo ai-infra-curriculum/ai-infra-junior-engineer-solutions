@@ -942,7 +942,7 @@ For service organizations:
 
 ### Tools
 - [External Secrets Operator](https://external-secrets.io/)
-- [Sealed Secrets](https://github.com/bitnami-labs/sealed-secrets)
+- [Sealed Secrets](https://github.com/bitnami/sealed-secrets)
 - [HashiCorp Vault](https://www.vaultproject.io/)
 - [git-secrets](https://github.com/awslabs/git-secrets)
 - [kube-bench](https://github.com/aquasecurity/kube-bench) - CIS benchmark testing
