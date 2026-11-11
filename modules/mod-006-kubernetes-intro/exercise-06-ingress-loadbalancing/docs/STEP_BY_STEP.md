@@ -209,7 +209,7 @@ spec:
 
 ```bash
 # Install cert-manager
-kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.0/cert-manager.yaml
+kubectl apply -f https://release-assets.githubusercontent.com/github-production-release-asset/92313258/856d3950-136d-4dab-8d9e-a7e37327a03d?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-11-11T15%3A46%3A36Z&rscd=attachment%3B+filename%3Dcert-manager.yaml&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-11-11T14%3A45%3A39Z&ske=2026-11-11T15%3A46%3A36Z&sks=b&skv=2018-11-09&sig=X%2BfZ46bfRMgkTcs%2F9C6yINGMu0fsHp2NXGDorfWkHQQ%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5NDQwOTUwMywibmJmIjoxNzk0NDA5MjAzLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.XxakRDRwmyCac1YFpkfp1XEBKVSkm0T-XlidWh1MNek&response-content-disposition=attachment%3B%20filename%3Dcert-manager.yaml&response-content-type=application%2Foctet-stream
 
 # Verify
 kubectl get pods -n cert-manager
