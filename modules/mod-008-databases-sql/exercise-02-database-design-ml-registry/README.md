@@ -1,6 +1,6 @@
 # Exercise 02: Database Design — ML Model Registry — Solution
 
-Reference solution for [learning exercise-02-database-design-ml-registry](https://github.com/ai-infra-curriculum/ai-infra-junior-engineer-learning/tree/main/lessons/mod-008-databases-sql/exercises/exercise-02-database-design-ml-registry.md).
+Reference solution for [learning exercise-02-database-design-ml-registry](https://github.com/ai-infra-curriculum/ai-infra-junior-engineer-learning/blob/main/lessons/mod-008-databases-sql/exercises/exercise-02-database-design-ml-registry.md).
 
 Design a schema for an ML model registry that tracks experiments, model versions, deployments, and lineage.
 
