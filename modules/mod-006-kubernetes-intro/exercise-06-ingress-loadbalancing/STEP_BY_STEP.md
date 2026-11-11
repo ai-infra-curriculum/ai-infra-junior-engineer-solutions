@@ -681,7 +681,7 @@ rm tls.key tls.crt
 **For production**: Use cert-manager for automatic Let's Encrypt certificates:
 ```bash
 # Install cert-manager (one-time)
-kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.13.2/cert-manager.yaml
+kubectl apply -f https://release-assets.githubusercontent.com/github-production-release-asset/92313258/45338379-4666-4423-8226-51d13f55a2e3?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-11-11T17%3A51%3A00Z&rscd=attachment%3B+filename%3Dcert-manager.yaml&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-11-11T16%3A50%3A37Z&ske=2026-11-11T17%3A51%3A00Z&sks=b&skv=2018-11-09&sig=YoPJB0FWSYZQ4aRS6V4upeF02om0TPg2OJ%2BqVdSm55g%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5NDQxNjcyNywibmJmIjoxNzk0NDE2NDI3LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.NC-IPMn4jQBOg89G36ivKH4bPvnXRpFiy4Hu1rvwGJQ&response-content-disposition=attachment%3B%20filename%3Dcert-manager.yaml&response-content-type=application%2Foctet-stream
 
 # Create ClusterIssuer for Let's Encrypt
 cat <<EOF | kubectl apply -f -
