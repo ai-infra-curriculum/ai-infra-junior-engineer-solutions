@@ -179,7 +179,7 @@ kubectl create secret generic mlflow-credentials \
 
 ```bash
 # Install SealedSecrets controller
-kubectl apply -f https://github.com/bitnami-labs/sealed-secrets/releases/download/v0.24.0/controller.yaml
+kubectl apply -f https://release-assets.githubusercontent.com/github-production-release-asset/92702519/f91a8d01-e70a-4e78-9cd0-748a3f3cdbf3?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-11-12T08%3A57%3A12Z&rscd=attachment%3B+filename%3Dcontroller.yaml&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-11-12T07%3A57%3A01Z&ske=2026-11-12T08%3A57%3A12Z&sks=b&skv=2018-11-09&sig=liaUEN0h54seP6K52J%2Brx3PuMjwzEeMfmsusG6s9Mq0%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5NDQ3MDcwMiwibmJmIjoxNzk0NDcwNDAyLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.7hRzzE9MwpMZDxOSgtN1rFPs2JOYlx_8NIiHH3dKys8&response-content-disposition=attachment%3B%20filename%3Dcontroller.yaml&response-content-type=application%2Foctet-stream
 
 # Create sealed secret
 kubectl create secret generic api-keys \
