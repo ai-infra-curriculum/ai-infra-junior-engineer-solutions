@@ -342,7 +342,7 @@ kubectl describe hpa model-api-hpa -n ml-serving
 minikube addons enable metrics-server
 
 # For cloud clusters
-kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+kubectl apply -f https://release-assets.githubusercontent.com/github-production-release-asset/92132038/03f1bdd8-7ea8-41a2-bef8-410b6957be23?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-11-12T07%3A35%3A53Z&rscd=attachment%3B+filename%3Dcomponents.yaml&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-11-12T06%3A35%3A39Z&ske=2026-11-12T07%3A35%3A53Z&sks=b&skv=2018-11-09&sig=zsYhvqI972P4TIbm2c32ORuSFDc8UigSKkSHAnUGMck%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5NDQ2NzA4MSwibmJmIjoxNzk0NDY2NzgxLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.efYV_PJePnc3y3Poo7cxD-2kthP2Ar-9GrmI32e62Ls&response-content-disposition=attachment%3B%20filename%3Dcomponents.yaml&response-content-type=application%2Foctet-stream
 ```
 
 **Acceptance Criteria:**
