@@ -1,6 +1,6 @@
 # Exercise 04: SQLAlchemy ORM Integration — Solution
 
-Reference solution for [learning exercise-04-sqlalchemy-orm-integration](https://github.com/ai-infra-curriculum/ai-infra-junior-engineer-learning/tree/main/lessons/mod-008-databases-sql/exercises/exercise-04-sqlalchemy-orm-integration.md).
+Reference solution for [learning exercise-04-sqlalchemy-orm-integration](https://github.com/ai-infra-curriculum/ai-infra-junior-engineer-learning/blob/main/lessons/mod-008-databases-sql/exercises/exercise-04-sqlalchemy-orm-integration.md).
 
 Re-implement the model registry from exercise 02 using SQLAlchemy 2.0 ORM with typed mappings, Alembic migrations, and a clean repository layer.
 
