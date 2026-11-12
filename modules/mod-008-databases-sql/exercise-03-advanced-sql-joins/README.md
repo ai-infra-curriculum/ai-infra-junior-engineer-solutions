@@ -1,6 +1,6 @@
 # Exercise 03: Advanced SQL — Joins, CTEs, Window Functions — Solution
 
-Reference solution for [learning exercise-03-advanced-sql-joins](https://github.com/ai-infra-curriculum/ai-infra-junior-engineer-learning/tree/main/lessons/mod-008-databases-sql/exercises/exercise-03-advanced-sql-joins.md).
+Reference solution for [learning exercise-03-advanced-sql-joins](https://github.com/ai-infra-curriculum/ai-infra-junior-engineer-learning/blob/main/lessons/mod-008-databases-sql/exercises/exercise-03-advanced-sql-joins.md).
 
 This is largely a SQL-only exercise — `solutions/queries.sql` is the deliverable. Each query is annotated with the technique it demonstrates.
 
