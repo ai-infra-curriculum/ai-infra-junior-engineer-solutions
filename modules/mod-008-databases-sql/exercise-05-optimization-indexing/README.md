@@ -1,6 +1,6 @@
 # Exercise 05: Query Optimization & Indexing — Solution
 
-Reference solution for [learning exercise-05-optimization-indexing](https://github.com/ai-infra-curriculum/ai-infra-junior-engineer-learning/tree/main/lessons/mod-008-databases-sql/exercises/exercise-05-optimization-indexing.md).
+Reference solution for [learning exercise-05-optimization-indexing](https://github.com/ai-infra-curriculum/ai-infra-junior-engineer-learning/blob/main/lessons/mod-008-databases-sql/exercises/exercise-05-optimization-indexing.md).
 
 This exercise has two outputs:
 
