@@ -396,7 +396,7 @@ When ConfigMap changes, checksum changes → pods restart
 
 ```bash
 # Install Sealed Secrets controller
-kubectl apply -f https://github.com/bitnami-labs/sealed-secrets/releases/download/v0.24.0/controller.yaml
+kubectl apply -f https://release-assets.githubusercontent.com/github-production-release-asset/92702519/f91a8d01-e70a-4e78-9cd0-748a3f3cdbf3?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-11-11T13%3A52%3A08Z&rscd=attachment%3B+filename%3Dcontroller.yaml&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-11-11T12%3A52%3A07Z&ske=2026-11-11T13%3A52%3A08Z&sks=b&skv=2018-11-09&sig=nEqKNn8BrEXmWTjSa5qNoLozJlomBv5aFjZH31A0CuU%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc5NDQwMjMwMywibmJmIjoxNzk0NDAyMDAzLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.UGmY62Hpw3i92qsYMHSuJNWnk4ICdkz_td2DDXl48Rw&response-content-disposition=attachment%3B%20filename%3Dcontroller.yaml&response-content-type=application%2Foctet-stream
 
 # Install kubeseal CLI
 brew install kubeseal
