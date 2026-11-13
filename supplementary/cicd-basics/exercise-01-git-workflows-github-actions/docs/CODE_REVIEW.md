@@ -133,4 +133,4 @@ This is wrong. Fix it.
 ## Resources
 
 - [Google's Code Review Guide](https://google.github.io/eng-practices/review/)
-- [Pull Request Best Practices](https://github.com/blog/1943-how-to-write-the-perfect-pull-request)
+- [Pull Request Best Practices](https://github.blog/developer-skills/github/how-to-write-the-perfect-pull-request/)
