@@ -1,6 +1,6 @@
 # Exercise 01: SQL Basics & CRUD — Solution
 
-Reference solution for [learning exercise-01-sql-basics-crud](https://github.com/ai-infra-curriculum/ai-infra-junior-engineer-learning/tree/main/lessons/mod-008-databases-sql/exercises/exercise-01-sql-basics-crud.md).
+Reference solution for [learning exercise-01-sql-basics-crud](https://github.com/ai-infra-curriculum/ai-infra-junior-engineer-learning/blob/main/lessons/mod-008-databases-sql/exercises/exercise-01-sql-basics-crud.md).
 
 ## What this covers
 
